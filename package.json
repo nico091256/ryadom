@@ -9,6 +9,7 @@
     "dev:api": "pnpm --filter @localshop/api start:dev",
     "dev:admin": "pnpm --filter @localshop/admin dev",
     "dev:mobile": "pnpm --filter @localshop/mobile start",
+    "dev:mobile:web": "pnpm --filter @localshop/mobile web",
     "build": "pnpm -r --filter=!@localshop/mobile build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
