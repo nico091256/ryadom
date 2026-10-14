@@ -42,7 +42,11 @@
       "output": "single",
       "favicon": "./assets/favicon.png"
     },
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "plugins": [
       "expo-router",
       [
@@ -56,14 +60,12 @@
         {
           "photosPermission": "Mahsulotlar rasmini tanlash uchun ruxsat bering."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "localshop-tashkent"
       }
     }
   }
