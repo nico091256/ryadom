@@ -1,0 +1,116 @@
+{
+  "common": {
+    "appName": "LocalShop",
+    "som": "сум",
+    "m": "м",
+    "km": "км",
+    "loading": "Загрузка...",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить",
+    "retry": "Повторить",
+    "back": "Назад",
+    "search": "Поиск",
+    "freeDelivery": "Бесплатная доставка",
+    "open": "Открыто",
+    "closed": "Закрыто",
+    "error": "Произошла ошибка"
+  },
+  "welcome": {
+    "title": "Магазины вашего района",
+    "subtitle": "Быстрая и бесплатная доставка из магазинов в радиусе 3 км",
+    "chooseLanguage": "Выберите язык",
+    "continue": "Продолжить"
+  },
+  "auth": {
+    "phoneTitle": "Номер телефона",
+    "phoneSubtitle": "Введите ваш номер телефона для входа или регистрации",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "sendCode": "Получить СМС-код",
+    "smsTitle": "Код подтверждения",
+    "smsSubtitle": "Введите 6-значный код, отправленный на {{phone}}",
+    "verify": "Подтвердить",
+    "resendCode": "Отправить код повторно",
+    "shopLoginLink": "Вход для продавца",
+    "shopLoginTitle": "Вход для магазина",
+    "login": "Логин",
+    "password": "Пароль",
+    "loginButton": "Войти",
+    "customerLoginLink": "Вход для покупателей",
+    "namePrompt": "Введите ваше имя",
+    "saveName": "Сохранить и начать"
+  },
+  "tabs": {
+    "home": "Главная",
+    "cart": "Корзина",
+    "orders": "Заказы",
+    "profile": "Профиль",
+    "products": "Товары",
+    "shop": "Магазин"
+  },
+  "home": {
+    "deliverTo": "Адрес доставки",
+    "changeAddress": "Изменить",
+    "nearbyShops": "Ближайшие магазины",
+    "noShopsNearby": "В радиусе 3 км открытых магазинов не найдено",
+    "listView": "Список",
+    "mapView": "Карта"
+  },
+  "shop": {
+    "allCategories": "Все товары",
+    "outOfStock": "Нет в наличии",
+    "addToCart": "Добавить",
+    "workingHours": "Режим работы",
+    "closedBanner": "Магазин сейчас закрыт, прием заказов приостановлен"
+  },
+  "cart": {
+    "title": "Корзина",
+    "empty": "Ваша корзина пуста",
+    "startShopping": "Начать покупки",
+    "clearCart": "Очистить корзину",
+    "total": "Итого",
+    "checkout": "Оформить заказ",
+    "multipleShopsWarning": "В корзине находятся товары из другого магазина. Очистить корзину?"
+  },
+  "checkout": {
+    "title": "Оформление заказа",
+    "deliveryAddress": "Адрес доставки",
+    "contactPhone": "Контактный телефон",
+    "commentPlaceholder": "Комментарий для доставки (код домофона и т.д.)",
+    "paymentMethod": "Способ оплаты",
+    "cashOnDelivery": "Наличными при получении",
+    "onlinePayment": "Онлайн картой (Payme / Click)",
+    "placeOrder": "Подтвердить заказ"
+  },
+  "orderStatus": {
+    "new": "Новый",
+    "accepted": "Принят",
+    "preparing": "Собирается",
+    "on_the_way": "В пути",
+    "delivered": "Доставлен",
+    "cancelled": "Отменен",
+    "cancelOrder": "Отменить заказ",
+    "reorder": "Повторить заказ",
+    "callSeller": "Позвонить продавцу",
+    "callCustomer": "Позвонить покупателю"
+  },
+  "seller": {
+    "newOrders": "Новые",
+    "inProgress": "В работе",
+    "completed": "Завершенные",
+    "accept": "Принять",
+    "reject": "Отклонить",
+    "rejectReason": "Укажите причину отклонения",
+    "markPreparing": "Начать сборку",
+    "markOnTheWay": "Выехал на доставку",
+    "markDelivered": "Заказ вручен",
+    "confirmCash": "Подтвердить получение наличных",
+    "openClosedToggle": "Статус магазина (Открыт/Закрыт)",
+    "todayStats": "Выручка за сегодня",
+    "weekStats": "Выручка за неделю",
+    "monthStats": "Выручка за месяц",
+    "changePasswordRequired": "Безопасность: Смените пароль при первом входе",
+    "newPassword": "Новый пароль",
+    "savePassword": "Сменить пароль"
+  }
+}
