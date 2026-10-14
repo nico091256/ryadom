@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { mobileApi } from '../../services/api';
-import { getSocket, joinOrderRoom } from '../../services/socket';
+import { mobileApi } from '../../../services/api';
+import { getSocket, joinOrderRoom } from '../../../services/socket';
 import { formatPrice, SupportedLanguage, OrderStatus, SOCKET_EVENTS } from '@localshop/shared';
 import {
   ArrowLeft,

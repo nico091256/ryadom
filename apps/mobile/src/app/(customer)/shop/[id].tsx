@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { mobileApi } from '../../services/api';
-import { useCartStore } from '../../store/useCartStore';
+import { mobileApi } from '../../../services/api';
+import { useCartStore } from '../../../store/useCartStore';
 import { formatPrice, SupportedLanguage, resolveLocalizedText } from '@localshop/shared';
 import {
   ArrowLeft,
