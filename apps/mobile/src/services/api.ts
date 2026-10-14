@@ -1,8 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// In development, Android emulator uses 10.0.2.2 to access host machine; iOS uses localhost
-const HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+function getHost(): string {
+  if (Platform.OS === 'web') {
+    return typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+  }
+  // When running via Expo Go on physical phones, hostUri holds the computer's LAN IP (e.g. 10.60.7.99:8082)
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      return ip;
+    }
+  }
+
+  if (Platform.OS === 'android') {
+    return '10.0.2.2';
+  }
+
+  // Fallback to local network IP for physical devices
+  return '10.60.7.99';
+}
+
+export const HOST = getHost();
 export const API_BASE_URL = `http://${HOST}:4000/api/v1`;
 export const SOCKET_URL = `http://${HOST}:4000`;
 
