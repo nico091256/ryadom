@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  seller
+  admin
+}
+
+enum OrderStatus {
+  new
+  accepted
+  preparing
+  on_the_way
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  online
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  refunded
+  failed
+}
+
+model City {
+  id        String   @id @default(uuid())
+  name_uz   String
+  name_ru   String
+  name_en   String
+  is_active Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  shops     Shop[]
+  addresses Address[]
+
+  @@map("cities")
+}
+
+model User {
+  id                   String    @id @default(uuid())
+  phone                String?   @unique
+  name                 String?
+  role                 UserRole  @default(customer)
+  login                String?   @unique
+  password_hash        String?
+  language             String    @default("uz")
+  is_blocked           Boolean   @default(false)
+  must_change_password Boolean   @default(false)
+  push_token           String?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  addresses            Address[]
+  shops                Shop[]
+  cart                 Cart?
+  orders               Order[]   @relation("CustomerOrders")
+  status_changes       OrderStatusHistory[]
+  notifications        Notification[]
+
+  @@map("users")
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  user_id      String
+  city_id      String
+  title        String
+  address_text String
+  lat          Float
+  lng          Float
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  city         City     @relation(fields: [city_id], references: [id])
+
+  @@map("addresses")
+}
+
+model Shop {
+  id                      String    @id @default(uuid())
+  owner_id                String
+  city_id                 String
+  name                    String
+  logo_url                String?
+  phone                   String
+  address_text            String
+  lat                     Float
+  lng                     Float
+  open_time               String    @default("08:00")
+  close_time              String    @default("22:00")
+  is_open                 Boolean   @default(true)
+  is_active               Boolean   @default(true)
+  commission_rate_percent Float     @default(0)
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+
+  owner                   User      @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  city                    City      @relation(fields: [city_id], references: [id])
+  products                Product[]
+  carts                   Cart[]
+  orders                  Order[]
+
+  @@map("shops")
+}
+
+model Category {
+  id         String     @id @default(uuid())
+  parent_id  String?
+  name_uz    String
+  name_ru    String
+  name_en    String
+  icon_url   String?
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  parent     Category?  @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  products   Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  shop_id        String
+  category_id    String
+  name_uz        String
+  name_ru        String
+  name_en        String
+  description_uz String?
+  description_ru String?
+  description_en String?
+  price          Int         // stored in tiyin (1 UZS = 100 tiyin)
+  image_url      String?
+  stock          Int         @default(0)
+  is_available   Boolean     @default(true)
+  deleted_at     DateTime?   // soft delete
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  shop           Shop        @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+  category       Category    @relation(fields: [category_id], references: [id])
+  cart_items     CartItem[]
+  order_items    OrderItem[]
+
+  @@map("products")
+}
+
+model Cart {
+  id         String     @id @default(uuid())
+  user_id    String     @unique
+  shop_id    String
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  shop       Shop       @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+  items      CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id         String   @id @default(uuid())
+  cart_id    String
+  product_id String
+  quantity   Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  cart       Cart     @relation(fields: [cart_id], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([cart_id, product_id])
+  @@map("cart_items")
+}
+
+model Order {
+  id                      String        @id @default(uuid())
+  customer_id             String
+  shop_id                 String
+  address_snapshot        Json          // { lat, lng, text, title }
+  customer_phone          String
+  status                  OrderStatus   @default(new)
+  payment_method          PaymentMethod @default(cash)
+  payment_status          PaymentStatus @default(pending)
+  total_amount            Int           // in tiyin
+  commission_rate_percent Float         @default(0)
+  commission_amount       Int           @default(0) // in tiyin
+  comment                 String?
+  needs_attention         Boolean       @default(false)
+  accepted_at             DateTime?
+  delivered_at            DateTime?
+  created_at              DateTime      @default(now())
+  updated_at              DateTime      @updatedAt
+
+  customer                User          @relation("CustomerOrders", fields: [customer_id], references: [id])
+  shop                    Shop          @relation(fields: [shop_id], references: [id])
+  items                   OrderItem[]
+  status_history          OrderStatusHistory[]
+  payments                Payment[]
+
+  @@index([shop_id, status, created_at])
+  @@index([customer_id, created_at])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(uuid())
+  order_id     String
+  product_id   String
+  product_name String
+  unit_price   Int      // in tiyin
+  quantity     Int
+  created_at   DateTime @default(now())
+
+  order        Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [product_id], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id         String      @id @default(uuid())
+  order_id   String
+  status     OrderStatus
+  changed_by String
+  reason     String?
+  created_at DateTime    @default(now())
+
+  order      Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  actor      User        @relation(fields: [changed_by], references: [id])
+
+  @@map("order_status_history")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  order_id       String
+  provider       String        // "payme" or "click"
+  provider_tx_id String?
+  amount         Int           // in tiyin
+  status         PaymentStatus @default(pending)
+  raw_payload    Json?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  order          Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  type       String
+  payload    Json
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model SmsCode {
+  id         String   @id @default(uuid())
+  phone      String
+  code_hash  String
+  attempts   Int      @default(0)
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@index([phone])
+  @@map("sms_codes")
+}

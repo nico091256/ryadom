@@ -1,0 +1,27 @@
+{
+  "name": "local-shop-delivery-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Shop Delivery Platform — monorepo for mobile app, NestJS API, and Admin Web Panel",
+  "author": "Elshodbek Turayev",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev:api": "pnpm --filter @localshop/api start:dev",
+    "dev:admin": "pnpm --filter @localshop/admin dev",
+    "dev:mobile": "pnpm --filter @localshop/mobile start",
+    "build": "pnpm -r --filter=!@localshop/mobile build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@12.11.2"
+}
