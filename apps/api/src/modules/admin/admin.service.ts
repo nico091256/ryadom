@@ -18,7 +18,7 @@ import { ShopsService } from '../shops/shops.service';
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const ORDER_STATUSES = ['new', 'accepted', 'preparing', 'on_the_way', 'delivered', 'cancelled'] as const;
+const ORDER_STATUSES = ['new', 'accepted', 'on_the_way', 'delivered', 'cancelled'] as const;
 
 /** Prisma select used to build the OrderSummary shape */
 const ORDER_SUMMARY_SELECT = {
@@ -212,6 +212,7 @@ export class AdminService {
     const where: Prisma.ShopWhereInput = {};
     if (query.status === 'active') where.is_active = true;
     else if (query.status === 'inactive') where.is_active = false;
+    else if (query.status === 'pending' || query.status === 'blocked') where.status = query.status as any;
     const q = query.q?.trim();
     if (q) {
       where.OR = [
@@ -326,6 +327,51 @@ export class AdminService {
         owner: { select: this.shopOwnerSelect },
         city: true,
       },
+    });
+  }
+
+  /**
+   * Approves a self-registered (pending) shop: becomes visible to customers.
+   */
+  async approveShop(shopId: string) {
+    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+    return this.prisma.shop.update({
+      where: { id: shopId },
+      data: { status: 'active' as any, is_active: true, is_open: true },
+      include: { owner: { select: this.shopOwnerSelect }, city: true },
+    });
+  }
+
+  /**
+   * Blocks a shop (whether previously pending or active): hidden from customers.
+   */
+  async blockShop(shopId: string) {
+    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+    return this.prisma.shop.update({
+      where: { id: shopId },
+      data: { status: 'blocked' as any, is_active: false },
+      include: { owner: { select: this.shopOwnerSelect }, city: true },
+    });
+  }
+
+  /**
+   * Unblocks a previously blocked shop, restoring it to active.
+   */
+  async unblockShop(shopId: string) {
+    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+    return this.prisma.shop.update({
+      where: { id: shopId },
+      data: { status: 'active' as any, is_active: true },
+      include: { owner: { select: this.shopOwnerSelect }, city: true },
     });
   }
 

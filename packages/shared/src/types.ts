@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod, PaymentStatus, SupportedLanguage, UserRole } from './enums';
+import { DevicePlatform, OrderStatus, PaymentMethod, PaymentStatus, ShopStatus, SupportedLanguage, UserRole } from './enums';
 
 export interface LocalizedString {
   uz: string;
@@ -55,6 +55,7 @@ export interface ShopDto {
   close_time: string; // HH:mm
   is_open: boolean;
   is_active: boolean;
+  status: ShopStatus;
   commission_rate_percent: number;
   distanceMeters?: number;
   isCurrentlyOpen?: boolean;
@@ -155,6 +156,15 @@ export interface OrderDto {
   delivered_at: string | null;
   items: OrderItemDto[];
   status_history?: OrderStatusHistoryDto[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceTokenDto {
+  id: string;
+  user_id: string;
+  token: string;
+  platform: DevicePlatform;
   created_at: string;
   updated_at: string;
 }

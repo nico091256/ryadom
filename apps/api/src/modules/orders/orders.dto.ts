@@ -59,7 +59,7 @@ export class CancelOrderDto {
 }
 
 export class UpdateOrderStatusDto {
-  @ApiProperty({ example: OrderStatus.PREPARING, enum: [OrderStatus.PREPARING, OrderStatus.ON_THE_WAY, OrderStatus.DELIVERED] })
+  @ApiProperty({ example: OrderStatus.ON_THE_WAY, enum: [OrderStatus.ON_THE_WAY, OrderStatus.DELIVERED] })
   @IsNotEmpty()
   @IsEnum(OrderStatus)
   status: OrderStatus;

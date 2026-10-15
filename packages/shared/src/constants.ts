@@ -5,15 +5,16 @@ export const DEFAULT_SEARCH_RADIUS_METERS = 3000; // 3 km
 export const TIYIN_PER_UZS = 100;
 
 // Timeouts
-export const ORDER_ACCEPTANCE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const ORDER_ACCEPTANCE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 export const SMS_EXPIRATION_SECONDS = 120; // 2 minutes
 export const MAX_SMS_ATTEMPTS = 5;
+export const IDEMPOTENCY_KEY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+export const REFRESH_TOKEN_TTL_DAYS = 30;
 
-// Allowed status transitions as mandated by the Technical Specification (Section 7)
+// Allowed status transitions: NEW -> ACCEPTED -> ON_THE_WAY -> DELIVERED (+ cancellations)
 export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.NEW]: [OrderStatus.ACCEPTED, OrderStatus.CANCELLED],
-  [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-  [OrderStatus.PREPARING]: [OrderStatus.ON_THE_WAY, OrderStatus.CANCELLED],
+  [OrderStatus.ACCEPTED]: [OrderStatus.ON_THE_WAY, OrderStatus.CANCELLED],
   [OrderStatus.ON_THE_WAY]: [OrderStatus.DELIVERED],
   [OrderStatus.DELIVERED]: [],
   [OrderStatus.CANCELLED]: [],
@@ -23,7 +24,6 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export const CANCELLATION_ALLOWED_ROLES: Record<OrderStatus, UserRole[]> = {
   [OrderStatus.NEW]: [UserRole.CUSTOMER, UserRole.SELLER, UserRole.ADMIN],
   [OrderStatus.ACCEPTED]: [UserRole.SELLER, UserRole.ADMIN],
-  [OrderStatus.PREPARING]: [UserRole.SELLER, UserRole.ADMIN],
   [OrderStatus.ON_THE_WAY]: [],
   [OrderStatus.DELIVERED]: [],
   [OrderStatus.CANCELLED]: [],
@@ -54,4 +54,7 @@ export const ERROR_CODES = {
   SMS_CODE_EXPIRED: 'SMS_CODE_EXPIRED',
   TOO_MANY_ATTEMPTS: 'TOO_MANY_ATTEMPTS',
   MUST_CHANGE_PASSWORD: 'MUST_CHANGE_PASSWORD',
+  DUPLICATE_REQUEST: 'DUPLICATE_REQUEST',
+  INVALID_REFRESH_TOKEN: 'INVALID_REFRESH_TOKEN',
+  SHOP_NOT_APPROVED: 'SHOP_NOT_APPROVED',
 } as const;

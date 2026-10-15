@@ -9,3 +9,6 @@ allowBuilds:
   '@scarf/scarf': true
   bcrypt: true
   prisma: true
+  '@firebase/util': true
+  msgpackr-extract: true
+  protobufjs: true

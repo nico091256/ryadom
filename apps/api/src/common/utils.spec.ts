@@ -41,31 +41,28 @@ describe('Domain Utils & State Transitions', () => {
     });
   });
 
-  describe('Order State Machine Transitions (Section 7)', () => {
-    it('allows valid normal lifecycle: new -> accepted -> preparing -> on_the_way -> delivered', () => {
+  describe('Order State Machine Transitions (4-state spec)', () => {
+    it('allows valid normal lifecycle: new -> accepted -> on_the_way -> delivered', () => {
       expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.ACCEPTED, UserRole.SELLER)).toBe(true);
-      expect(canTransitionOrder(OrderStatus.ACCEPTED, OrderStatus.PREPARING, UserRole.SELLER)).toBe(true);
-      expect(canTransitionOrder(OrderStatus.PREPARING, OrderStatus.ON_THE_WAY, UserRole.SELLER)).toBe(true);
+      expect(canTransitionOrder(OrderStatus.ACCEPTED, OrderStatus.ON_THE_WAY, UserRole.SELLER)).toBe(true);
       expect(canTransitionOrder(OrderStatus.ON_THE_WAY, OrderStatus.DELIVERED, UserRole.SELLER)).toBe(true);
     });
 
     it('allows customer to cancel only while order is new', () => {
       expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.CANCELLED, UserRole.CUSTOMER)).toBe(true);
       expect(canTransitionOrder(OrderStatus.ACCEPTED, OrderStatus.CANCELLED, UserRole.CUSTOMER)).toBe(false);
-      expect(canTransitionOrder(OrderStatus.PREPARING, OrderStatus.CANCELLED, UserRole.CUSTOMER)).toBe(false);
       expect(canTransitionOrder(OrderStatus.ON_THE_WAY, OrderStatus.CANCELLED, UserRole.CUSTOMER)).toBe(false);
     });
 
-    it('allows seller to cancel from new, accepted, or preparing', () => {
+    it('allows seller to cancel from new or accepted, but not once on the way', () => {
       expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.CANCELLED, UserRole.SELLER)).toBe(true);
       expect(canTransitionOrder(OrderStatus.ACCEPTED, OrderStatus.CANCELLED, UserRole.SELLER)).toBe(true);
-      expect(canTransitionOrder(OrderStatus.PREPARING, OrderStatus.CANCELLED, UserRole.SELLER)).toBe(true);
       expect(canTransitionOrder(OrderStatus.ON_THE_WAY, OrderStatus.CANCELLED, UserRole.SELLER)).toBe(false);
       expect(canTransitionOrder(OrderStatus.DELIVERED, OrderStatus.CANCELLED, UserRole.SELLER)).toBe(false);
     });
 
     it('rejects invalid or illegal skips in state progression', () => {
-      expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.PREPARING, UserRole.SELLER)).toBe(false);
+      expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.ON_THE_WAY, UserRole.SELLER)).toBe(false);
       expect(canTransitionOrder(OrderStatus.NEW, OrderStatus.DELIVERED, UserRole.SELLER)).toBe(false);
       expect(canTransitionOrder(OrderStatus.DELIVERED, OrderStatus.NEW, UserRole.SELLER)).toBe(false);
       expect(canTransitionOrder(OrderStatus.CANCELLED, OrderStatus.ACCEPTED, UserRole.SELLER)).toBe(false);

@@ -10,10 +10,15 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ISmsService, SMS_SERVICE } from '../sms/sms.interface';
 import { SendCodeDto, VerifyCodeDto, LoginDto, ChangePasswordDto } from './auth.dto';
-import { UserRole } from '@localshop/shared';
+import { REFRESH_TOKEN_TTL_DAYS, UserRole } from '@localshop/shared';
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 @Injectable()
 export class AuthService {
@@ -187,10 +192,7 @@ export class AuthService {
       });
     }
 
-    const isPasswordValid =
-      (await bcrypt.compare(dto.password, user.password_hash)) ||
-      (user.login === 'seller_chilonzor' &&
-        (dto.password === 'Shopkeeper123!' || dto.password === 'Seller123456!'));
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password_hash);
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
@@ -216,33 +218,62 @@ export class AuthService {
     };
   }
 
+  /**
+   * Exchanges a refresh token for a new access + refresh token pair, rotating
+   * (revoking the old DB-persisted token and issuing a new one) so a stolen
+   * refresh token can be invalidated and cannot be replayed after rotation.
+   */
   async refreshToken(refreshToken: string) {
-    try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'super-secret-jwt-refresh-key-minimum-32-chars-long'),
-      });
+    const tokenHash = hashToken(refreshToken);
+    const stored = await this.prisma.refreshToken.findUnique({ where: { token_hash: tokenHash } });
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-      });
-
-      if (!user || user.is_blocked) {
-        throw new UnauthorizedException({
-          code: 'USER_BLOCKED',
-          message: 'User no longer active or suspended.',
-        });
-      }
-
-      return this.generateTokens(user.id, user.role, {
-        phone: user.phone || undefined,
-        login: user.login || undefined,
-      });
-    } catch {
+    if (!stored || stored.revoked_at || stored.expires_at < new Date()) {
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
-        message: 'Invalid or expired refresh token. Please log in again.',
+        message: 'Invalid, expired or revoked refresh token. Please log in again.',
       });
     }
+
+    const user = await this.prisma.user.findUnique({ where: { id: stored.user_id } });
+    if (!user || user.is_blocked) {
+      throw new UnauthorizedException({
+        code: 'USER_BLOCKED',
+        message: 'User no longer active or suspended.',
+      });
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revoked_at: new Date() },
+    });
+
+    return this.generateTokens(user.id, user.role, {
+      phone: user.phone || undefined,
+      login: user.login || undefined,
+    });
+  }
+
+  /**
+   * Revokes a single refresh token (logout on this device).
+   */
+  async logout(refreshToken: string) {
+    const tokenHash = hashToken(refreshToken);
+    await this.prisma.refreshToken.updateMany({
+      where: { token_hash: tokenHash, revoked_at: null },
+      data: { revoked_at: new Date() },
+    });
+    return { success: true };
+  }
+
+  /**
+   * Revokes every refresh token belonging to the user (logout on all devices).
+   */
+  async logoutAll(userId: string) {
+    await this.prisma.refreshToken.updateMany({
+      where: { user_id: userId, revoked_at: null },
+      data: { revoked_at: new Date() },
+    });
+    return { success: true };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
@@ -280,22 +311,28 @@ export class AuthService {
     };
   }
 
+  /**
+   * Issues a short-lived JWT access token plus an opaque, DB-persisted refresh
+   * token (only its SHA-256 hash is stored, so a DB leak can't be replayed).
+   */
   private async generateTokens(userId: string, role: string, extra: Record<string, any> = {}) {
     const payload = { sub: userId, role, ...extra };
 
     const accessSecret = this.configService.get<string>('JWT_ACCESS_SECRET', 'super-secret-jwt-access-key-minimum-32-chars-long');
-    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET', 'super-secret-jwt-refresh-key-minimum-32-chars-long');
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: accessSecret,
+      expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m'),
+    });
 
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: accessSecret,
-        expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m'),
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: refreshSecret,
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION', '30d'),
-      }),
-    ]);
+    const refreshToken = randomBytes(32).toString('hex');
+    const ttlDays = this.configService.get<number>('REFRESH_TOKEN_TTL_DAYS', REFRESH_TOKEN_TTL_DAYS);
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: userId,
+        token_hash: hashToken(refreshToken),
+        expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      },
+    });
 
     return {
       accessToken,

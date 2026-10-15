@@ -7,7 +7,6 @@ export enum UserRole {
 export enum OrderStatus {
   NEW = 'new',
   ACCEPTED = 'accepted',
-  PREPARING = 'preparing',
   ON_THE_WAY = 'on_the_way',
   DELIVERED = 'delivered',
   CANCELLED = 'cancelled',
@@ -34,4 +33,17 @@ export enum SupportedLanguage {
 export enum OnlinePaymentProvider {
   PAYME = 'payme',
   CLICK = 'click',
+}
+
+export enum ShopStatus {
+  PENDING = 'pending',
+  ACTIVE = 'active',
+  BLOCKED = 'blocked',
+}
+
+export enum DevicePlatform {
+  ANDROID = 'android',
+  IOS = 'ios',
+  WEB = 'web',
+  UNKNOWN = 'unknown',
 }

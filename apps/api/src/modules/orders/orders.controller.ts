@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  ConflictException,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -10,29 +12,60 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { OrderStatus, PaymentMethod, UserRole } from '@localshop/shared';
+import { ERROR_CODES, OrderStatus, PaymentMethod, UserRole } from '@localshop/shared';
 import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto } from './orders.dto';
+import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly idempotencyService: IdempotencyService,
+  ) {}
 
   @Post()
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Create new order from customer active shopping cart' })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description: 'Optional client-generated key; retried requests with the same key return the original result instead of creating a duplicate order.',
+  })
   async createOrder(
     @CurrentUser('id') customerId: string,
     @Body() dto: CreateOrderDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.ordersService.createOrder(customerId, dto);
+    if (!idempotencyKey) {
+      return this.ordersService.createOrder(customerId, dto);
+    }
+
+    const scope = `orders:create:${customerId}`;
+    const { claimed, cached } = await this.idempotencyService.claim(scope, idempotencyKey);
+    if (!claimed) {
+      if (cached) return cached;
+      throw new ConflictException({
+        code: ERROR_CODES.DUPLICATE_REQUEST,
+        message: 'An identical request is already being processed.',
+      });
+    }
+
+    try {
+      const result = await this.ordersService.createOrder(customerId, dto);
+      await this.idempotencyService.store(scope, idempotencyKey, result);
+      return result;
+    } catch (err) {
+      await this.idempotencyService.release(scope, idempotencyKey);
+      throw err;
+    }
   }
 
   @Get()
@@ -107,7 +140,7 @@ export class OrdersController {
 
   @Patch(':id/status')
   @Roles(UserRole.SELLER)
-  @ApiOperation({ summary: 'Seller advances order to preparing, on_the_way, or delivered' })
+  @ApiOperation({ summary: 'Seller advances order to on_the_way or delivered' })
   async updateStatus(
     @Param('id') orderId: string,
     @CurrentUser('id') sellerId: string,

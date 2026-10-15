@@ -7,7 +7,7 @@ on:
     branches: [main, master]
 
 jobs:
-  lint-and-typecheck:
+  lint-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -40,10 +40,65 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile=false
 
-      - name: Run Linters & Formatters
-        run: |
-          pnpm format:check || true
+      - name: Check formatting (advisory only — repo has pre-existing Prettier debt, not gated yet)
+        run: pnpm format:check || true
 
-      - name: Run Tests
-        run: |
-          pnpm test || true
+      - name: Run Unit Tests
+        run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: localshop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/localshop?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ci-test-access-secret-minimum-32-characters-long
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+          run_install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared package
+        run: pnpm --filter @localshop/shared build
+
+      - name: Apply Prisma migrations
+        run: pnpm --filter @localshop/api exec prisma migrate deploy
+
+      - name: Run API e2e tests
+        run: pnpm --filter @localshop/api test:e2e

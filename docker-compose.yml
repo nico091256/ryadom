@@ -46,9 +46,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_ACCESS_SECRET=production-secret-access-token-key-change-in-prod
-      - JWT_REFRESH_SECRET=production-secret-refresh-token-key-change-in-prod
       - SMS_PROVIDER=mock
       - ONLINE_PAYMENTS_ENABLED=false
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
     depends_on:
       postgres:
         condition: service_healthy

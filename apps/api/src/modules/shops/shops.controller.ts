@@ -1,12 +1,20 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ShopsService } from './shops.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { RegisterShopDto } from './shops.dto';
 
 @ApiTags('Shops')
 @Controller('shops')
 export class ShopsController {
   constructor(private readonly shopsService: ShopsService) {}
+
+  @Public()
+  @Post('register')
+  @ApiOperation({ summary: 'Self-service shop registration; creates the shop as pending admin approval' })
+  async register(@Body() dto: RegisterShopDto) {
+    return this.shopsService.registerShop(dto);
+  }
 
   @Public()
   @Get('nearby')

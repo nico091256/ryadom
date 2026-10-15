@@ -43,10 +43,19 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Exchange refresh token for a new access token' })
+  @ApiOperation({ summary: 'Exchange refresh token for a new access token (rotates the refresh token)' })
   @ApiResponse({ status: 200, description: 'Tokens refreshed' })
   async refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
+  }
+
+  @Public()
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke a single refresh token (logout on this device)' })
+  @ApiResponse({ status: 200, description: 'Logged out' })
+  async logout(@Body() dto: RefreshTokenDto) {
+    return this.authService.logout(dto.refreshToken);
   }
 
   @Post('change-password')

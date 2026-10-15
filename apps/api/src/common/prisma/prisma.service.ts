@@ -110,6 +110,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       close_time: '23:00',
       is_open: true,
       is_active: true,
+      status: 'active',
       commission_rate_percent: 0,
       created_at: new Date(),
       updated_at: new Date(),
@@ -254,6 +255,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       smsCodes: [],
       payments: [],
       notifications: [],
+      refreshTokens: [],
+      deviceTokens: [],
     };
   }
 
@@ -273,6 +276,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       { key: 'smsCode', storeKey: 'smsCodes' },
       { key: 'payment', storeKey: 'payments' },
       { key: 'notification', storeKey: 'notifications' },
+      { key: 'refreshToken', storeKey: 'refreshTokens' },
+      { key: 'deviceToken', storeKey: 'deviceTokens' },
     ];
 
     for (const { key, storeKey } of models) {

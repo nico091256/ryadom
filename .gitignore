@@ -32,8 +32,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Storage & Uploads
-uploads/
+# Storage & Uploads (runtime upload storage only — not src/modules/uploads)
+/uploads/
+apps/api/uploads/
 storage/
 
 # Coverage & test artifacts

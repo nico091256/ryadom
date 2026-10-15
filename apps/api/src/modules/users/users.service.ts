@@ -38,14 +38,6 @@ export class UsersService {
     return rest;
   }
 
-  async setPushToken(userId: string, pushToken: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { push_token: pushToken },
-    });
-    return { success: true };
-  }
-
   // Address CRUD (Customer role)
   async getAddresses(userId: string) {
     return this.prisma.address.findMany({

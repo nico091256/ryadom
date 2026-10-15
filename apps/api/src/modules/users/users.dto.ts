@@ -13,13 +13,6 @@ export class UpdateProfileDto {
   language?: string;
 }
 
-export class RegisterPushTokenDto {
-  @ApiProperty({ example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]' })
-  @IsNotEmpty()
-  @IsString()
-  pushToken: string;
-}
-
 export class CreateAddressDto {
   @ApiProperty({ example: 'Uy', description: 'Address label: Uy, Ish, etc.' })
   @IsNotEmpty()

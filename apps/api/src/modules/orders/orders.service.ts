@@ -6,15 +6,19 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto } from './orders.dto';
+import { ORDER_AUTO_CANCEL_JOB, ORDER_AUTO_CANCEL_QUEUE } from './orders.constants';
 import {
   ALLOWED_STATUS_TRANSITIONS,
   CANCELLATION_ALLOWED_ROLES,
   ERROR_CODES,
+  ORDER_ACCEPTANCE_TIMEOUT_MS,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
@@ -31,6 +35,7 @@ export class OrdersService {
     private notificationsGateway: NotificationsGateway,
     private pushNotificationService: PushNotificationService,
     private paymentsService: PaymentsService,
+    @InjectQueue(ORDER_AUTO_CANCEL_QUEUE) private autoCancelQueue: Queue,
   ) {}
 
   /**
@@ -61,10 +66,16 @@ export class OrdersService {
     const promoCode = dto.promo_code?.trim().toUpperCase() || null;
 
     const shop = cart.shop;
-    if (!shop.is_active || !shop.is_open) {
+    if (!shop.is_active || shop.status !== ('active' as any)) {
+      throw new ConflictException({
+        code: ERROR_CODES.SHOP_INACTIVE,
+        message: 'This shop is not active. Orders cannot be accepted.',
+      });
+    }
+    if (!shop.is_open) {
       throw new ConflictException({
         code: ERROR_CODES.SHOP_CLOSED,
-        message: 'This shop is currently closed or inactive. Orders cannot be accepted.',
+        message: 'This shop is currently closed. Orders cannot be accepted.',
       });
     }
 
@@ -182,6 +193,13 @@ ${promoLine}` : promoLine;
     // 7. Dispatch High-Priority Push Notification to Seller
     const formattedTotal = formatPrice(order.total_amount);
     this.pushNotificationService.sendNewOrderSellerPush(shop.owner_id, order.id, formattedTotal);
+
+    // 8. Schedule the hard auto-cancel job (10-minute acceptance window)
+    await this.autoCancelQueue.add(
+      ORDER_AUTO_CANCEL_JOB,
+      { orderId: order.id },
+      { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: order.id, removeOnComplete: true, removeOnFail: true },
+    );
 
     return order;
   }
@@ -428,7 +446,7 @@ ${promoLine}` : promoLine;
   }
 
   /**
-   * Seller updates order progression: preparing, on_the_way, delivered
+   * Seller updates order progression: on_the_way, delivered
    */
   async updateStatus(orderId: string, sellerId: string, dto: UpdateOrderStatusDto) {
     return this.transitionOrder(orderId, dto.status, sellerId, UserRole.SELLER);
@@ -544,6 +562,11 @@ ${promoLine}` : promoLine;
       return updated;
     });
 
+    // The order left 'new' (accepted or cancelled) before the auto-cancel job fired; drop it.
+    if (currentStatus === OrderStatus.NEW) {
+      await this.autoCancelQueue.remove(orderId).catch(() => undefined);
+    }
+
     const timestamp = new Date().toISOString();
 
     // Broadcast Realtime Event
@@ -565,34 +588,5 @@ ${promoLine}` : promoLine;
     }
 
     return updatedOrder;
-  }
-
-  /**
-   * 5-Minute Escalation Background Check (Section 7 & Milestone 3)
-   * Finds orders where status = 'new' and created_at > 5 minutes ago and needs_attention = false.
-   * Sets needs_attention = true so Admin panel displays them at the top.
-   */
-  async checkOrderAcceptanceTimeouts() {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
-    const timedOutOrders = await this.prisma.order.findMany({
-      where: {
-        status: OrderStatus.NEW as any,
-        needs_attention: false,
-        created_at: { lte: fiveMinutesAgo },
-      },
-    });
-
-    if (timedOutOrders.length > 0) {
-      this.logger.warn(`Found ${timedOutOrders.length} unaccepted orders exceeding 5-minute timeout. Flagging for admin attention.`);
-      await this.prisma.order.updateMany({
-        where: {
-          id: { in: timedOutOrders.map((o) => o.id) },
-        },
-        data: {
-          needs_attention: true,
-        },
-      });
-    }
   }
 }

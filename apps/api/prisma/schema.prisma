@@ -16,10 +16,15 @@ enum UserRole {
 enum OrderStatus {
   new
   accepted
-  preparing
   on_the_way
   delivered
   cancelled
+}
+
+enum ShopStatus {
+  pending
+  active
+  blocked
 }
 
 enum PaymentMethod {
@@ -59,7 +64,6 @@ model User {
   language             String    @default("uz")
   is_blocked           Boolean   @default(false)
   must_change_password Boolean   @default(false)
-  push_token           String?
   created_at           DateTime  @default(now())
   updated_at           DateTime  @updatedAt
 
@@ -69,8 +73,39 @@ model User {
   orders               Order[]   @relation("CustomerOrders")
   status_changes       OrderStatusHistory[]
   notifications        Notification[]
+  refresh_tokens       RefreshToken[]
+  device_tokens        DeviceToken[]
 
   @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  user_id     String
+  token_hash  String    @unique
+  device_info String?
+  expires_at  DateTime
+  revoked_at  DateTime?
+  created_at  DateTime  @default(now())
+
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+model DeviceToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String   @unique
+  platform   String   @default("unknown")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("device_tokens")
 }
 
 model Address {
@@ -108,6 +143,7 @@ model Shop {
   close_time              String    @default("22:00")
   is_open                 Boolean   @default(true)
   is_active               Boolean   @default(true)
+  status                  ShopStatus @default(active)
   commission_rate_percent Float     @default(0)
   created_at              DateTime  @default(now())
   updated_at              DateTime  @updatedAt

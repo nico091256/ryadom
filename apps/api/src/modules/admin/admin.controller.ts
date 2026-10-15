@@ -115,6 +115,24 @@ export class AdminController {
     return this.adminService.updateShop(shopId, dto);
   }
 
+  @Post('shops/:id/approve')
+  @ApiOperation({ summary: 'Approve a self-registered (pending) shop, making it visible to customers' })
+  async approveShop(@Param('id') shopId: string) {
+    return this.adminService.approveShop(shopId);
+  }
+
+  @Post('shops/:id/block')
+  @ApiOperation({ summary: 'Block a shop (hidden from customers, cannot accept orders)' })
+  async blockShop(@Param('id') shopId: string) {
+    return this.adminService.blockShop(shopId);
+  }
+
+  @Post('shops/:id/unblock')
+  @ApiOperation({ summary: 'Unblock a previously blocked shop' })
+  async unblockShop(@Param('id') shopId: string) {
+    return this.adminService.unblockShop(shopId);
+  }
+
   @Post('shops/:id/reset-password')
   @ApiOperation({ summary: 'Reset the shopkeeper password to a random temporary one' })
   async resetShopPassword(@Param('id') shopId: string) {

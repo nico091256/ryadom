@@ -1,10 +1,74 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { DEFAULT_SEARCH_RADIUS_METERS, UserRole } from '@localshop/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { DEFAULT_SEARCH_RADIUS_METERS } from '@localshop/shared';
+import { RegisterShopDto } from './shops.dto';
 
 @Injectable()
 export class ShopsService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Self-service shop registration (spec: POST /store/register). Creates the
+   * shopkeeper account and shop as `pending`/inactive so it stays invisible
+   * to customers until an admin approves it — mirrors the admin-create flow
+   * but lets the owner choose their own login/password up front.
+   */
+  async registerShop(dto: RegisterShopDto) {
+    const existingUser = await this.prisma.user.findUnique({ where: { login: dto.login } });
+    if (existingUser) {
+      throw new ConflictException({
+        code: 'SELLER_LOGIN_EXISTS',
+        message: `Username '${dto.login}' is already in use. Please choose another.`,
+      });
+    }
+
+    let cityId = dto.city_id;
+    if (!cityId) {
+      const city = await this.prisma.city.findFirst({ where: { is_active: true } });
+      cityId = city ? city.id : '00000000-0000-0000-0000-000000000001';
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      const owner = await tx.user.create({
+        data: {
+          login: dto.login,
+          phone: dto.phone,
+          name: dto.owner_name,
+          password_hash: passwordHash,
+          role: UserRole.SELLER as any,
+          must_change_password: false,
+          is_blocked: false,
+        },
+      });
+
+      const shop = await tx.shop.create({
+        data: {
+          owner_id: owner.id,
+          city_id: cityId,
+          name: dto.name,
+          phone: dto.phone,
+          address_text: dto.address_text,
+          lat: dto.lat,
+          lng: dto.lng,
+          open_time: dto.open_time || '08:00',
+          close_time: dto.close_time || '22:00',
+          is_open: false,
+          is_active: false,
+          status: 'pending' as any,
+          commission_rate_percent: 0,
+        },
+        include: {
+          owner: { select: { id: true, login: true, name: true, phone: true } },
+          city: true,
+        },
+      });
+
+      return shop;
+    });
+  }
 
   /**
    * Evaluates if a shop is currently open based on current time and manual switch.
@@ -67,9 +131,9 @@ export class ShopsService {
     try {
       // Attempt spatial query using PostGIS ST_DWithin
       const rawShops: any[] = await this.prisma.$queryRaw`
-        SELECT 
+        SELECT
           s.id, s.owner_id, s.city_id, s.name, s.logo_url, s.phone, s.address_text,
-          s.lat, s.lng, s.open_time, s.close_time, s.is_open, s.is_active, s.commission_rate_percent,
+          s.lat, s.lng, s.open_time, s.close_time, s.is_open, s.is_active, s.status, s.commission_rate_percent,
           s.created_at, s.updated_at,
           ROUND(ST_Distance(
             ST_SetSRID(ST_MakePoint(s.lng, s.lat), 4326)::geography,
@@ -77,7 +141,8 @@ export class ShopsService {
           )) AS "distanceMeters"
         FROM shops s
         WHERE s.is_active = true
-          AND s.lat IS NOT NULL 
+          AND s.status = 'active'
+          AND s.lat IS NOT NULL
           AND s.lng IS NOT NULL
           AND ST_DWithin(
             ST_SetSRID(ST_MakePoint(s.lng, s.lat), 4326)::geography,
@@ -95,7 +160,7 @@ export class ShopsService {
     } catch {
       // Fallback query with Haversine distance in memory if PostGIS is not enabled in dev database
       const activeShops = await this.prisma.shop.findMany({
-        where: { is_active: true },
+        where: { is_active: true, status: 'active' as any },
       });
 
       return withCounts(activeShops)
@@ -120,7 +185,7 @@ export class ShopsService {
       },
     });
 
-    if (!shop || !shop.is_active) {
+    if (!shop || !shop.is_active || shop.status !== ('active' as any)) {
       throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found or inactive' });
     }
 
@@ -132,7 +197,7 @@ export class ShopsService {
 
   async findShopProducts(shopId: string, categoryId?: string, query?: string) {
     const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
-    if (!shop || !shop.is_active) {
+    if (!shop || !shop.is_active || shop.status !== ('active' as any)) {
       throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found or inactive' });
     }
 

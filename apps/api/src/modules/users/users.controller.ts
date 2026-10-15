@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Patch, Put } from '@nestjs/common';
+import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RegisterPushTokenDto, UpdateProfileDto } from './users.dto';
+import { UpdateProfileDto } from './users.dto';
 
 @ApiTags('Profile')
 @ApiBearerAuth()
@@ -23,14 +23,5 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(userId, dto);
-  }
-
-  @Put('push-token')
-  @ApiOperation({ summary: 'Register Expo push notification token for device' })
-  async setPushToken(
-    @CurrentUser('id') userId: string,
-    @Body() dto: RegisterPushTokenDto,
-  ) {
-    return this.usersService.setPushToken(userId, dto.pushToken);
   }
 }
