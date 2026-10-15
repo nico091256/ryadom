@@ -1,207 +1,307 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { FolderTree, Plus, Edit2, Save, X, Tag } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
+import { api, ApiError, errorMessage } from '@/lib/api';
+import type { Category } from '@/lib/types';
+import { formatNumber } from '@/lib/format';
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Field,
+  Input,
+  Modal,
+  PageHeader,
+  SearchInput,
+  Table,
+  TableSkeleton,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '@/components/ui';
 
-export default function CategoriesPage() {
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+function CategoryIcon({ icon }: { icon: string | null }) {
+  if (icon && /^https?:\/\//.test(icon)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={icon} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />;
+  }
+  return (
+    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+      {icon && icon.length <= 2 ? <span className="text-lg">{icon}</span> : <FolderTree className="h-4 w-4" />}
+    </div>
+  );
+}
 
-  const [formData, setFormData] = useState({
-    name_uz: '',
-    name_ru: '',
-    name_en: '',
-    icon_url: '',
-  });
-
-  const loadCategories = async () => {
-    try {
-      const data = await api.getCategories();
-      setCategories(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+function CategoryModal({
+  open,
+  category,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  category: Category | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [f, setF] = useState({ name_uz: '', name_ru: '', name_en: '', icon_url: '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingId) {
-        await api.updateCategory(editingId, formData);
-      } else {
-        await api.createCategory(formData);
-      }
-      setIsCreating(false);
-      setEditingId(null);
-      setFormData({ name_uz: '', name_ru: '', name_en: '', icon_url: '' });
-      await loadCategories();
-    } catch (err: any) {
-      alert(err.message || 'Xatolik yuz berdi');
+    if (open) {
+      setF({
+        name_uz: category?.name_uz ?? '',
+        name_ru: category?.name_ru ?? '',
+        name_en: category?.name_en ?? '',
+        icon_url: category?.icon_url ?? '',
+      });
+      setErr(null);
     }
-  };
+  }, [open, category]);
 
-  const startEdit = (cat: any) => {
-    setEditingId(cat.id);
-    setIsCreating(false);
-    setFormData({
-      name_uz: cat.name_uz,
-      name_ru: cat.name_ru || '',
-      name_en: cat.name_en || '',
-      icon_url: cat.icon_url || '',
-    });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!f.name_uz.trim()) {
+      setErr("O'zbekcha nomini kiriting");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      name_uz: f.name_uz.trim(),
+      name_ru: f.name_ru.trim() || f.name_uz.trim(),
+      name_en: f.name_en.trim() || f.name_uz.trim(),
+      icon_url: f.icon_url.trim() || undefined,
+    };
+    try {
+      if (category) await api.updateCategory(category.id, payload);
+      else await api.createCategory(payload);
+      toast.success(category ? 'Kategoriya yangilandi' : "Kategoriya qo'shildi", payload.name_uz);
+      onSaved();
+    } catch (e2) {
+      toast.error("Saqlab bo'lmadi", errorMessage(e2));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Global Mahsulot Kategoriyalari</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Barcha do'konlar foydalanadigan mahsulot toifalari (3 tilda)
-          </p>
+    <Modal
+      open={open}
+      onClose={saving ? () => {} : onClose}
+      title={category ? 'Kategoriyani tahrirlash' : 'Yangi kategoriya'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            Bekor
+          </Button>
+          <Button type="submit" form="category-form" loading={saving}>
+            Saqlash
+          </Button>
+        </>
+      }
+    >
+      <form id="category-form" onSubmit={submit} className="space-y-4" noValidate>
+        <Field label="Nomi (o'zbekcha)" required error={err}>
+          <Input value={f.name_uz} onChange={set('name_uz')} invalid={!!err} placeholder="Meva va sabzavotlar" autoFocus />
+        </Field>
+        <Field label="Nomi (ruscha)" hint="Bo'sh qolsa o'zbekcha nomi ishlatiladi">
+          <Input value={f.name_ru} onChange={set('name_ru')} placeholder="Овощи и фрукты" />
+        </Field>
+        <Field label="Nomi (inglizcha)" hint="Bo'sh qolsa o'zbekcha nomi ishlatiladi">
+          <Input value={f.name_en} onChange={set('name_en')} placeholder="Fruits & Vegetables" />
+        </Field>
+        <Field label="Ikonka" hint="Rasm URL manzili, emoji yoki ikonka nomi">
+          <div className="flex items-center gap-3">
+            <CategoryIcon icon={f.icon_url.trim() || null} />
+            <Input value={f.icon_url} onChange={set('icon_url')} placeholder="https://... yoki apple" className="flex-1" />
+          </div>
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
+export default function CategoriesPage() {
+  const toast = useToast();
+  const [items, setItems] = useState<Category[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [modal, setModal] = useState<{ open: boolean; category: Category | null }>({ open: false, category: null });
+  const [deleting, setDeleting] = useState<Category | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [inUse, setInUse] = useState<{ category: Category; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const list = await api.getCategories();
+      setItems(Array.isArray(list) ? list : []);
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const doDelete = async () => {
+    if (!deleting) return;
+    setDeleteLoading(true);
+    try {
+      await api.deleteCategory(deleting.id);
+      toast.success("Kategoriya o'chirildi", deleting.name_uz);
+      setItems((xs) => (xs ? xs.filter((c) => c.id !== deleting.id) : xs));
+      setDeleting(null);
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 409 || e.code === 'CATEGORY_IN_USE')) {
+        setInUse({ category: deleting, message: e.message });
+        setDeleting(null);
+      } else {
+        toast.error("O'chirib bo'lmadi", errorMessage(e));
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = items ?? [];
+    if (!term) return list;
+    return list.filter((c) => [c.name_uz, c.name_ru, c.name_en].some((x) => x?.toLowerCase().includes(term)));
+  }, [items, q]);
+
+  return (
+    <div>
+      <PageHeader
+        title="Kategoriyalar"
+        description="Barcha do'konlar uchun umumiy mahsulot kategoriyalari"
+        actions={
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setModal({ open: true, category: null })}>
+            Yangi kategoriya
+          </Button>
+        }
+      />
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4">
+          <p className="text-sm text-slate-500">{items ? `${formatNumber(items.length)} ta kategoriya` : ' '}</p>
+          <SearchInput value={q} onChange={setQ} placeholder="Kategoriya qidirish" className="w-full sm:w-72" />
         </div>
-        {!isCreating && !editingId && (
-          <button
-            onClick={() => {
-              setIsCreating(true);
-              setEditingId(null);
-              setFormData({ name_uz: '', name_ru: '', name_en: '', icon_url: '' });
-            }}
-            className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-xs"
-          >
-            <Plus size={16} />
-            <span>Yangi kategoriya</span>
-          </button>
-        )}
-      </div>
-
-      {/* Modal / Inline Form for Add & Edit */}
-      {(isCreating || editingId) && (
-        <form onSubmit={handleSave} className="bg-white p-6 rounded-2xl border border-emerald-500/30 shadow-md space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h3 className="font-semibold text-sm text-slate-900">
-              {editingId ? 'Kategoriyani Tahrirlash' : 'Yangi Kategoriya Yaratish'}
-            </h3>
-            <button
-              type="button"
-              onClick={() => {
-                setIsCreating(false);
-                setEditingId(null);
-              }}
-              className="text-slate-400 hover:text-slate-600 p-1"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nomi (O'zbekcha) *</label>
-              <input
-                type="text"
-                required
-                value={formData.name_uz}
-                onChange={(e) => setFormData({ ...formData, name_uz: e.target.value })}
-                placeholder="Non va pishiriqlar"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nomi (Ruscha)</label>
-              <input
-                type="text"
-                value={formData.name_ru}
-                onChange={(e) => setFormData({ ...formData, name_ru: e.target.value })}
-                placeholder="Хлеб и выпечка"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nomi (Inglizcha)</label>
-              <input
-                type="text"
-                value={formData.name_en}
-                onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
-                placeholder="Bakery & Bread"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Ikonka yoki Rasm URL</label>
-              <input
-                type="text"
-                value={formData.icon_url}
-                onChange={(e) => setFormData({ ...formData, icon_url: e.target.value })}
-                placeholder="bread-slice yoki https://..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsCreating(false);
-                setEditingId(null);
-              }}
-              className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Bekor qilish
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
-            >
-              Saqlash
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Categories Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {loading ? (
-          <div className="col-span-full p-8 text-center text-slate-400 text-sm">Yuklanmoqda...</div>
-        ) : categories.length === 0 ? (
-          <div className="col-span-full p-8 text-center text-slate-400 text-sm">Kategoriyalar mavjud emas.</div>
+        {error && !items ? (
+          <ErrorState message={error} onRetry={load} />
         ) : (
-          categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
-                    <Tag size={18} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{cat.name_uz}</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{cat.name_ru} &bull; {cat.name_en}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => startEdit(cat)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <Edit2 size={15} />
-                </button>
-              </div>
-            </div>
-          ))
+          <Table>
+            <THead>
+              <TH>Nomi</TH>
+              <TH>Ruscha</TH>
+              <TH>Inglizcha</TH>
+              <TH align="right">Mahsulotlar</TH>
+              <TH />
+            </THead>
+            <TBody>
+              {!items ? (
+                <TableSkeleton rows={8} cols={5} />
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState
+                      icon={<FolderTree className="h-6 w-6" />}
+                      title={q ? 'Hech narsa topilmadi' : "Kategoriyalar yo'q"}
+                      action={
+                        !q ? (
+                          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setModal({ open: true, category: null })}>
+                            Kategoriya qo'shish
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((c) => (
+                  <TR key={c.id}>
+                    <TD>
+                      <div className="flex items-center gap-3">
+                        <CategoryIcon icon={c.icon_url} />
+                        <span className="font-medium text-slate-900">{c.name_uz}</span>
+                      </div>
+                    </TD>
+                    <TD className="text-slate-500">{c.name_ru}</TD>
+                    <TD className="text-slate-500">{c.name_en}</TD>
+                    <TD align="right" className="tabular-nums">
+                      {c.productCount != null ? formatNumber(c.productCount) : '—'}
+                    </TD>
+                    <TD align="right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Tahrirlash" onClick={() => setModal({ open: true, category: c })}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="O'chirish" onClick={() => setDeleting(c)} className="hover:bg-rose-50 hover:text-rose-600">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TD>
+                  </TR>
+                ))
+              )}
+            </TBody>
+          </Table>
         )}
-      </div>
+      </Card>
+
+      <CategoryModal
+        open={modal.open}
+        category={modal.category}
+        onClose={() => setModal({ open: false, category: null })}
+        onSaved={() => {
+          setModal({ open: false, category: null });
+          load();
+        }}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={doDelete}
+        loading={deleteLoading}
+        title="Kategoriyani o'chirish"
+        message={
+          <>
+            <b>{deleting?.name_uz}</b> kategoriyasi butunlay o'chiriladi.
+            {deleting?.productCount ? ` Unda ${deleting.productCount} ta mahsulot bor — avval ularni boshqa kategoriyaga o'tkazing.` : ''}
+          </>
+        }
+        confirmLabel="O'chirish"
+      />
+      <Modal
+        open={!!inUse}
+        onClose={() => setInUse(null)}
+        size="sm"
+        title="Kategoriya ishlatilmoqda"
+        footer={<Button onClick={() => setInUse(null)}>Tushunarli</Button>}
+      >
+        <p className="text-sm text-slate-600">
+          <b>{inUse?.category.name_uz}</b> kategoriyasini o'chirib bo'lmaydi, chunki unga mahsulotlar biriktirilgan.
+        </p>
+        {inUse?.message && (
+          <p className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            {/\d+/.test(inUse.message)
+              ? `${/archived/i.test(inUse.message) ? 'Arxivlangan (buyurtma tarixiga ega)' : 'Faol'} mahsulotlar soni: ${inUse.message.match(/\d+/)![0]} ta.`
+              : inUse.message}
+          </p>
+        )}
+        <p className="mt-2 text-sm text-slate-500">Avval mahsulotlarni boshqa kategoriyaga o'tkazing yoki ularni o'chiring.</p>
+      </Modal>
     </div>
   );
 }

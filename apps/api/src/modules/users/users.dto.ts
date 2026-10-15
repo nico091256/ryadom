@@ -45,6 +45,26 @@ export class CreateAddressDto {
   @IsOptional()
   @IsString()
   city_id?: string;
+
+  @ApiProperty({ example: '2', required: false })
+  @IsOptional()
+  @IsString()
+  entrance?: string;
+
+  @ApiProperty({ example: '5', required: false })
+  @IsOptional()
+  @IsString()
+  floor?: string;
+
+  @ApiProperty({ example: '45', required: false })
+  @IsOptional()
+  @IsString()
+  apartment?: string;
+
+  @ApiProperty({ example: '45K1234', required: false })
+  @IsOptional()
+  @IsString()
+  door_code?: string;
 }
 
 export class UpdateAddressDto {
@@ -67,4 +87,24 @@ export class UpdateAddressDto {
   @IsOptional()
   @IsNumber()
   lng?: number;
+
+  @ApiProperty({ example: '2', required: false })
+  @IsOptional()
+  @IsString()
+  entrance?: string;
+
+  @ApiProperty({ example: '5', required: false })
+  @IsOptional()
+  @IsString()
+  floor?: string;
+
+  @ApiProperty({ example: '45', required: false })
+  @IsOptional()
+  @IsString()
+  apartment?: string;
+
+  @ApiProperty({ example: '45K1234', required: false })
+  @IsOptional()
+  @IsString()
+  door_code?: string;
 }

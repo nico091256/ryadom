@@ -37,10 +37,32 @@ export class ShopsService {
   /**
    * Search nearby shops within radius (default 3000m)
    */
-  async findNearby(lat: number, lng: number, radiusMeters: number = DEFAULT_SEARCH_RADIUS_METERS) {
+  async findNearby(
+    lat: number,
+    lng: number,
+    radiusMeters: number = DEFAULT_SEARCH_RADIUS_METERS,
+    categoryId?: string,
+  ) {
     if (!lat || !lng) {
       return [];
     }
+
+    // Count available products per shop (optionally restricted to a category).
+    // Shops with zero matching products are excluded when a category filter is set.
+    const productCounts = await this.prisma.product.groupBy({
+      by: ['shop_id'],
+      where: {
+        is_available: true,
+        deleted_at: null,
+        ...(categoryId ? { category_id: categoryId } : {}),
+      },
+      _count: { _all: true },
+    });
+    const countByShop = new Map<string, number>(productCounts.map((p) => [p.shop_id, p._count._all]));
+    const withCounts = <T extends { id: string }>(shops: T[]) =>
+      shops
+        .filter((shop) => !categoryId || (countByShop.get(shop.id) || 0) > 0)
+        .map((shop) => ({ ...shop, productCount: countByShop.get(shop.id) || 0 }));
 
     try {
       // Attempt spatial query using PostGIS ST_DWithin
@@ -65,7 +87,7 @@ export class ShopsService {
         ORDER BY "distanceMeters" ASC;
       `;
 
-      return rawShops.map((shop) => ({
+      return withCounts(rawShops).map((shop) => ({
         ...shop,
         distanceMeters: Number(shop.distanceMeters),
         isCurrentlyOpen: this.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
@@ -76,7 +98,7 @@ export class ShopsService {
         where: { is_active: true },
       });
 
-      return activeShops
+      return withCounts(activeShops)
         .map((shop) => {
           const distance = this.prisma.calculateDistanceMeters(lat, lng, shop.lat, shop.lng);
           return {
@@ -118,6 +140,7 @@ export class ShopsService {
       where: {
         shop_id: shopId,
         deleted_at: null,
+        is_available: true,
         ...(categoryId ? { category_id: categoryId } : {}),
         ...(query
           ? {

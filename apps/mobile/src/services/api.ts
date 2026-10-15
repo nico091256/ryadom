@@ -137,16 +137,37 @@ class MobileApiClient {
     return this.request('/addresses');
   }
 
-  async createAddress(addressData: { title: string; address_text: string; lat: number; lng: number }) {
+  async createAddress(addressData: {
+    title: string;
+    address_text: string;
+    lat: number;
+    lng: number;
+    entrance?: string;
+    floor?: string;
+    apartment?: string;
+    door_code?: string;
+  }) {
     return this.request('/addresses', {
       method: 'POST',
       body: JSON.stringify(addressData),
     });
   }
 
+  async updateAddress(addressId: string, addressData: Record<string, any>) {
+    return this.request(`/addresses/${addressId}`, {
+      method: 'PUT',
+      body: JSON.stringify(addressData),
+    });
+  }
+
+  async deleteAddress(addressId: string) {
+    return this.request(`/addresses/${addressId}`, { method: 'DELETE' });
+  }
+
   // Shops & Nearby (within 3km)
-  async getNearbyShops(lat: number, lng: number, radius = 3000) {
-    return this.request(`/shops/nearby?lat=${lat}&lng=${lng}&radius=${radius}`);
+  async getNearbyShops(lat: number, lng: number, radius = 3000, categoryId?: string) {
+    const cat = categoryId ? `&category=${encodeURIComponent(categoryId)}` : '';
+    return this.request(`/shops/nearby?lat=${lat}&lng=${lng}&radius=${radius}${cat}`);
   }
 
   async getShopDetails(shopId: string) {
@@ -189,6 +210,7 @@ class MobileApiClient {
     customer_phone: string;
     payment_method: string;
     comment?: string;
+    promo_code?: string;
   }) {
     return this.request('/orders', {
       method: 'POST',
@@ -267,6 +289,50 @@ class MobileApiClient {
 
   async getSellerStats() {
     return this.request('/seller/stats');
+  }
+
+  /**
+   * Upload a picked image (expo-image-picker asset uri) and return its absolute URL.
+   * The API answers with a server-relative path like /uploads/abc.jpg.
+   */
+  async uploadImage(uri: string, mimeType = 'image/jpeg'): Promise<string> {
+    const token = await this.getToken();
+    const url = `${API_BASE_URL}/uploads/image`;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+    let status: number;
+    let bodyText: string;
+
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(uri)).blob();
+      const form = new FormData();
+      form.append('file', blob, `upload.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`);
+      const res = await fetch(url, { method: 'POST', headers: authHeaders, body: form });
+      status = res.status;
+      bodyText = await res.text();
+    } else {
+      // SDK 57 swaps global fetch for expo/fetch, which can't send React Native
+      // { uri, name, type } FormData parts — upload natively from the file instead.
+      const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+      const res = await FileSystem.uploadAsync(url, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType,
+        headers: authHeaders,
+      });
+      status = res.status;
+      bodyText = res.body;
+    }
+
+    let data: any = {};
+    try {
+      data = JSON.parse(bodyText);
+    } catch {}
+    if (status < 200 || status >= 300) {
+      throw new Error(data.message || 'Rasm yuklashda xatolik');
+    }
+    return `http://${HOST}:4000${data.url}`;
   }
 }
 

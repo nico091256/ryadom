@@ -1,159 +1,232 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { Users, Search, Shield, UserX, CheckCircle, Smartphone, Lock } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Lock, Unlock, Users } from 'lucide-react';
+import { api, errorMessage } from '@/lib/api';
+import type { Paginated, UserRow } from '@/lib/types';
+import { ROLE_META } from '@/lib/constants';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { useDebounce } from '@/lib/hooks';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Select,
+  Table,
+  TableSkeleton,
+  Tabs,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '@/components/ui';
+import { UserDrawer } from '@/components/users/UserDrawer';
+import { OrderDrawer } from '@/components/orders/OrderDrawer';
+
+const LIMIT = 20;
+type RoleFilter = 'all' | 'customer' | 'seller' | 'admin';
+type BlockTarget = { id: string; name: string | null; is_blocked: boolean; role: string };
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<any[]>([]);
+  const toast = useToast();
+  const [role, setRole] = useState<RoleFilter>('all');
+  const [blocked, setBlocked] = useState('');
+  const [q, setQ] = useState('');
+  const dq = useDebounce(q.trim());
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<Paginated<UserRow> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedRole, setSelectedRole] = useState('');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [target, setTarget] = useState<BlockTarget | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const loadUsers = async () => {
+  const seq = useRef(0);
+  const load = useCallback(async () => {
+    const my = ++seq.current;
+    setLoading(true);
     try {
-      const data = await api.getUsers(search || undefined, selectedRole || undefined);
-      setUsers(data);
-    } catch (err) {
-      console.error(err);
+      const r = await api.getUsers({
+        q: dq || undefined,
+        role: role === 'all' ? undefined : role,
+        blocked: blocked || undefined,
+        page,
+        limit: LIMIT,
+      });
+      if (my !== seq.current) return;
+      setResult(r);
+      setError(null);
+    } catch (e) {
+      if (my === seq.current) setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (my === seq.current) setLoading(false);
     }
-  };
+  }, [dq, role, blocked, page]);
 
   useEffect(() => {
-    loadUsers();
-  }, [selectedRole]);
+    load();
+  }, [load]);
+  useEffect(() => setPage(1), [dq, role, blocked]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadUsers();
-  };
-
-  const handleToggleBlock = async (user: any) => {
-    setUpdatingId(user.id);
+  const confirmBlock = async () => {
+    if (!target) return;
+    const next = !target.is_blocked;
+    setSaving(true);
     try {
-      await api.toggleBlockUser(user.id, !user.is_blocked);
-      await loadUsers();
-    } catch (err: any) {
-      alert(err.message || 'Xatolik yuz berdi');
+      await api.setUserBlocked(target.id, next);
+      setResult((r) => (r ? { ...r, data: r.data.map((u) => (u.id === target.id ? { ...u, is_blocked: next } : u)) } : r));
+      window.dispatchEvent(new CustomEvent('ryadom:user-updated', { detail: { id: target.id, is_blocked: next } }));
+      toast.success(next ? 'Foydalanuvchi bloklandi' : 'Foydalanuvchi blokdan chiqarildi', target.name || undefined);
+      setTarget(null);
+    } catch (e) {
+      toast.error("Amalni bajarib bo'lmadi", errorMessage(e));
     } finally {
-      setUpdatingId(null);
+      setSaving(false);
     }
   };
 
+  const rows = result?.data ?? [];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Foydalanuvchilar Boshqaruvi</h2>
-        <p className="text-xs text-slate-500 mt-1">Platformadagi mijozlar va do'konchilar akkauntlari nazorati</p>
-      </div>
+    <div>
+      <PageHeader title="Foydalanuvchilar" description="Mijozlar, sotuvchilar va administratorlar" />
 
-      {/* Filter and Search */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full max-w-md">
-          <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-            <Search size={18} />
-          </span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ism, telefon yoki login orqali qidirish..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-900"
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 pt-3 lg:flex-row lg:items-end lg:justify-between">
+          <Tabs<RoleFilter>
+            items={[
+              { value: 'all', label: 'Hammasi' },
+              { value: 'customer', label: 'Mijozlar' },
+              { value: 'seller', label: 'Sotuvchilar' },
+              { value: 'admin', label: 'Adminlar' },
+            ]}
+            value={role}
+            onChange={setRole}
           />
-        </form>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+            <Select value={blocked} onChange={(e) => setBlocked(e.target.value)} className="sm:w-44" aria-label="Holat">
+              <option value="">Barcha holatlar</option>
+              <option value="false">Faol</option>
+              <option value="true">Bloklangan</option>
+            </Select>
+            <SearchInput value={q} onChange={setQ} placeholder="Ism, telefon yoki login" className="sm:w-72" />
+          </div>
+        </div>
 
-        <select
-          value={selectedRole}
-          onChange={(e) => setSelectedRole(e.target.value)}
-          className="px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white w-full sm:w-auto"
-        >
-          <option value="">Barcha rollar</option>
-          <option value="customer">Mijozlar (Customer)</option>
-          <option value="seller">Sotuvchilar (Seller)</option>
-          <option value="admin">Administratorlar (Admin)</option>
-        </select>
-      </div>
-
-      {/* Users Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-slate-400 text-sm">Yuklanmoqda...</div>
-        ) : users.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-sm">Foydalanuvchilar topilmadi.</div>
+        {error && !result ? (
+          <ErrorState message={error} onRetry={load} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50/75 border-b border-slate-200 uppercase text-[11px] font-semibold text-slate-500">
-                <tr>
-                  <th className="px-5 py-3.5">Foydalanuvchi</th>
-                  <th className="px-5 py-3.5">Roli</th>
-                  <th className="px-5 py-3.5">Aloqa</th>
-                  <th className="px-5 py-3.5">Holati</th>
-                  <th className="px-5 py-3.5 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="font-semibold text-slate-900 text-sm">{user.name || 'Nomsiz'}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {user.login ? `@${user.login}` : user.phone}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase ${
-                          user.role === 'admin'
-                            ? 'bg-purple-50 text-purple-700'
-                            : user.role === 'seller'
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                      >
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-[11px] text-slate-600">
-                      {user.phone || '—'}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                          user.is_blocked
-                            ? 'bg-rose-50 text-rose-700'
-                            : 'bg-emerald-50 text-emerald-700'
-                        }`}
-                      >
-                        {user.is_blocked ? 'Bloklangan' : 'Faol'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      {user.role !== 'admin' && (
-                        <button
-                          onClick={() => handleToggleBlock(user)}
-                          disabled={updatingId === user.id}
-                          className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                            user.is_blocked
-                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                              : 'bg-rose-50 hover:bg-rose-100 text-rose-700'
-                          }`}
-                        >
-                          {user.is_blocked ? 'Blokdan chiqarish' : 'Bloklash'}
-                        </button>
-                      )}
+          <>
+            <Table>
+              <THead>
+                <TH>Foydalanuvchi</TH>
+                <TH>Rol</TH>
+                <TH>Telefon / login</TH>
+                <TH align="right">Buyurtmalar</TH>
+                <TH align="right">Jami xarid</TH>
+                <TH>Ro'yxatdan o'tgan</TH>
+                <TH>Holat</TH>
+                <TH />
+              </THead>
+              <TBody>
+                {loading && !result ? (
+                  <TableSkeleton rows={8} cols={8} />
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <EmptyState icon={<Users className="h-6 w-6" />} title="Foydalanuvchilar topilmadi" description="Qidiruv yoki filtrni o'zgartiring." />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ) : (
+                  rows.map((u) => {
+                    const meta = ROLE_META[u.role];
+                    return (
+                      <TR key={u.id} onClick={() => setUserId(u.id)} className={loading ? 'opacity-60' : undefined}>
+                        <TD>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                              {(u.name || u.login || u.phone || '?').replace('+', '')[0]?.toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="max-w-[200px] truncate font-medium text-slate-900">{u.name || 'Ismsiz'}</p>
+                              {u.shop && <p className="max-w-[200px] truncate text-xs text-slate-400">{u.shop.name}</p>}
+                            </div>
+                          </div>
+                        </TD>
+                        <TD>{meta ? <Badge tone={meta.tone}>{meta.label}</Badge> : u.role}</TD>
+                        <TD>
+                          <p className="tabular-nums text-slate-700">{u.phone || '—'}</p>
+                          {u.login && <p className="font-mono text-xs text-slate-400">@{u.login}</p>}
+                        </TD>
+                        <TD align="right" className="tabular-nums">
+                          {formatNumber(u.ordersCount)}
+                        </TD>
+                        <TD align="right" className="tabular-nums">
+                          {formatMoney(u.totalSpentTiyin)}
+                        </TD>
+                        <TD className="text-slate-500">{formatDate(u.created_at)}</TD>
+                        <TD>
+                          {u.is_blocked ? (
+                            <Badge tone="red" dot>
+                              Bloklangan
+                            </Badge>
+                          ) : (
+                            <Badge tone="green" dot>
+                              Faol
+                            </Badge>
+                          )}
+                        </TD>
+                        <TD align="right">
+                          {u.role !== 'admin' && (
+                            <Button
+                              size="sm"
+                              variant={u.is_blocked ? 'secondary' : 'outline-danger'}
+                              icon={u.is_blocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTarget(u);
+                              }}
+                            >
+                              {u.is_blocked ? 'Ochish' : 'Bloklash'}
+                            </Button>
+                          )}
+                        </TD>
+                      </TR>
+                    );
+                  })
+                )}
+              </TBody>
+            </Table>
+            {result && result.total > 0 && <Pagination page={page} limit={result.limit || LIMIT} total={result.total} onChange={setPage} />}
+          </>
         )}
-      </div>
+      </Card>
+
+      <UserDrawer userId={userId} onClose={() => setUserId(null)} onToggleBlock={setTarget} onOpenOrder={setOrderId} />
+      <OrderDrawer orderId={orderId} onClose={() => setOrderId(null)} />
+      <ConfirmDialog
+        open={!!target}
+        onClose={() => setTarget(null)}
+        onConfirm={confirmBlock}
+        loading={saving}
+        tone={target?.is_blocked ? 'primary' : 'danger'}
+        title={target?.is_blocked ? 'Blokdan chiqarish' : 'Foydalanuvchini bloklash'}
+        message={
+          target?.is_blocked
+            ? `${target?.name || 'Foydalanuvchi'} yana ilovadan foydalana oladi.`
+            : `${target?.name || 'Foydalanuvchi'} ilovaga kira olmaydi va buyurtma bera olmaydi.`
+        }
+        confirmLabel={target?.is_blocked ? 'Blokdan chiqarish' : 'Bloklash'}
+      />
     </div>
   );
 }

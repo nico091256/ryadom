@@ -14,10 +14,12 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mobileApi } from '../../services/api';
-import { ArrowLeft, ArrowRight, Store, Lock, User, ShoppingBag } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Store, Lock, User, ShoppingBag, Globe } from 'lucide-react-native';
+import LanguageSelectorModal from '../../components/LanguageSelectorModal';
 
 export default function SellerLoginScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [langModalVisible, setLangModalVisible] = useState(false);
   const router = useRouter();
   const { setUser } = useAuthStore();
 
@@ -29,7 +31,7 @@ export default function SellerLoginScreen() {
   const handleLogin = async () => {
     setError(null);
     if (!login.trim() || !password) {
-      setError('Login va parolni to\'ldiring');
+      setError(t('authUi.sellerLogin.fieldsRequired'));
       return;
     }
 
@@ -37,7 +39,7 @@ export default function SellerLoginScreen() {
     try {
       const res = await mobileApi.login(login.trim(), password);
       if (res.user?.role !== 'seller') {
-        throw new Error('Ushbu akkaunt do\'konchi roliga ega emas');
+        throw new Error(t('authUi.sellerLogin.notSeller'));
       }
 
       setUser(res.user);
@@ -48,7 +50,7 @@ export default function SellerLoginScreen() {
         router.replace('/(seller)/orders');
       }
     } catch (err: any) {
-      setError(err.message || 'Login yoki parol noto\'g\'ri');
+      setError(err.message || t('authUi.sellerLogin.invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -62,11 +64,23 @@ export default function SellerLoginScreen() {
       >
         {/* Top Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(customer)'))}
+              style={styles.backBtn}
+              accessibilityLabel={t('common.back')}
+            >
             <ArrowLeft size={20} color="#0f172a" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('auth.shopLoginTitle')}</Text>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            onPress={() => setLangModalVisible(true)}
+            style={styles.langBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('authUi.changeLanguage')}
+          >
+            <Globe size={16} color="#0f172a" />
+            <Text style={styles.langBtnText}>{(i18n.language || 'uz').slice(0, 2).toUpperCase()}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Form Body */}
@@ -76,7 +90,7 @@ export default function SellerLoginScreen() {
           </View>
           <Text style={styles.title}>{t('auth.shopLoginTitle')}</Text>
           <Text style={styles.subtitle}>
-            Platforma administratori tomonidan berilgan login va parolingizni kiriting
+            {t('authUi.sellerLogin.subtitle')}
           </Text>
 
           {error && (
@@ -131,7 +145,12 @@ export default function SellerLoginScreen() {
           </TouchableOpacity>
 
           <View style={styles.mockNote}>
-            <Text style={styles.mockText}>Demo do'konchi: seller_chilonzor / Shopkeeper123!</Text>
+            <Text style={styles.mockText}>
+              {t('authUi.sellerLogin.demoNote', {
+                login: 'seller_chilonzor',
+                password: 'Shopkeeper123!',
+              })}
+            </Text>
           </View>
         </View>
 
@@ -146,6 +165,7 @@ export default function SellerLoginScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <LanguageSelectorModal visible={langModalVisible} onClose={() => setLangModalVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -172,6 +192,20 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 12,
     backgroundColor: '#f8fafc',
+  },
+  langBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+  },
+  langBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   headerTitle: {
     fontSize: 16,

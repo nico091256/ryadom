@@ -1,175 +1,279 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
-import { Store, Plus, MapPin, Phone, CheckCircle, XCircle, Search } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronRight, Pencil, Plus, Store } from 'lucide-react';
+import { api, errorMessage } from '@/lib/api';
+import type { Paginated, Shop } from '@/lib/types';
+import { formatMoney, formatNumber } from '@/lib/format';
+import { useDebounce } from '@/lib/hooks';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Switch,
+  Table,
+  TableSkeleton,
+  Tabs,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '@/components/ui';
+import { ShopLogo } from '@/components/shops/ShopLogo';
+import { CreateShopModal, CredentialsModal, Credentials, EditShopModal } from '@/components/shops/ShopForms';
 
-export default function ShopsPage() {
-  const [shops, setShops] = useState<any[]>([]);
+const LIMIT = 20;
+type StatusFilter = 'all' | 'active' | 'inactive';
+
+function ShopsInner() {
+  const toast = useToast();
+  const router = useRouter();
+  const params = useSearchParams();
+  const [q, setQ] = useState('');
+  const dq = useDebounce(q.trim());
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<Paginated<Shop> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(params?.get('new') === '1');
+  const [editing, setEditing] = useState<Shop | null>(null);
+  const [creds, setCreds] = useState<Credentials | null>(null);
 
-  const loadShops = async () => {
+  const seq = useRef(0);
+  const load = useCallback(async () => {
+    const my = ++seq.current;
+    setLoading(true);
     try {
-      const data = await api.getShops();
-      setShops(data);
-    } catch (err: any) {
-      console.error(err);
+      const r = await api.getShops({ q: dq || undefined, status: status === 'all' ? undefined : status, page, limit: LIMIT });
+      if (my !== seq.current) return;
+      setResult(r);
+      setError(null);
+    } catch (e) {
+      if (my === seq.current) setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (my === seq.current) setLoading(false);
     }
-  };
+  }, [dq, status, page]);
 
   useEffect(() => {
-    loadShops();
-  }, []);
+    load();
+  }, [load]);
+  useEffect(() => setPage(1), [dq, status]);
 
-  const handleToggleActive = async (shop: any) => {
-    setUpdatingId(shop.id);
+  const patchRow = (id: string, patch: Partial<Shop>) =>
+    setResult((r) => (r ? { ...r, data: r.data.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : r));
+
+  const toggleActive = async (shop: Shop, value: boolean) => {
+    setToggling(shop.id);
+    patchRow(shop.id, { is_active: value });
     try {
-      await api.updateShop(shop.id, { is_active: !shop.is_active });
-      await loadShops();
-    } catch (err: any) {
-      alert(err.message || 'Xatolik yuz berdi');
+      await api.updateShop(shop.id, { is_active: value });
+      toast.success(value ? "Do'kon faollashtirildi" : "Do'kon o'chirildi", shop.name);
+    } catch (e) {
+      patchRow(shop.id, { is_active: !value });
+      toast.error("Holatni o'zgartirib bo'lmadi", errorMessage(e));
     } finally {
-      setUpdatingId(null);
+      setToggling(null);
     }
   };
 
-  const filteredShops = shops.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.owner?.login?.toLowerCase().includes(search.toLowerCase()) ||
-      s.phone.includes(search),
-  );
+  const closeCreate = () => {
+    setCreateOpen(false);
+    if (params?.get('new')) router.replace('/shops');
+  };
+
+  const rows = result?.data ?? [];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Do'konlar Ro'yxati</h2>
-          <p className="text-xs text-slate-500 mt-1">Platformada ro'yxatdan o'tgan mahalla do'konlari</p>
+    <div>
+      <PageHeader
+        title="Do'konlar"
+        description="Hamkor do'konlar, ularning egalari va ko'rsatkichlari"
+        actions={
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+            Yangi do'kon
+          </Button>
+        }
+      />
+
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 pt-3 sm:flex-row sm:items-end sm:justify-between">
+          <Tabs<StatusFilter>
+            items={[
+              { value: 'all', label: 'Hammasi' },
+              { value: 'active', label: 'Faol' },
+              { value: 'inactive', label: 'Nofaol' },
+            ]}
+            value={status}
+            onChange={setStatus}
+          />
+          <SearchInput value={q} onChange={setQ} placeholder="Nomi, telefon yoki manzil" className="mb-3 sm:w-72" />
         </div>
-        <Link
-          href="/shops/new"
-          className="inline-flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-xs"
-        >
-          <Plus size={16} />
-          <span>Yangi do'kon qo'shish</span>
-        </Link>
-      </div>
 
-      {/* Search Input */}
-      <div className="relative max-w-md">
-        <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-          <Search size={18} />
-        </span>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Do'kon nomi, login yoki telefon orqali qidirish..."
-          className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-900 bg-white"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-slate-400 text-sm">Yuklanmoqda...</div>
-        ) : filteredShops.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-sm">Do'konlar topilmadi.</div>
+        {error && !result ? (
+          <ErrorState message={error} onRetry={load} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50/75 border-b border-slate-200 uppercase text-[11px] font-semibold text-slate-500">
-                <tr>
-                  <th className="px-5 py-3.5">Do'kon</th>
-                  <th className="px-5 py-3.5">Sotuvchi Akkaunti</th>
-                  <th className="px-5 py-3.5">Ish Vaqti</th>
-                  <th className="px-5 py-3.5">Mahsulotlar</th>
-                  <th className="px-5 py-3.5">Holati</th>
-                  <th className="px-5 py-3.5 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredShops.map((shop) => (
-                  <tr key={shop.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shrink-0 font-bold overflow-hidden border border-slate-200">
-                          {shop.logo_url ? (
-                            <img src={shop.logo_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            shop.name.charAt(0)
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900 text-sm">{shop.name}</div>
-                          <div className="flex items-center space-x-1 text-slate-400 text-[11px] mt-0.5">
-                            <MapPin size={12} />
-                            <span className="truncate max-w-[200px]">{shop.address_text}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">@{shop.owner?.login}</div>
-                      <div className="text-slate-400 text-[11px]">{shop.phone}</div>
-                    </td>
-                    <td className="px-5 py-4 font-mono">
-                      {shop.open_time} — {shop.close_time}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                        {shop._count?.products || 0} ta mahsulot
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center space-x-2">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                            shop.is_active
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-rose-50 text-rose-700'
-                          }`}
-                        >
-                          {shop.is_active ? 'Faol' : 'Bloklangan'}
-                        </span>
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                            shop.is_open
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {shop.is_open ? 'Ochiq' : 'Yopiq'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => handleToggleActive(shop)}
-                        disabled={updatingId === shop.id}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                          shop.is_active
-                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
-                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                        }`}
-                      >
-                        {shop.is_active ? 'Bloklash' : 'Faollashtirish'}
-                      </button>
+          <>
+            <Table>
+              <THead>
+                <TH>Do'kon</TH>
+                <TH>Egasi</TH>
+                <TH>Holat</TH>
+                <TH align="right">Mahsulot</TH>
+                <TH align="right">Buyurtma</TH>
+                <TH align="right">Tushum</TH>
+                <TH align="center">Faol</TH>
+                <TH />
+              </THead>
+              <TBody>
+                {loading && !result ? (
+                  <TableSkeleton rows={8} cols={8} />
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <EmptyState
+                        icon={<Store className="h-6 w-6" />}
+                        title="Do'konlar topilmadi"
+                        description={q || status !== 'all' ? "Qidiruv yoki filtrni o'zgartiring." : "Birinchi do'konni qo'shing."}
+                        action={
+                          !q && status === 'all' ? (
+                            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                              Yangi do'kon
+                            </Button>
+                          ) : undefined
+                        }
+                      />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ) : (
+                  rows.map((s) => (
+                    <TR key={s.id} onClick={() => router.push(`/shops/${s.id}`)} className={loading ? 'opacity-60' : undefined}>
+                      <TD>
+                        <div className="flex items-center gap-3">
+                          <ShopLogo shop={s} />
+                          <div className="min-w-0">
+                            <p className="max-w-[240px] truncate font-medium text-slate-900">{s.name}</p>
+                            <p className="max-w-[240px] truncate text-xs text-slate-400">{s.address_text}</p>
+                          </div>
+                        </div>
+                      </TD>
+                      <TD>
+                        <p className="text-slate-900">{s.owner?.name || '—'}</p>
+                        <p className="font-mono text-xs text-slate-400">
+                          {s.owner?.login ? `@${s.owner.login}` : ''}
+                          {s.owner?.is_blocked && <span className="ml-1 font-sans text-rose-500">· bloklangan</span>}
+                        </p>
+                      </TD>
+                      <TD>
+                        <div className="flex flex-col items-start gap-1">
+                          {s.is_active ? (
+                            s.isCurrentlyOpen ? (
+                              <Badge tone="green" dot>
+                                Hozir ochiq
+                              </Badge>
+                            ) : (
+                              <Badge tone="amber" dot>
+                                Yopiq
+                              </Badge>
+                            )
+                          ) : (
+                            <Badge tone="gray" dot>
+                              Nofaol
+                            </Badge>
+                          )}
+                          <span className="text-xs text-slate-400">
+                            {s.open_time}–{s.close_time}
+                          </span>
+                        </div>
+                      </TD>
+                      <TD align="right" className="tabular-nums">
+                        {formatNumber(s.productCount)}
+                      </TD>
+                      <TD align="right" className="tabular-nums">
+                        {formatNumber(s.orderCount)}
+                      </TD>
+                      <TD align="right" className="font-medium tabular-nums text-slate-900">
+                        {formatMoney(s.revenueTiyin)}
+                      </TD>
+                      <TD align="center">
+                        <Switch
+                          size="sm"
+                          checked={s.is_active}
+                          disabled={toggling === s.id}
+                          onChange={(v) => toggleActive(s, v)}
+                          label={s.is_active ? "O'chirish" : 'Faollashtirish'}
+                        />
+                      </TD>
+                      <TD align="right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Tahrirlash"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditing(s);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Link
+                            href={`/shops/${s.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            title="Batafsil"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </div>
+                      </TD>
+                    </TR>
+                  ))
+                )}
+              </TBody>
+            </Table>
+            {result && result.total > 0 && <Pagination page={page} limit={result.limit || LIMIT} total={result.total} onChange={setPage} />}
+          </>
         )}
-      </div>
+      </Card>
+
+      <CreateShopModal
+        open={createOpen}
+        onClose={closeCreate}
+        onCreated={(c) => {
+          closeCreate();
+          setCreds(c);
+          load();
+        }}
+      />
+      <EditShopModal
+        shop={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(s) => {
+          patchRow(s.id, s);
+          setEditing(null);
+        }}
+      />
+      <CredentialsModal creds={creds} onClose={() => setCreds(null)} />
     </div>
+  );
+}
+
+export default function ShopsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ShopsInner />
+    </Suspense>
   );
 }

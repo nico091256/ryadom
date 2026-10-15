@@ -70,6 +70,10 @@ export class UsersService {
         address_text: dto.address_text,
         lat: dto.lat,
         lng: dto.lng,
+        entrance: dto.entrance,
+        floor: dto.floor,
+        apartment: dto.apartment,
+        door_code: dto.door_code,
       },
     });
   }
@@ -93,6 +97,10 @@ export class UsersService {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.address_text !== undefined ? { address_text: dto.address_text } : {}),
         ...(dto.lat !== undefined ? { lat: dto.lat } : {}),
+        ...(dto.entrance !== undefined ? { entrance: dto.entrance } : {}),
+        ...(dto.floor !== undefined ? { floor: dto.floor } : {}),
+        ...(dto.apartment !== undefined ? { apartment: dto.apartment } : {}),
+        ...(dto.door_code !== undefined ? { door_code: dto.door_code } : {}),
         ...(dto.lng !== undefined ? { lng: dto.lng } : {}),
       },
     });

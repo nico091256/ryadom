@@ -39,3 +39,5 @@ storage/
 # Coverage & test artifacts
 coverage/
 .nyc_output/
+
+ECC/

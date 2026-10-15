@@ -6,6 +6,22 @@ export interface DeliveryAddress {
   address_text: string;
   lat: number;
   lng: number;
+  entrance?: string | null;
+  floor?: string | null;
+  apartment?: string | null;
+  door_code?: string | null;
+}
+
+/** "Podyezd 2, Qavat 5, Xonadon 45" — empty string when no details are set */
+export function formatAddressDetails(a: Partial<DeliveryAddress>): string {
+  return [
+    a.entrance && `Podyezd ${a.entrance}`,
+    a.floor && `Qavat ${a.floor}`,
+    a.apartment && `Xonadon ${a.apartment}`,
+    a.door_code && `Domofon ${a.door_code}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 interface AddressState {

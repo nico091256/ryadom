@@ -1,10 +1,14 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ShoppingBag, Package, Store, TrendingUp } from 'lucide-react-native';
 
 export default function SellerTabsLayout() {
   const { t } = useTranslation();
+  // Keep icons clear of the phone's home indicator / gesture bar
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 8) + 6;
 
   return (
     <Tabs
@@ -15,8 +19,8 @@ export default function SellerTabsLayout() {
         tabBarStyle: {
           backgroundColor: '#ffffff',
           borderTopColor: '#f1f5f9',
-          height: 60,
-          paddingBottom: 8,
+          height: 58 + bottomPad,
+          paddingBottom: bottomPad,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -49,7 +53,7 @@ export default function SellerTabsLayout() {
       <Tabs.Screen
         name="stats"
         options={{
-          title: 'Statistika',
+          title: t('sellerUi.tabs.stats'),
           tabBarIcon: ({ color, size }) => <TrendingUp size={size} color={color} />,
         }}
       />

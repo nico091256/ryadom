@@ -10,15 +10,19 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mobileApi } from '../../services/api';
-import { ArrowLeft, ArrowRight, ShieldCheck, Phone, Store } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, ShieldCheck, Phone, Store, Globe } from 'lucide-react-native';
+import LanguageSelectorModal from '../../components/LanguageSelectorModal';
 
 export default function CustomerLoginScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [langModalVisible, setLangModalVisible] = useState(false);
   const router = useRouter();
+  const { next } = useLocalSearchParams<{ next?: string }>();
+  const afterLogin = (next || '/(customer)') as any;
   const { setUser } = useAuthStore();
 
   const [step, setStep] = useState<'phone' | 'code' | 'name'>('phone');
@@ -32,7 +36,7 @@ export default function CustomerLoginScreen() {
   const handleSendCode = async () => {
     setError(null);
     if (!phone || phone.length < 9) {
-      setError('Telefon raqamini to\'liq kiriting');
+      setError(t('authUi.login.phoneIncomplete'));
       return;
     }
 
@@ -41,7 +45,7 @@ export default function CustomerLoginScreen() {
       await mobileApi.sendCode(phone);
       setStep('code');
     } catch (err: any) {
-      setError(err.message || 'SMS kod yuborishda xatolik');
+      setError(err.message || t('authUi.login.sendCodeFailed'));
     } finally {
       setLoading(false);
     }
@@ -50,7 +54,7 @@ export default function CustomerLoginScreen() {
   const handleVerifyCode = async () => {
     setError(null);
     if (!code || code.length !== 6) {
-      setError('6 xonali SMS kodni kiriting');
+      setError(t('authUi.login.codeRequired'));
       return;
     }
 
@@ -62,10 +66,10 @@ export default function CustomerLoginScreen() {
         setStep('name');
       } else {
         setUser(res.user);
-        router.replace('/(customer)');
+        router.replace(afterLogin);
       }
     } catch (err: any) {
-      setError(err.message || 'SMS kod noto\'g\'ri');
+      setError(err.message || t('authUi.login.codeInvalid'));
     } finally {
       setLoading(false);
     }
@@ -73,7 +77,7 @@ export default function CustomerLoginScreen() {
 
   const handleSaveName = async () => {
     if (!name.trim()) {
-      setError('Ismingizni kiriting');
+      setError(t('authUi.login.nameRequired'));
       return;
     }
 
@@ -81,9 +85,9 @@ export default function CustomerLoginScreen() {
     try {
       const updated = await mobileApi.updateProfile({ name: name.trim() });
       setUser(updated);
-      router.replace('/(customer)');
+      router.replace(afterLogin);
     } catch (err: any) {
-      setError(err.message || 'Xatolik yuz berdi');
+      setError(err.message || t('common.error'));
     } finally {
       setLoading(false);
     }
@@ -101,16 +105,29 @@ export default function CustomerLoginScreen() {
             <TouchableOpacity
               onPress={() => setStep(step === 'name' ? 'code' : 'phone')}
               style={styles.backBtn}
+              accessibilityLabel={t('common.back')}
             >
               <ArrowLeft size={20} color="#0f172a" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(customer)'))}
+              style={styles.backBtn}
+              accessibilityLabel={t('common.back')}
+            >
               <ArrowLeft size={20} color="#0f172a" />
             </TouchableOpacity>
           )}
           <Text style={styles.headerTitle}>{t('common.appName')}</Text>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            onPress={() => setLangModalVisible(true)}
+            style={styles.langBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('authUi.changeLanguage')}
+          >
+            <Globe size={16} color="#0f172a" />
+            <Text style={styles.langBtnText}>{(i18n.language || 'uz').slice(0, 2).toUpperCase()}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Form Body */}
@@ -156,7 +173,7 @@ export default function CustomerLoginScreen() {
               </TouchableOpacity>
 
               <View style={styles.mockNote}>
-                <Text style={styles.mockText}>Test rejimi: Tasdiqlash kodi: 123456</Text>
+                <Text style={styles.mockText}>{t('authUi.login.testModeNote', { code: '123456' })}</Text>
               </View>
             </View>
           )}
@@ -205,7 +222,7 @@ export default function CustomerLoginScreen() {
             <View style={styles.stepContainer}>
               <Text style={styles.title}>{t('auth.namePrompt')}</Text>
               <Text style={styles.subtitle}>
-                Buyurtmalarni yetkazib berishda kuryer sizga qanday murojaat qilsin?
+                {t('authUi.login.nameSubtitle')}
               </Text>
 
               <View style={styles.inputContainer}>
@@ -213,7 +230,7 @@ export default function CustomerLoginScreen() {
                   style={styles.input}
                   value={name}
                   onChangeText={setName}
-                  placeholder="Ismingiz (masalan, Sardor)"
+                  placeholder={t('authUi.login.namePlaceholder')}
                   placeholderTextColor="#94a3b8"
                 />
               </View>
@@ -244,6 +261,7 @@ export default function CustomerLoginScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <LanguageSelectorModal visible={langModalVisible} onClose={() => setLangModalVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -270,6 +288,20 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 12,
     backgroundColor: '#f8fafc',
+  },
+  langBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+  },
+  langBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   headerTitle: {
     fontSize: 16,

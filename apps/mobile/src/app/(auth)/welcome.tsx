@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ArrowRight, Check } from 'lucide-react-native';
 
 export default function WelcomeScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const { setLanguage } = useAuthStore();
-  const [selectedLang, setSelectedLang] = useState('uz');
+  const [selectedLang, setSelectedLang] = useState((i18n.language || 'uz').slice(0, 2));
 
   const languages = [
     { code: 'uz', label: "O'zbekcha", flag: '🇺🇿' },
@@ -23,7 +24,7 @@ export default function WelcomeScreen() {
   };
 
   const handleContinue = () => {
-    router.push('/(auth)/login');
+    router.push({ pathname: '/(auth)/login', params: next ? { next } : {} } as any);
   };
 
   return (
@@ -32,9 +33,9 @@ export default function WelcomeScreen() {
         {/* Brand Icon */}
         <View style={styles.logoContainer}>
           <View style={styles.logoBadge}>
-            <Text style={styles.logoLetter}>L</Text>
+            <Text style={styles.logoLetter}>R</Text>
           </View>
-          <Text style={styles.brandTitle}>LocalShop</Text>
+          <Text style={styles.brandTitle}>{t('common.appName')}</Text>
           <Text style={styles.brandTagline}>{t('welcome.subtitle')}</Text>
         </View>
 

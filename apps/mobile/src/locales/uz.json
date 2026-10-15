@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "LocalShop",
+    "appName": "Ryadom",
     "som": "so'm",
     "m": "m",
     "km": "km",
@@ -54,7 +54,24 @@
     "nearbyShops": "Yaqin do'konlar",
     "noShopsNearby": "3 km radiusda ochiq do'konlar topilmadi",
     "listView": "Ro'yxat",
-    "mapView": "Xarita"
+    "mapView": "Xarita",
+    "searchPlaceholder": "Do'kon yoki mahsulotlarni qidirish...",
+    "allCategories": "Barcha toifalar",
+    "filterAll": "Barchasi",
+    "filterOpen": "Ochiq do'konlar",
+    "filterNear": "Eng yaqin (1 km)",
+    "filterTop": "Top reyting",
+    "minOrder": "Min. buyurtma",
+    "activeOrderTitle": "Faol buyurtma",
+    "trackOrder": "Kuzatish",
+    "promoFree": "Bepul Yetkazish 🚀",
+    "promoFreeSub": "Barcha yaqin do'konlardan",
+    "promoFast": "Tezkor Yetkazish ⚡",
+    "promoFastSub": "15-20 daqiqada eshigingizda",
+    "promoBread": "Issiq Non va Sut 🍞",
+    "promoBreadSub": "Har tong yangi mahsulotlar",
+    "promoSpecial": "Maxsus Takliflar 🔥",
+    "promoSpecialSub": "Chegirma va aksiyalar"
   },
   "shop": {
     "allCategories": "Barchasi",

@@ -1,231 +1,319 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
 import {
+  ArrowRight,
+  Banknote,
+  Package,
+  Percent,
+  RefreshCw,
   ShoppingBag,
   Store,
-  Users,
-  AlertTriangle,
   TrendingUp,
-  ArrowUpRight,
-  Clock,
-  CheckCircle,
+  Users,
+  XCircle,
 } from 'lucide-react';
+import { api, errorMessage } from '@/lib/api';
+import type { DashboardStats } from '@/lib/types';
+import { ORDER_STATUSES, ORDER_STATUS_META } from '@/lib/constants';
+import { formatMoney, formatNumber, shortId, timeAgo } from '@/lib/format';
+import { useInterval } from '@/lib/hooks';
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Skeleton,
+  StatCard,
+  StatusBadge,
+  Table,
+  TableSkeleton,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui';
+import { DailyChart } from '@/components/DailyChart';
+import { OrderDrawer } from '@/components/orders/OrderDrawer';
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const data = await api.getDashboardStats();
-        setStats(data);
-      } catch (err: any) {
-        setError(err.message || 'Statistikani yuklashda xatolik yuz berdi.');
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const s = await api.getStats();
+      setStats(s);
+      setError(null);
+      setUpdatedAt(new Date());
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setRefreshing(false);
     }
-    loadStats();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    load();
+  }, [load]);
+  useInterval(load, 30_000);
 
-  if (error) {
-    return (
-      <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl">
-        {error}
-      </div>
-    );
-  }
-
-  const summary = stats?.summary || {
-    totalOrders: 0,
-    totalShops: 0,
-    totalCustomers: 0,
-    totalSellers: 0,
-    needsAttentionCount: 0,
-  };
-
-  const chartData: any[] = stats?.ordersPerDayLast30Days || [];
-  const maxDayOrders = Math.max(...chartData.map((d) => d.orderCount), 5);
+  const t = stats?.totals;
+  const loading = !stats && !error;
+  const totalByStatus = stats ? ORDER_STATUSES.reduce((s, k) => s + (stats.ordersByStatus?.[k] ?? 0), 0) : 0;
+  const daily = stats?.daily ?? [];
+  const sum30 = daily.reduce(
+    (acc, d) => ({ orders: acc.orders + d.orders, rev: acc.rev + d.revenueTiyin }),
+    { orders: 0, rev: 0 },
+  );
+  const topMax = Math.max(1, ...(stats?.topShops ?? []).map((s) => s.revenueTiyin));
 
   return (
-    <div className="space-y-6">
-      {/* Needs Attention Alert Banner */}
-      {summary.needsAttentionCount > 0 && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
-          <div className="flex items-center space-x-3 text-amber-800">
-            <AlertTriangle className="text-amber-500 shrink-0" size={24} />
-            <div>
-              <p className="font-semibold text-sm">
-                Diqqat talab buyurtmalar mavjud: {summary.needsAttentionCount} ta
-              </p>
-              <p className="text-xs text-amber-700">
-                Ushbu buyurtmalar 5 daqiqadan ko'proq vaqt davomida do'kon tomonidan qabul qilinmagan.
-              </p>
-            </div>
+    <div>
+      <PageHeader
+        title="Xush kelibsiz"
+        description={
+          updatedAt
+            ? `Platforma ko'rsatkichlari · har 30 soniyada yangilanadi · oxirgi: ${updatedAt.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+            : "Platforma ko'rsatkichlari"
+        }
+        actions={
+          <Button variant="secondary" icon={<RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} onClick={load} disabled={refreshing}>
+            Yangilash
+          </Button>
+        }
+      />
+
+      {error && !stats ? (
+        <Card>
+          <ErrorState message={error} onRetry={load} />
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              loading={loading}
+              label="Bugungi buyurtmalar"
+              value={formatNumber(t?.ordersToday)}
+              hint={`Jami: ${formatNumber(t?.orders)} ta`}
+              icon={<ShoppingBag className="h-5 w-5" />}
+              tone="green"
+            />
+            <StatCard
+              loading={loading}
+              label="Bugungi tushum"
+              value={formatMoney(t?.revenueTodayTiyin)}
+              hint={`Jami: ${formatMoney(t?.revenueTiyin)}`}
+              icon={<Banknote className="h-5 w-5" />}
+              tone="blue"
+            />
+            <StatCard
+              loading={loading}
+              label="Platforma komissiyasi"
+              value={formatMoney(t?.commissionTiyin)}
+              hint={`O'rtacha chek: ${formatMoney(t?.avgOrderTiyin)}`}
+              icon={<Percent className="h-5 w-5" />}
+              tone="violet"
+            />
+            <StatCard
+              loading={loading}
+              label="Bekor qilish darajasi"
+              value={`${(t?.cancelRatePercent ?? 0).toFixed(1).replace('.', ',')}%`}
+              hint={`${formatNumber(stats?.ordersByStatus?.cancelled)} ta bekor qilingan`}
+              icon={<XCircle className="h-5 w-5" />}
+              tone="rose"
+            />
+            <StatCard
+              loading={loading}
+              label="Do'konlar"
+              value={formatNumber(t?.shops)}
+              hint={`${formatNumber(t?.activeShops)} faol · ${formatNumber(t?.openShopsNow)} hozir ochiq`}
+              icon={<Store className="h-5 w-5" />}
+              tone="amber"
+            />
+            <StatCard
+              loading={loading}
+              label="Mijozlar"
+              value={formatNumber(t?.customers)}
+              hint={`${formatNumber(t?.sellers)} ta sotuvchi`}
+              icon={<Users className="h-5 w-5" />}
+              tone="blue"
+            />
+            <StatCard
+              loading={loading}
+              label="Mahsulotlar"
+              value={formatNumber(t?.products)}
+              hint="Katalogdagi faol mahsulotlar"
+              icon={<Package className="h-5 w-5" />}
+              tone="slate"
+            />
+            <StatCard
+              loading={loading}
+              label="30 kunlik tushum"
+              value={formatMoney(sum30.rev)}
+              hint={`${formatNumber(sum30.orders)} ta buyurtma`}
+              icon={<TrendingUp className="h-5 w-5" />}
+              tone="green"
+            />
           </div>
-          <Link
-            href="/orders?status=new"
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center space-x-1"
-          >
-            <span>Ko'rib chiqish</span>
-            <ArrowUpRight size={14} />
-          </Link>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <Card className="xl:col-span-2">
+              <CardHeader title="So'nggi 30 kun" description="Kunlik buyurtmalar soni va yetkazilgan buyurtmalar tushumi" />
+              <div className="p-5">{loading ? <Skeleton className="h-64 w-full" /> : <DailyChart data={daily} />}</div>
+            </Card>
+
+            <Card>
+              <CardHeader title="Holatlar bo'yicha" description={`Jami ${formatNumber(totalByStatus)} ta buyurtma`} />
+              <div className="space-y-4 p-5">
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)
+                ) : (
+                  <>
+                    <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+                      {ORDER_STATUSES.map((s) => {
+                        const v = stats?.ordersByStatus?.[s] ?? 0;
+                        if (!v) return null;
+                        return (
+                          <div
+                            key={s}
+                            title={`${ORDER_STATUS_META[s].label}: ${v}`}
+                            style={{ width: `${(v / Math.max(1, totalByStatus)) * 100}%`, background: ORDER_STATUS_META[s].bar }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <ul className="space-y-2.5">
+                      {ORDER_STATUSES.map((s) => {
+                        const v = stats?.ordersByStatus?.[s] ?? 0;
+                        const pct = totalByStatus ? (v / totalByStatus) * 100 : 0;
+                        return (
+                          <li key={s}>
+                            <Link href={`/orders?status=${s}`} className="flex items-center gap-3 rounded-lg px-1 py-0.5 text-sm hover:bg-slate-50">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ background: ORDER_STATUS_META[s].bar }} />
+                              <span className="flex-1 text-slate-700">{ORDER_STATUS_META[s].label}</span>
+                              <span className="font-medium tabular-nums text-slate-900">{formatNumber(v)}</span>
+                              <span className="w-12 text-right text-xs tabular-nums text-slate-400">{pct.toFixed(0)}%</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <Card>
+              <CardHeader
+                title="Top do'konlar"
+                description="30 kunlik tushum bo'yicha"
+                actions={
+                  <Link href="/shops" className="text-xs font-medium text-brand-700 hover:underline">
+                    Barchasi
+                  </Link>
+                }
+              />
+              <div className="p-5">
+                {loading ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className="h-9 w-full" />
+                    ))}
+                  </div>
+                ) : !stats?.topShops?.length ? (
+                  <EmptyState icon={<Store className="h-6 w-6" />} title="Hali ma'lumot yo'q" description="Yetkazilgan buyurtmalar paydo bo'lgach shu yerda ko'rinadi." />
+                ) : (
+                  <ol className="space-y-4">
+                    {stats.topShops.map((s, i) => (
+                      <li key={s.id}>
+                        <Link href={`/shops/${s.id}`} className="group block">
+                          <div className="flex items-center gap-3 text-sm">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                              {i + 1}
+                            </span>
+                            <span className="flex-1 truncate font-medium text-slate-900 group-hover:text-brand-700">{s.name}</span>
+                            <span className="whitespace-nowrap tabular-nums text-slate-700">{formatMoney(s.revenueTiyin)}</span>
+                          </div>
+                          <div className="ml-9 mt-1.5 flex items-center gap-2">
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-full rounded-full bg-brand-500" style={{ width: `${(s.revenueTiyin / topMax) * 100}%` }} />
+                            </div>
+                            <span className="text-xs tabular-nums text-slate-400">{formatNumber(s.orders)} ta</span>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden xl:col-span-2">
+              <CardHeader
+                title="So'nggi buyurtmalar"
+                actions={
+                  <Link href="/orders" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                    Barchasi <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                }
+              />
+              <Table>
+                <THead>
+                  <TH>Buyurtma</TH>
+                  <TH>Mijoz</TH>
+                  <TH>Do'kon</TH>
+                  <TH>Holat</TH>
+                  <TH align="right">Summa</TH>
+                </THead>
+                <TBody>
+                  {loading ? (
+                    <TableSkeleton rows={6} cols={5} />
+                  ) : !stats?.recentOrders?.length ? (
+                    <tr>
+                      <td colSpan={5}>
+                        <EmptyState title="Buyurtmalar yo'q" />
+                      </td>
+                    </tr>
+                  ) : (
+                    stats.recentOrders.map((o) => (
+                      <TR key={o.id} onClick={() => setOrderId(o.id)}>
+                        <TD>
+                          <p className="font-mono text-xs font-semibold text-slate-900">{shortId(o.id)}</p>
+                          <p className="text-xs text-slate-400">{timeAgo(o.created_at)}</p>
+                        </TD>
+                        <TD>
+                          <p className="text-slate-900">{o.customer?.name || 'Ismsiz'}</p>
+                          <p className="text-xs text-slate-400">{o.customer_phone}</p>
+                        </TD>
+                        <TD className="max-w-[180px] truncate">{o.shop?.name ?? '—'}</TD>
+                        <TD>
+                          <StatusBadge status={o.status} />
+                        </TD>
+                        <TD align="right" className="font-medium tabular-nums text-slate-900">
+                          {formatMoney(o.total_amount)}
+                        </TD>
+                      </TR>
+                    ))
+                  )}
+                </TBody>
+              </Table>
+            </Card>
+          </div>
         </div>
       )}
 
-      {/* Top Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Jami Buyurtmalar</span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-              <ShoppingBag size={20} />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold text-slate-900">{summary.totalOrders}</span>
-            <span className="text-xs text-emerald-600 font-medium">Barcha buyurtmalar</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Faol Do'konlar</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Store size={20} />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold text-slate-900">{summary.totalShops}</span>
-            <span className="text-xs text-slate-500 font-medium">Toshkent shahrida</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Mijozlar</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-              <Users size={20} />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold text-slate-900">{summary.totalCustomers}</span>
-            <span className="text-xs text-purple-600 font-medium">Faol xaridorlar</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Kechikkanlar (5 min+)</span>
-            <div className={`p-2 rounded-xl ${summary.needsAttentionCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-              <Clock size={20} />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className={`text-2xl font-bold ${summary.needsAttentionCount > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
-              {summary.needsAttentionCount}
-            </span>
-            <span className="text-xs text-slate-500">Kechikkan buyurtma</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 30-Day Orders Chart Visualizer */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">So'nggi 30 kunlik buyurtmalar faolligi</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Kunlik qabul qilingan buyurtmalar soni</p>
-          </div>
-          <div className="flex items-center space-x-2 text-xs text-slate-500 font-medium">
-            <span className="w-3 h-3 bg-emerald-500 rounded-xs inline-block"></span>
-            <span>Buyurtmalar grafigi</span>
-          </div>
-        </div>
-
-        {/* Bar chart container */}
-        <div className="h-48 flex items-end space-x-1 sm:space-x-1.5 pt-6 border-b border-slate-100">
-          {chartData.map((d, index) => {
-            const heightPercent = Math.max(8, (d.orderCount / maxDayOrders) * 100);
-            return (
-              <div
-                key={d.date}
-                className="flex-1 flex flex-col items-center group relative h-full justify-end"
-              >
-                {/* Tooltip */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-slate-900 text-white text-[11px] px-2 py-1 rounded shadow-md pointer-events-none whitespace-nowrap z-20">
-                  {d.date}: {d.orderCount} buyurtma
-                </div>
-                <div
-                  style={{ height: `${heightPercent}%` }}
-                  className={`w-full rounded-t-sm transition-all duration-200 ${
-                    d.orderCount > 0
-                      ? 'bg-emerald-500 group-hover:bg-emerald-600'
-                      : 'bg-slate-100 group-hover:bg-slate-200'
-                  }`}
-                />
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex justify-between text-[11px] text-slate-400 mt-2 font-mono">
-          <span>{chartData[0]?.date || ''}</span>
-          <span>{chartData[Math.floor(chartData.length / 2)]?.date || ''}</span>
-          <span>{chartData[chartData.length - 1]?.date || ''}</span>
-        </div>
-      </div>
-
-      {/* Quick Launch Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white flex flex-col justify-between shadow-sm">
-          <div>
-            <h4 className="font-bold text-lg mb-1">Yangi Do'kon Qo'shish</h4>
-            <p className="text-emerald-100 text-xs">
-              Platformaga yangi mahalla do'koni va uning sotuvchi akkauntini Yandex xaritasida manzilini belgilab biriktiring.
-            </p>
-          </div>
-          <div className="mt-6">
-            <Link
-              href="/shops/new"
-              className="inline-flex items-center space-x-2 bg-white text-emerald-800 font-semibold text-xs px-4 py-2.5 rounded-xl hover:bg-emerald-50 transition-colors shadow-xs"
-            >
-              <span>Do'kon ro'yxatdan o'tkazish</span>
-              <ArrowUpRight size={16} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div>
-            <h4 className="font-bold text-lg text-slate-900 mb-1">Global Kategoriyalar Boshqaruvi</h4>
-            <p className="text-slate-500 text-xs">
-              Do'konlar o'z mahsulotlarini kiritishlari uchun 3 tilda (UZ, RU, EN) global toifalar va ikonkalarni boshqaring.
-            </p>
-          </div>
-          <div className="mt-6">
-            <Link
-              href="/categories"
-              className="inline-flex items-center space-x-2 bg-slate-900 text-white font-semibold text-xs px-4 py-2.5 rounded-xl hover:bg-slate-800 transition-colors shadow-xs"
-            >
-              <span>Kategoriyalarga o'tish</span>
-              <ArrowUpRight size={16} />
-            </Link>
-          </div>
-        </div>
-      </div>
+      <OrderDrawer orderId={orderId} onClose={() => setOrderId(null)} onChanged={() => load()} />
     </div>
   );
 }

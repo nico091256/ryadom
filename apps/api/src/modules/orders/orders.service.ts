@@ -57,6 +57,9 @@ export class OrdersService {
       });
     }
 
+    // Promo code is validated against the promo_codes table inside the transaction below
+    const promoCode = dto.promo_code?.trim().toUpperCase() || null;
+
     const shop = cart.shop;
     if (!shop.is_active || !shop.is_open) {
       throw new ConflictException({
@@ -106,7 +109,19 @@ export class OrdersService {
         text: dto.address_text,
       };
 
-      // 3. Commission snapshot
+      // 3. Apply promo discount to the stored/charged total
+      let comment = dto.comment?.trim() || '';
+      let discountAmount = 0;
+      if (promoCode) {
+        const discount = await this.applyPromoCode(tx, promoCode, totalAmount);
+        discountAmount = discount;
+        totalAmount -= discount;
+        const promoLine = `Promokod: ${promoCode} (-${formatPrice(discount)})`;
+        comment = comment ? `${comment}
+${promoLine}` : promoLine;
+      }
+
+      // 4. Commission snapshot
       const commissionRate = shop.commission_rate_percent || 0;
       const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
 
@@ -123,7 +138,9 @@ export class OrdersService {
           total_amount: totalAmount,
           commission_rate_percent: commissionRate,
           commission_amount: commissionAmount,
-          comment: dto.comment || null,
+          promo_code: promoCode,
+          discount_amount: discountAmount,
+          comment: comment || null,
           needs_attention: false,
           items: {
             create: cart.items.map((i) => ({
@@ -170,6 +187,116 @@ export class OrdersService {
   }
 
   /**
+   * Validates a promo code against the promo_codes table (inside the order transaction),
+   * atomically increments its usage_count and returns the discount in tiyin.
+   */
+  private async applyPromoCode(tx: any, code: string, basketTotal: number): Promise<number> {
+    const invalid = (message: string) =>
+      new BadRequestException({ code: 'INVALID_PROMO_CODE', message });
+
+    const promo = await tx.promoCode.findUnique({ where: { code } });
+    if (!promo) {
+      throw invalid(`Promokod '${code}' topilmadi / Promo code '${code}' not found.`);
+    }
+    if (!promo.is_active) {
+      throw invalid(`Promokod '${code}' faol emas / Promo code '${code}' is not active.`);
+    }
+    if (promo.expires_at && promo.expires_at.getTime() <= Date.now()) {
+      throw invalid(`Promokod '${code}' muddati tugagan / Promo code '${code}' has expired.`);
+    }
+    if (promo.usage_limit !== null && promo.usage_count >= promo.usage_limit) {
+      throw invalid(`Promokod '${code}' foydalanish limiti tugagan / Promo code '${code}' usage limit reached.`);
+    }
+    if (promo.min_order_tiyin !== null && basketTotal < promo.min_order_tiyin) {
+      throw invalid(
+        `Minimal buyurtma summasi ${formatPrice(promo.min_order_tiyin)} / Minimum order for '${code}' is ${formatPrice(promo.min_order_tiyin)}.`,
+      );
+    }
+
+    let discount = Math.round((basketTotal * promo.discount_percent) / 100);
+    if (promo.max_discount_tiyin !== null && discount > promo.max_discount_tiyin) {
+      discount = promo.max_discount_tiyin;
+    }
+    discount = Math.min(discount, basketTotal);
+
+    // Conditional increment guards against concurrent redemptions exceeding usage_limit
+    const updated = await tx.promoCode.updateMany({
+      where: {
+        id: promo.id,
+        ...(promo.usage_limit !== null ? { usage_count: { lt: promo.usage_limit } } : {}),
+      },
+      data: { usage_count: { increment: 1 } },
+    });
+    if (updated.count === 0) {
+      throw invalid(`Promokod '${code}' foydalanish limiti tugagan / Promo code '${code}' usage limit reached.`);
+    }
+
+    return discount;
+  }
+
+  /**
+   * Admin force-cancels an order in any non-final status (new..on_the_way).
+   * Mirrors the regular cancel flow: restores stock, writes history, emits realtime + push events.
+   */
+  async adminCancelOrder(orderId: string, adminId: string, reason: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, shop: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    if (order.status === (OrderStatus.DELIVERED as any) || order.status === (OrderStatus.CANCELLED as any)) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_CANCELLABLE',
+        message: `Order in status '${order.status}' cannot be cancelled.`,
+      });
+    }
+
+    const cancelReason = reason?.trim() || 'Cancelled by admin';
+
+    await this.prisma.$transaction(async (tx) => {
+      // Guard against a concurrent status change
+      const res = await tx.order.updateMany({
+        where: { id: orderId, status: order.status },
+        data: { status: OrderStatus.CANCELLED as any, needs_attention: false },
+      });
+      if (res.count === 0) {
+        throw new ConflictException({
+          code: ERROR_CODES.INVALID_STATUS_TRANSITION,
+          message: 'Order status changed concurrently. Please refresh and try again.',
+        });
+      }
+
+      for (const item of order.items) {
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      await tx.orderStatusHistory.create({
+        data: {
+          order_id: orderId,
+          status: OrderStatus.CANCELLED as any,
+          changed_by: adminId,
+          reason: cancelReason,
+        },
+      });
+    });
+
+    const timestamp = new Date().toISOString();
+    this.notificationsGateway.broadcastOrderStatus(orderId, order.customer_id, OrderStatus.CANCELLED, timestamp);
+    this.notificationsGateway.broadcastOrderCancelled(order.shop_id, orderId, cancelReason);
+    this.pushNotificationService.sendOrderStatusPush(order.customer_id, OrderStatus.CANCELLED, orderId);
+    this.pushNotificationService.sendOrderStatusPush(order.shop.owner_id, OrderStatus.CANCELLED, orderId);
+
+    return { id: orderId };
+  }
+
+  /**
    * Get orders list based on actor role
    */
   async getOrders(
@@ -210,7 +337,7 @@ export class OrdersService {
       this.prisma.order.findMany({
         where,
         include: {
-          items: true,
+          items: { include: { product: { select: { id: true, name_uz: true, name_ru: true, name_en: true, image_url: true } } } },
           shop: { select: { id: true, name: true, phone: true, logo_url: true } },
           customer: { select: { id: true, name: true, phone: true } },
           status_history: { orderBy: { created_at: 'asc' } },
@@ -241,7 +368,7 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
-        items: true,
+        items: { include: { product: { select: { id: true, name_uz: true, name_ru: true, name_en: true, image_url: true } } } },
         shop: { select: { id: true, name: true, phone: true, logo_url: true, owner_id: true } },
         customer: { select: { id: true, name: true, phone: true } },
         status_history: {

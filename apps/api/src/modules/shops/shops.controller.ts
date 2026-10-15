@@ -14,15 +14,17 @@ export class ShopsController {
   @ApiQuery({ name: 'lat', required: true, type: Number })
   @ApiQuery({ name: 'lng', required: true, type: Number })
   @ApiQuery({ name: 'radius', required: false, type: Number })
+  @ApiQuery({ name: 'category', required: false, type: String, description: 'Only shops with available products in this category' })
   async getNearbyShops(
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radius') radius?: string,
+    @Query('category') categoryId?: string,
   ) {
     const latNum = parseFloat(lat);
     const lngNum = parseFloat(lng);
     const radiusNum = radius ? parseInt(radius, 10) : 3000;
-    return this.shopsService.findNearby(latNum, lngNum, radiusNum);
+    return this.shopsService.findNearby(latNum, lngNum, radiusNum, categoryId || undefined);
   }
 
   @Public()

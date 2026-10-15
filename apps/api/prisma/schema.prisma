@@ -81,6 +81,10 @@ model Address {
   address_text String
   lat          Float
   lng          Float
+  entrance     String?  // podyezd
+  floor        String?  // qavat
+  apartment    String?  // xonadon
+  door_code    String?  // domofon kodi
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -201,6 +205,8 @@ model Order {
   total_amount            Int           // in tiyin
   commission_rate_percent Float         @default(0)
   commission_amount       Int           @default(0) // in tiyin
+  promo_code              String?       // applied promo code, if any
+  discount_amount         Int           @default(0) // in tiyin, already subtracted from total_amount
   comment                 String?
   needs_attention         Boolean       @default(false)
   accepted_at             DateTime?
@@ -287,4 +293,21 @@ model SmsCode {
 
   @@index([phone])
   @@map("sms_codes")
+}
+
+model PromoCode {
+  id                 String    @id @default(uuid())
+  code               String    @unique // stored uppercase
+  description        String?
+  discount_percent   Int       // 1..100
+  max_discount_tiyin Int?      // cap on the discount, null = no cap
+  min_order_tiyin    Int?      // minimum basket total, null = none
+  usage_limit        Int?      // total redemptions allowed, null = unlimited
+  usage_count        Int       @default(0)
+  is_active          Boolean   @default(true)
+  expires_at         DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  @@map("promo_codes")
 }

@@ -12,10 +12,12 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mobileApi } from '../../services/api';
-import { Lock, ShieldAlert, Check } from 'lucide-react-native';
+import { Lock, ShieldAlert, Check, Globe } from 'lucide-react-native';
+import LanguageSelectorModal from '../../components/LanguageSelectorModal';
 
 export default function ForcedChangePasswordScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [langModalVisible, setLangModalVisible] = useState(false);
   const router = useRouter();
   const { user, setUser } = useAuthStore();
 
@@ -28,11 +30,11 @@ export default function ForcedChangePasswordScreen() {
   const handleSubmit = async () => {
     setError(null);
     if (!newPassword || newPassword.length < 6) {
-      setError('Yangi parol kamida 6 belgidan iborat bo\'lishi shart');
+      setError(t('authUi.changePassword.tooShort'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('Yangi parollar bir-biriga mos kelmadi');
+      setError(t('authUi.changePassword.mismatch'));
       return;
     }
 
@@ -44,7 +46,7 @@ export default function ForcedChangePasswordScreen() {
       }
       router.replace('/(seller)/orders');
     } catch (err: any) {
-      setError(err.message || 'Parolni o\'zgartirishda xatolik');
+      setError(err.message || t('authUi.changePassword.failed'));
     } finally {
       setLoading(false);
     }
@@ -52,6 +54,17 @@ export default function ForcedChangePasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => setLangModalVisible(true)}
+          style={styles.langBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('authUi.changeLanguage')}
+        >
+          <Globe size={16} color="#0f172a" />
+          <Text style={styles.langBtnText}>{(i18n.language || 'uz').slice(0, 2).toUpperCase()}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.content}>
         <View style={styles.iconCircle}>
           <ShieldAlert size={32} color="#f59e0b" />
@@ -59,7 +72,7 @@ export default function ForcedChangePasswordScreen() {
 
         <Text style={styles.title}>{t('seller.changePasswordRequired')}</Text>
         <Text style={styles.subtitle}>
-          Xavfsizlik maqsadida administrator bergan boshlang'ich parolni o'zingizning yangi shaxsiy parolingizga almashtiring.
+          {t('authUi.changePassword.subtitle')}
         </Text>
 
         {error && (
@@ -69,7 +82,7 @@ export default function ForcedChangePasswordScreen() {
         )}
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Joriy boshlang'ich parol</Text>
+          <Text style={styles.label}>{t('authUi.changePassword.currentLabel')}</Text>
           <TextInput
             style={styles.input}
             value={currentPassword}
@@ -79,7 +92,7 @@ export default function ForcedChangePasswordScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Yangi maxfiy parol (kamida 6 belgi)</Text>
+          <Text style={styles.label}>{t('authUi.changePassword.newLabel')}</Text>
           <TextInput
             style={styles.input}
             value={newPassword}
@@ -90,7 +103,7 @@ export default function ForcedChangePasswordScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Yangi parolni tasdiqlang</Text>
+          <Text style={styles.label}>{t('authUi.changePassword.confirmLabel')}</Text>
           <TextInput
             style={styles.input}
             value={confirmPassword}
@@ -115,11 +128,32 @@ export default function ForcedChangePasswordScreen() {
           )}
         </TouchableOpacity>
       </View>
+      <LanguageSelectorModal visible={langModalVisible} onClose={() => setLangModalVisible(false)} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  langBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+  },
+  langBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
   container: {
     flex: 1,
     backgroundColor: '#ffffff',

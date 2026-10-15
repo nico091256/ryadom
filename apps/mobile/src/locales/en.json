@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "LocalShop",
+    "appName": "Ryadom",
     "som": "UZS",
     "m": "m",
     "km": "km",
@@ -54,7 +54,24 @@
     "nearbyShops": "Nearby Shops",
     "noShopsNearby": "No open shops found within 3 km",
     "listView": "List",
-    "mapView": "Map"
+    "mapView": "Map",
+    "searchPlaceholder": "Search shops or products...",
+    "allCategories": "All categories",
+    "filterAll": "All",
+    "filterOpen": "Open now",
+    "filterNear": "Nearest (< 1 km)",
+    "filterTop": "Top rated",
+    "minOrder": "Min. order",
+    "activeOrderTitle": "Active order",
+    "trackOrder": "Track",
+    "promoFree": "Free Delivery 🚀",
+    "promoFreeSub": "From all neighborhood shops",
+    "promoFast": "Express Delivery ⚡",
+    "promoFastSub": "At your door in 15-20 min",
+    "promoBread": "Fresh Bread & Milk 🍞",
+    "promoBreadSub": "Fresh local daily arrivals",
+    "promoSpecial": "Hot Specials 🔥",
+    "promoSpecialSub": "Discounts & promotions"
   },
   "shop": {
     "allCategories": "All Products",

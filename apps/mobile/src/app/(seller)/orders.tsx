@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,19 @@ import {
   Alert,
   RefreshControl,
   Vibration,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { mobileApi } from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getSocket, joinShopRoom } from '../../services/socket';
-import { formatPrice, SupportedLanguage, OrderStatus, SOCKET_EVENTS } from '@localshop/shared';
+import {
+  formatPrice,
+  SupportedLanguage,
+  OrderStatus,
+  SOCKET_EVENTS,
+  resolveLocalizedText,
+} from '@localshop/shared';
 import {
   Phone,
   MapPin,
@@ -24,10 +31,15 @@ import {
   XCircle,
   Truck,
   Package,
-  AlertTriangle,
   BellRing,
   Check,
 } from 'lucide-react-native';
+import SellerRejectModal from '../../components/SellerRejectModal';
+
+// Kept as data (not a pre-built string) so the banner re-renders in the current language
+type LoudAlert =
+  | { kind: 'new'; id: string }
+  | { kind: 'cancelled'; id: string; reason?: string };
 
 export default function SellerOrdersScreen() {
   const { t, i18n } = useTranslation();
@@ -37,13 +49,16 @@ export default function SellerOrdersScreen() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loudAlert, setLoudAlert] = useState<string | null>(null);
+  const [loudAlert, setLoudAlert] = useState<LoudAlert | null>(null);
+  const [rejectOrderId, setRejectOrderId] = useState<string | null>(null);
+  const shopId = user?.shopId;
 
   const currentLang = (i18n.language as SupportedLanguage) || SupportedLanguage.UZ;
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     try {
-      const res = await mobileApi.getOrders();
+      // Default page size is 20 — request a larger page so no active orders are dropped
+      const res = await mobileApi.request('/orders?limit=100');
       setOrders(res.data || []);
     } catch (e) {
       console.warn('Failed to load seller orders', e);
@@ -51,27 +66,55 @@ export default function SellerOrdersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
+  // Polling fallback
   useEffect(() => {
     loadOrders();
-
-    if (user?.shopId) {
-      getSocket().then((socket) => {
-        joinShopRoom(user.shopId!);
-
-        socket.on(SOCKET_EVENTS.ORDER_NEW, (newOrder) => {
-          // Trigger loud alert (vibration & banner)
-          Vibration.vibrate([0, 500, 200, 500]);
-          setLoudAlert(`Yangi buyurtma keldi! #${newOrder.id?.slice(0, 8)}`);
-          loadOrders();
-        });
-      });
-    }
-
     const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [loadOrders]);
+
+  // Realtime socket listeners — registered once per shop and removed on unmount
+  useEffect(() => {
+    if (!shopId) return;
+    let cancelled = false;
+    let socketRef: any = null;
+
+    const onNewOrder = (newOrder: any) => {
+      // Trigger loud alert (vibration & banner)
+      if (Platform.OS !== 'web') Vibration.vibrate([0, 500, 200, 500]);
+      setLoudAlert({ kind: 'new', id: newOrder?.id?.slice(0, 8) ?? '' });
+      loadOrders();
+    };
+    const onOrderCancelled = (payload: { orderId: string; reason?: string }) => {
+      setLoudAlert({
+        kind: 'cancelled',
+        id: payload?.orderId?.slice(0, 8) ?? '',
+        reason: payload?.reason || undefined,
+      });
+      loadOrders();
+    };
+    const onConnect = () => joinShopRoom(shopId);
+
+    getSocket().then((socket) => {
+      if (cancelled) return;
+      socketRef = socket;
+      joinShopRoom(shopId);
+      socket.on('connect', onConnect); // re-join room after reconnects
+      socket.on(SOCKET_EVENTS.ORDER_NEW, onNewOrder);
+      socket.on(SOCKET_EVENTS.ORDER_CANCELLED, onOrderCancelled);
+    });
+
+    return () => {
+      cancelled = true;
+      if (socketRef) {
+        socketRef.off('connect', onConnect);
+        socketRef.off(SOCKET_EVENTS.ORDER_NEW, onNewOrder);
+        socketRef.off(SOCKET_EVENTS.ORDER_CANCELLED, onOrderCancelled);
+      }
+    };
+  }, [shopId, loadOrders]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -83,61 +126,46 @@ export default function SellerOrdersScreen() {
       await mobileApi.acceptOrder(orderId);
       await loadOrders();
     } catch (err: any) {
-      Alert.alert('Xatolik', err.message || 'Qabul qilishda xatolik yuz berdi');
+      Alert.alert(t('sellerUi.common.error'), err.message || t('sellerUi.orders.acceptFailed'));
     }
   };
 
-  const handleReject = (orderId: string) => {
-    Alert.prompt
-      ? Alert.prompt(
-          t('seller.reject'),
-          t('seller.rejectReason'),
-          [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('seller.reject'),
-              style: 'destructive',
-              onPress: async (reason) => {
-                if (!reason || !reason.trim()) {
-                  Alert.alert('Xatolik', 'Rad etish sababini kiritish majburiy');
-                  return;
-                }
-                try {
-                  await mobileApi.rejectOrder(orderId, reason.trim());
-                  await loadOrders();
-                } catch (err: any) {
-                  Alert.alert('Xatolik', err.message);
-                }
-              },
-            },
-          ],
-        )
-      : (async () => {
-          // Fallback on Android or systems without Alert.prompt
-          try {
-            await mobileApi.rejectOrder(orderId, 'Do\'konchi tomonidan rad etildi');
-            await loadOrders();
-          } catch (err: any) {
-            Alert.alert('Xatolik', err.message);
-          }
-        })();
+  const handleRejectSubmit = async (reason: string) => {
+    if (!rejectOrderId) return;
+    // Errors propagate to the modal, which shows them inline
+    await mobileApi.rejectOrder(rejectOrderId, reason);
+    setRejectOrderId(null);
+    await loadOrders();
   };
 
   const handleAdvanceStatus = async (order: any, nextStatus: string) => {
     if (nextStatus === OrderStatus.DELIVERED && order.payment_method === 'cash') {
+      const cashMsg = t('sellerUi.orders.cashConfirmMessage', {
+        amount: formatPrice(order.total_amount, currentLang),
+      });
+      if (Platform.OS === 'web') {
+        if (!window.confirm(cashMsg)) return;
+        try {
+          await mobileApi.updateOrderStatus(order.id, nextStatus);
+          await loadOrders();
+        } catch (err: any) {
+          window.alert(err.message);
+        }
+        return;
+      }
       Alert.alert(
         t('seller.confirmCash'),
-        `Mijozdan ${formatPrice(order.total_amount, currentLang)} naqd pul qabul qilinganligini tasdiqlaysizmi?`,
+        cashMsg,
         [
           { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Tasdiqlayman',
+            text: t('sellerUi.orders.cashConfirmButton'),
             onPress: async () => {
               try {
                 await mobileApi.updateOrderStatus(order.id, nextStatus);
                 await loadOrders();
               } catch (err: any) {
-                Alert.alert('Xatolik', err.message);
+                Alert.alert(t('sellerUi.common.error'), err.message);
               }
             },
           },
@@ -150,9 +178,28 @@ export default function SellerOrdersScreen() {
       await mobileApi.updateOrderStatus(order.id, nextStatus);
       await loadOrders();
     } catch (err: any) {
-      Alert.alert('Xatolik', err.message);
+      Alert.alert(t('sellerUi.common.error'), err.message);
     }
   };
+
+  const loudAlertText = !loudAlert
+    ? null
+    : loudAlert.kind === 'new'
+      ? t('sellerUi.orders.newOrderAlert', { id: loudAlert.id })
+      : loudAlert.reason
+        ? t('sellerUi.orders.cancelledAlertReason', { id: loudAlert.id, reason: loudAlert.reason })
+        : t('sellerUi.orders.cancelledAlert', { id: loudAlert.id });
+
+  // Order items keep a name snapshot; prefer the product's name in the current language when present
+  const productName = (prod: any) =>
+    resolveLocalizedText(
+      {
+        uz: prod.product?.name_uz || prod.product_name,
+        ru: prod.product?.name_ru,
+        en: prod.product?.name_en,
+      },
+      currentLang,
+    );
 
   const filteredOrders = orders.filter((o) => {
     if (activeTab === 'new') return o.status === 'new';
@@ -169,18 +216,22 @@ export default function SellerOrdersScreen() {
           style={styles.loudAlertBar}
           onPress={() => setLoudAlert(null)}
           activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={t('sellerUi.orders.dismissAlert')}
         >
-          <BellRing size={20} color="#ffffff" className="animate-bounce" />
-          <Text style={styles.loudAlertText}>{loudAlert}</Text>
+          <BellRing size={20} color="#ffffff" />
+          <Text style={styles.loudAlertText}>{loudAlertText}</Text>
           <XCircle size={18} color="#ffffff" />
         </TouchableOpacity>
       )}
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Buyurtmalar Boshqaruvi</Text>
+        <Text style={styles.headerTitle}>{t('sellerUi.orders.title')}</Text>
         <Text style={styles.headerSubtitle}>
-          {orders.filter((o) => o.status === 'new').length} ta yangi buyurtma
+          {t('sellerUi.orders.newCount', {
+            count: orders.filter((o) => o.status === 'new').length,
+          })}
         </Text>
       </View>
 
@@ -232,7 +283,7 @@ export default function SellerOrdersScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Clock size={40} color="#cbd5e1" />
-            <Text style={styles.emptyText}>Ushbu bo'limda buyurtmalar yo'q</Text>
+            <Text style={styles.emptyText}>{t('sellerUi.orders.empty')}</Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -248,14 +299,33 @@ export default function SellerOrdersScreen() {
                 <View>
                   <Text style={styles.orderId}>#{item.id.slice(0, 8)}</Text>
                   <Text style={styles.orderTime}>
-                    {minutesElapsed} daqiqa oldin kelgan
+                    {t('sellerUi.orders.minutesAgo', { count: minutesElapsed })}
                   </Text>
                 </View>
                 {item.status === 'new' && (
                   <View style={[styles.timerBadge, isUrgent && styles.timerBadgeUrgent]}>
                     <Clock size={12} color={isUrgent ? '#e11d48' : '#d97706'} />
                     <Text style={[styles.timerText, isUrgent && styles.timerTextUrgent]}>
-                      5 min qoidasi ({minutesElapsed}m)
+                      {t('sellerUi.orders.fiveMinRule', { count: minutesElapsed })}
+                    </Text>
+                  </View>
+                )}
+                {item.status !== 'new' && (
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      item.status === 'delivered' && styles.statusBadgeDelivered,
+                      item.status === 'cancelled' && styles.statusBadgeCancelled,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        item.status === 'delivered' && styles.statusBadgeTextDelivered,
+                        item.status === 'cancelled' && styles.statusBadgeTextCancelled,
+                      ]}
+                    >
+                      {t(`orderStatus.${item.status}`)}
                     </Text>
                   </View>
                 )}
@@ -265,11 +335,12 @@ export default function SellerOrdersScreen() {
               <View style={styles.customerSection}>
                 <View style={styles.customerRow}>
                   <Text style={styles.customerName}>
-                    {item.customer?.name || 'Mijoz'}
+                    {item.customer?.name || t('sellerUi.orders.customerFallback')}
                   </Text>
                   <TouchableOpacity
                     style={styles.callButton}
                     onPress={() => Linking.openURL(`tel:${item.customer_phone}`)}
+                    accessibilityLabel={t('sellerUi.orders.callCustomer')}
                   >
                     <Phone size={14} color="#16a34a" />
                     <Text style={styles.callButtonText}>{item.customer_phone}</Text>
@@ -278,6 +349,7 @@ export default function SellerOrdersScreen() {
 
                 <TouchableOpacity
                   style={styles.addressRow}
+                  accessibilityLabel={t('sellerUi.orders.openMap')}
                   onPress={() =>
                     Linking.openURL(
                       `https://yandex.uz/maps/?text=${item.address_snapshot?.lat},${item.address_snapshot?.lng}`,
@@ -292,7 +364,7 @@ export default function SellerOrdersScreen() {
 
                 {item.comment ? (
                   <Text style={styles.commentText}>
-                    💬 Izoh: {item.comment}
+                    💬 {t('sellerUi.orders.comment', { text: item.comment })}
                   </Text>
                 ) : null}
               </View>
@@ -302,7 +374,7 @@ export default function SellerOrdersScreen() {
                 {item.items?.map((prod: any) => (
                   <View key={prod.id} style={styles.itemRow}>
                     <Text style={styles.itemName}>
-                      {prod.product_name} <Text style={{ color: '#16a34a', fontWeight: '800' }}>×{prod.quantity}</Text>
+                      {productName(prod)} <Text style={{ color: '#16a34a', fontWeight: '800' }}>×{prod.quantity}</Text>
                     </Text>
                     <Text style={styles.itemSubtotal}>
                       {formatPrice(prod.unit_price * prod.quantity, currentLang)}
@@ -313,9 +385,13 @@ export default function SellerOrdersScreen() {
 
               {/* Total & Payment Method */}
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Jami:</Text>
+                <Text style={styles.totalLabel}>{t('sellerUi.orders.total')}</Text>
                 <Text style={styles.totalAmount}>
-                  {formatPrice(item.total_amount, currentLang)} ({item.payment_method === 'cash' ? 'Naqd' : 'Onlayn'})
+                  {formatPrice(item.total_amount, currentLang)} (
+                  {item.payment_method === 'cash'
+                    ? t('sellerUi.orders.payCash')
+                    : t('sellerUi.orders.payOnline')}
+                  )
                 </Text>
               </View>
 
@@ -325,7 +401,7 @@ export default function SellerOrdersScreen() {
                   <>
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.rejectBtn]}
-                      onPress={() => handleReject(item.id)}
+                      onPress={() => setRejectOrderId(item.id)}
                     >
                       <XCircle size={16} color="#e11d48" />
                       <Text style={styles.rejectBtnText}>{t('seller.reject')}</Text>
@@ -374,6 +450,16 @@ export default function SellerOrdersScreen() {
             </View>
           );
         }}
+      />
+
+      <SellerRejectModal
+        visible={!!rejectOrderId}
+        title={t('seller.reject')}
+        placeholder={t('seller.rejectReason')}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={t('seller.reject')}
+        onCancel={() => setRejectOrderId(null)}
+        onSubmit={handleRejectSubmit}
       />
     </SafeAreaView>
   );
@@ -482,6 +568,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
+  },
+  statusBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusBadgeDelivered: {
+    backgroundColor: '#dcfce7',
+  },
+  statusBadgeCancelled: {
+    backgroundColor: '#fee2e2',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  statusBadgeTextDelivered: {
+    color: '#166534',
+  },
+  statusBadgeTextCancelled: {
+    color: '#e11d48',
   },
   timerBadgeUrgent: {
     backgroundColor: '#fee2e2',

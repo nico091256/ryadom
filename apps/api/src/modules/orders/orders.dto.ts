@@ -37,6 +37,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   comment?: string;
+
+  @ApiProperty({ example: 'YANGI10', required: false, description: 'Optional promo code (validated server-side)' })
+  @IsOptional()
+  @IsString()
+  promo_code?: string;
 }
 
 export class RejectOrderDto {

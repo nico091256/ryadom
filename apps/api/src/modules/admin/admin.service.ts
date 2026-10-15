@@ -1,12 +1,140 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { AdminCategoryDto, AdminCreateShopDto, AdminUpdateShopDto } from './admin.dto';
+import {
+  AdminCreatePromoCodeDto,
+  AdminCreateShopDto,
+  AdminUpdateProductDto,
+  AdminUpdatePromoCodeDto,
+  AdminUpdateShopDto,
+} from './admin.dto';
 import { UserRole } from '@localshop/shared';
+import { OrdersService } from '../orders/orders.service';
+import { ShopsService } from '../shops/shops.service';
+
+/** Uzbekistan local time offset (UTC+5, no DST) used for day buckets */
+const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const ORDER_STATUSES = ['new', 'accepted', 'preparing', 'on_the_way', 'delivered', 'cancelled'] as const;
+
+/** Prisma select used to build the OrderSummary shape */
+const ORDER_SUMMARY_SELECT = {
+  id: true,
+  status: true,
+  payment_method: true,
+  payment_status: true,
+  total_amount: true,
+  discount_amount: true,
+  promo_code: true,
+  customer_phone: true,
+  created_at: true,
+  shop: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true, phone: true } },
+  _count: { select: { items: true } },
+} satisfies Prisma.OrderSelect;
+
+type OrderSummaryRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SUMMARY_SELECT }>;
+
+const USER_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  phone: true,
+  login: true,
+  role: true,
+  language: true,
+  is_blocked: true,
+  must_change_password: true,
+  created_at: true,
+} satisfies Prisma.UserSelect;
+
+/** YYYY-MM-DD of a date in Tashkent local time */
+function localDayKey(date: Date): string {
+  return new Date(date.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** UTC instant of local (Tashkent) midnight for a YYYY-MM-DD key */
+function localDayStart(key: string): Date {
+  return new Date(new Date(`${key}T00:00:00.000Z`).getTime() - TZ_OFFSET_MS);
+}
+
+function parsePagination(page?: string | number, limit?: string | number) {
+  const p = Math.max(1, parseInt(String(page ?? '1'), 10) || 1);
+  const l = Math.min(100, Math.max(1, parseInt(String(limit ?? '20'), 10) || 20));
+  return { page: p, limit: l, skip: (p - 1) * l };
+}
+
+function parseDayKey(value: string | undefined, field: string): string | undefined {
+  if (!value) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || isNaN(Date.parse(value))) {
+    throw new BadRequestException({ code: 'INVALID_DATE', message: `'${field}' must be YYYY-MM-DD` });
+  }
+  return value;
+}
+
+function generateTempPassword(length = 10): string {
+  // Unambiguous alphabet; guarantee at least one letter of each case and a digit
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const all = lower + upper + digits;
+  const chars = [
+    lower[randomInt(lower.length)],
+    upper[randomInt(upper.length)],
+    digits[randomInt(digits.length)],
+  ];
+  while (chars.length < length) chars.push(all[randomInt(all.length)]);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+export interface AdminOrderFilters {
+  status?: string;
+  shopId?: string;
+  paymentMethod?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: string;
+  limit?: string;
+}
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ordersService: OrdersService,
+    private shopsService: ShopsService,
+  ) {}
+
+  // ───────────────────────────── helpers ─────────────────────────────
+
+  private toOrderSummary(order: OrderSummaryRow) {
+    const { _count, ...rest } = order;
+    return { ...rest, itemsCount: _count.items };
+  }
+
+  private async deliveredRevenueByShop(shopIds: string[], since?: Date) {
+    if (shopIds.length === 0) return new Map<string, { sum: number; count: number }>();
+    const rows = await this.prisma.order.groupBy({
+      by: ['shop_id'],
+      where: {
+        shop_id: { in: shopIds },
+        status: 'delivered',
+        ...(since ? { created_at: { gte: since } } : {}),
+      },
+      _sum: { total_amount: true },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.shop_id, { sum: r._sum.total_amount ?? 0, count: r._count._all }]));
+  }
+
+  // ───────────────────────────── shops ─────────────────────────────
 
   /**
    * Admin creates a shop together with its shopkeeper account (Section 4 & 6)
@@ -70,17 +198,101 @@ export class AdminService {
     });
   }
 
-  async getShops() {
-    return this.prisma.shop.findMany({
+  private readonly shopOwnerSelect = {
+    id: true,
+    login: true,
+    name: true,
+    phone: true,
+    is_blocked: true,
+    must_change_password: true,
+  } satisfies Prisma.UserSelect;
+
+  async getShops(query: { q?: string; status?: string; page?: string; limit?: string }) {
+    const { page, limit, skip } = parsePagination(query.page, query.limit);
+    const where: Prisma.ShopWhereInput = {};
+    if (query.status === 'active') where.is_active = true;
+    else if (query.status === 'inactive') where.is_active = false;
+    const q = query.q?.trim();
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { address_text: { contains: q, mode: 'insensitive' } },
+        { owner: { login: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [shops, total] = await Promise.all([
+      this.prisma.shop.findMany({
+        where,
+        include: {
+          owner: { select: this.shopOwnerSelect },
+          city: true,
+          _count: { select: { products: { where: { deleted_at: null } }, orders: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.shop.count({ where }),
+    ]);
+
+    const revenue = await this.deliveredRevenueByShop(shops.map((s) => s.id));
+
+    return {
+      data: shops.map(({ _count, ...shop }) => ({
+        ...shop,
+        productCount: _count.products,
+        orderCount: _count.orders,
+        revenueTiyin: revenue.get(shop.id)?.sum ?? 0,
+        isCurrentlyOpen: shop.is_active && this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async getShop(shopId: string) {
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
       include: {
-        owner: { select: { id: true, login: true, name: true, phone: true, is_blocked: true } },
+        owner: { select: this.shopOwnerSelect },
         city: true,
-        _count: {
-          select: { products: true, orders: true },
+        _count: { select: { products: { where: { deleted_at: null } }, orders: true } },
+        products: {
+          where: { deleted_at: null },
+          include: { category: true },
+          orderBy: { created_at: 'desc' },
         },
       },
-      orderBy: { created_at: 'desc' },
     });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+
+    const todayStart = localDayStart(localDayKey(new Date()));
+    const since30 = new Date(todayStart.getTime() - 29 * DAY_MS);
+    const [revenueAll, ordersToday, orders30d, revenue30d] = await Promise.all([
+      this.deliveredRevenueByShop([shopId]),
+      this.prisma.order.count({ where: { shop_id: shopId, created_at: { gte: todayStart } } }),
+      this.prisma.order.count({ where: { shop_id: shopId, created_at: { gte: since30 } } }),
+      this.deliveredRevenueByShop([shopId], since30),
+    ]);
+
+    const { _count, ...rest } = shop;
+    return {
+      ...rest,
+      productCount: _count.products,
+      orderCount: _count.orders,
+      revenueTiyin: revenueAll.get(shopId)?.sum ?? 0,
+      isCurrentlyOpen: shop.is_active && this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
+      stats: {
+        ordersToday,
+        orders30d,
+        revenue30dTiyin: revenue30d.get(shopId)?.sum ?? 0,
+      },
+    };
   }
 
   async updateShop(shopId: string, dto: AdminUpdateShopDto) {
@@ -89,122 +301,528 @@ export class AdminService {
       throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
     }
 
+    const fields = [
+      'name',
+      'phone',
+      'address_text',
+      'lat',
+      'lng',
+      'open_time',
+      'close_time',
+      'is_open',
+      'is_active',
+      'commission_rate_percent',
+      'logo_url',
+    ] as const;
+    const data: Prisma.ShopUpdateInput = {};
+    for (const f of fields) {
+      if (dto[f] !== undefined) (data as any)[f] = dto[f];
+    }
+
     return this.prisma.shop.update({
       where: { id: shopId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
-        ...(dto.address_text !== undefined ? { address_text: dto.address_text } : {}),
-        ...(dto.lat !== undefined ? { lat: dto.lat } : {}),
-        ...(dto.lng !== undefined ? { lng: dto.lng } : {}),
-        ...(dto.is_active !== undefined ? { is_active: dto.is_active } : {}),
-        ...(dto.is_open !== undefined ? { is_open: dto.is_open } : {}),
-        ...(dto.commission_rate_percent !== undefined ? { commission_rate_percent: dto.commission_rate_percent } : {}),
-      },
+      data,
       include: {
-        owner: { select: { id: true, login: true, name: true, phone: true } },
+        owner: { select: this.shopOwnerSelect },
         city: true,
       },
     });
   }
 
-  async getUsers(search?: string, role?: UserRole) {
-    return this.prisma.user.findMany({
-      where: {
-        ...(role ? { role: role as any } : {}),
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } },
-                { login: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        login: true,
-        phone: true,
-        name: true,
-        role: true,
-        language: true,
-        is_blocked: true,
+  async resetShopPassword(shopId: string) {
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      include: { owner: { select: { id: true, login: true } } },
+    });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+    if (!shop.owner.login) {
+      throw new BadRequestException({ code: 'OWNER_HAS_NO_LOGIN', message: 'Shop owner has no login to reset.' });
+    }
+
+    const tempPassword = generateTempPassword(10);
+    await this.prisma.user.update({
+      where: { id: shop.owner.id },
+      data: {
+        password_hash: await bcrypt.hash(tempPassword, 10),
         must_change_password: true,
-        created_at: true,
-        _count: {
-          select: { orders: true, shops: true },
+      },
+    });
+
+    return { login: shop.owner.login, tempPassword };
+  }
+
+  // ───────────────────────────── products ─────────────────────────────
+
+  private async findProductOrThrow(productId: string) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product || product.deleted_at) {
+      throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found' });
+    }
+    return product;
+  }
+
+  async updateProduct(productId: string, dto: AdminUpdateProductDto) {
+    await this.findProductOrThrow(productId);
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
+      },
+      include: { category: true },
+    });
+  }
+
+  async deleteProduct(productId: string) {
+    await this.findProductOrThrow(productId);
+    await this.prisma.$transaction([
+      this.prisma.product.update({
+        where: { id: productId },
+        data: { deleted_at: new Date(), is_available: false },
+      }),
+      // Remove from any active carts so customers can't check it out
+      this.prisma.cartItem.deleteMany({ where: { product_id: productId } }),
+    ]);
+    return { success: true };
+  }
+
+  // ───────────────────────────── orders ─────────────────────────────
+
+  async getOrders(filters: AdminOrderFilters) {
+    const { page, limit, skip } = parsePagination(filters.page, filters.limit);
+    const where: Prisma.OrderWhereInput = {};
+
+    if (filters.status) {
+      if (!(ORDER_STATUSES as readonly string[]).includes(filters.status)) {
+        throw new BadRequestException({ code: 'INVALID_STATUS', message: `Unknown status '${filters.status}'` });
+      }
+      where.status = filters.status as any;
+    }
+    if (filters.shopId) where.shop_id = filters.shopId;
+    if (filters.paymentMethod) {
+      if (!['cash', 'online'].includes(filters.paymentMethod)) {
+        throw new BadRequestException({ code: 'INVALID_PAYMENT_METHOD', message: `Unknown payment method '${filters.paymentMethod}'` });
+      }
+      where.payment_method = filters.paymentMethod as any;
+    }
+
+    const from = parseDayKey(filters.from, 'from');
+    const to = parseDayKey(filters.to, 'to');
+    if (from || to) {
+      where.created_at = {
+        ...(from ? { gte: localDayStart(from) } : {}),
+        ...(to ? { lt: new Date(localDayStart(to).getTime() + DAY_MS) } : {}),
+      };
+    }
+
+    const q = filters.q?.trim();
+    if (q) {
+      where.OR = [
+        { id: { startsWith: q.toLowerCase() } },
+        { customer_phone: { contains: q, mode: 'insensitive' } },
+        { customer: { phone: { contains: q, mode: 'insensitive' } } },
+        { customer: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        select: ORDER_SUMMARY_SELECT,
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return { data: orders.map((o) => this.toOrderSummary(o)), total, page, limit };
+  }
+
+  async getOrder(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        ...ORDER_SUMMARY_SELECT,
+        address_snapshot: true,
+        comment: true,
+        commission_rate_percent: true,
+        commission_amount: true,
+        accepted_at: true,
+        delivered_at: true,
+        needs_attention: true,
+        updated_at: true,
+        shop: { select: { id: true, name: true, phone: true, address_text: true } },
+        items: { orderBy: { created_at: 'asc' } },
+        status_history: {
+          orderBy: { created_at: 'asc' },
+          include: { actor: { select: { id: true, name: true, login: true, role: true } } },
         },
       },
-      orderBy: { created_at: 'desc' },
     });
+
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    const { _count, items, status_history, ...rest } = order;
+    return {
+      ...rest,
+      itemsCount: _count.items,
+      items: items.map((i) => ({
+        id: i.id,
+        product_id: i.product_id,
+        product_name: i.product_name,
+        unit_price: i.unit_price,
+        quantity: i.quantity,
+        total_price: i.unit_price * i.quantity,
+      })),
+      // Schema stores only the resulting `status`; from_status/to_status are derived for convenience
+      status_history: status_history.map((h, idx) => ({
+        id: h.id,
+        status: h.status,
+        from_status: idx > 0 ? status_history[idx - 1].status : null,
+        to_status: h.status,
+        reason: h.reason,
+        created_at: h.created_at,
+        changed_by: h.changed_by,
+        actor: h.actor,
+      })),
+    };
+  }
+
+  async cancelOrder(orderId: string, adminId: string, reason: string) {
+    await this.ordersService.adminCancelOrder(orderId, adminId, reason);
+    return this.getOrder(orderId);
+  }
+
+  // ───────────────────────────── users ─────────────────────────────
+
+  async getUsers(query: { q?: string; role?: string; blocked?: string; page?: string; limit?: string }) {
+    const { page, limit, skip } = parsePagination(query.page, query.limit);
+    const where: Prisma.UserWhereInput = {};
+
+    if (query.role) {
+      if (!['customer', 'seller', 'admin'].includes(query.role)) {
+        throw new BadRequestException({ code: 'INVALID_ROLE', message: `Unknown role '${query.role}'` });
+      }
+      where.role = query.role as any;
+    }
+    if (query.blocked === 'true') where.is_blocked = true;
+    else if (query.blocked === 'false') where.is_blocked = false;
+
+    const q = query.q?.trim();
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { login: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          ...USER_PUBLIC_SELECT,
+          _count: { select: { orders: true } },
+          shops: { select: { id: true, name: true }, take: 1, orderBy: { created_at: 'asc' } },
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    const spent = await this.totalSpentByCustomer(users.map((u) => u.id));
+
+    return {
+      data: users.map(({ _count, shops, ...u }) => ({
+        ...u,
+        ordersCount: _count.orders,
+        totalSpentTiyin: spent.get(u.id) ?? 0,
+        shop: shops[0] ?? null,
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  private async totalSpentByCustomer(userIds: string[]) {
+    if (userIds.length === 0) return new Map<string, number>();
+    const rows = await this.prisma.order.groupBy({
+      by: ['customer_id'],
+      where: { customer_id: { in: userIds }, status: 'delivered' },
+      _sum: { total_amount: true },
+    });
+    return new Map(rows.map((r) => [r.customer_id, r._sum.total_amount ?? 0]));
+  }
+
+  async getUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        ...USER_PUBLIC_SELECT,
+        _count: { select: { orders: true } },
+        shops: { select: { id: true, name: true }, take: 1, orderBy: { created_at: 'asc' } },
+        addresses: { orderBy: { created_at: 'desc' } },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    const [recentOrders, spent] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { customer_id: userId },
+        select: ORDER_SUMMARY_SELECT,
+        orderBy: { created_at: 'desc' },
+        take: 10,
+      }),
+      this.totalSpentByCustomer([userId]),
+    ]);
+
+    const { _count, shops, ...rest } = user;
+    return {
+      ...rest,
+      ordersCount: _count.orders,
+      totalSpentTiyin: spent.get(userId) ?? 0,
+      shop: shops[0] ?? null,
+      recentOrders: recentOrders.map((o) => this.toOrderSummary(o)),
+    };
   }
 
   async toggleBlockUser(userId: string, isBlocked: boolean) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+    if (!user) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+    if (isBlocked && user.role === ('admin' as any)) {
+      throw new BadRequestException({ code: 'CANNOT_BLOCK_ADMIN', message: 'Admin accounts cannot be blocked.' });
+    }
+
     return this.prisma.user.update({
       where: { id: userId },
       data: { is_blocked: isBlocked },
-      select: { id: true, login: true, phone: true, name: true, is_blocked: true },
+      select: { id: true, login: true, phone: true, name: true, role: true, is_blocked: true },
     });
   }
 
-  /**
-   * Admin dashboard numbers and 30-day timeline
-   */
-  async getDashboardStats() {
-    const [totalOrders, totalShops, totalCustomers, totalSellers, needsAttentionCount] = await Promise.all([
-      this.prisma.order.count(),
-      this.prisma.shop.count({ where: { is_active: true } }),
-      this.prisma.user.count({ where: { role: UserRole.CUSTOMER as any } }),
-      this.prisma.user.count({ where: { role: UserRole.SELLER as any } }),
-      this.prisma.order.count({ where: { needs_attention: true, status: 'new' } }),
-    ]);
+  // ───────────────────────────── categories ─────────────────────────────
 
-    // Orders in the last 30 days grouped by day
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+  async getCategories() {
+    const categories = await this.prisma.category.findMany({
+      include: { _count: { select: { products: { where: { deleted_at: null } } } } },
+      orderBy: { name_uz: 'asc' },
+    });
+    return categories.map(({ _count, ...c }) => ({ ...c, productCount: _count.products }));
+  }
 
-    const recentOrders = await this.prisma.order.findMany({
-      where: {
-        created_at: { gte: thirtyDaysAgo },
-      },
-      select: {
-        created_at: true,
-        total_amount: true,
-        status: true,
-      },
+  async deleteCategory(categoryId: string) {
+    const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category) {
+      throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+
+    const activeCount = await this.prisma.product.count({ where: { category_id: categoryId, deleted_at: null } });
+    if (activeCount > 0) {
+      throw new ConflictException({
+        code: 'CATEGORY_IN_USE',
+        message: `Category is used by ${activeCount} product(s). Move or delete them first.`,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Soft-deleted products without order history can be purged; ones referenced by orders must stay
+      await tx.product.deleteMany({
+        where: { category_id: categoryId, deleted_at: { not: null }, order_items: { none: {} } },
+      });
+      const archived = await tx.product.count({ where: { category_id: categoryId } });
+      if (archived > 0) {
+        throw new ConflictException({
+          code: 'CATEGORY_IN_USE',
+          message: `Category is still referenced by ${archived} archived product(s) with order history.`,
+        });
+      }
+      await tx.category.updateMany({ where: { parent_id: categoryId }, data: { parent_id: null } });
+      await tx.category.delete({ where: { id: categoryId } });
     });
 
-    const dayMap = new Map<string, { date: string; orderCount: number; revenueTiyin: number }>();
+    return { success: true };
+  }
 
-    for (let i = 0; i < 30; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - (29 - i));
-      const key = d.toISOString().split('T')[0];
-      dayMap.set(key, { date: key, orderCount: 0, revenueTiyin: 0 });
+  // ───────────────────────────── promo codes ─────────────────────────────
+
+  async getPromoCodes() {
+    return this.prisma.promoCode.findMany({ orderBy: { created_at: 'desc' } });
+  }
+
+  async createPromoCode(dto: AdminCreatePromoCodeDto) {
+    const code = dto.code.trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException({ code: 'INVALID_PROMO_CODE', message: 'Code must not be empty' });
     }
-
-    for (const order of recentOrders) {
-      const key = order.created_at.toISOString().split('T')[0];
-      const entry = dayMap.get(key);
-      if (entry) {
-        entry.orderCount += 1;
-        if (order.status !== 'cancelled') {
-          entry.revenueTiyin += order.total_amount;
-        }
+    try {
+      return await this.prisma.promoCode.create({
+        data: {
+          code,
+          description: dto.description?.trim() || null,
+          discount_percent: dto.discount_percent,
+          max_discount_tiyin: dto.max_discount_tiyin ?? null,
+          min_order_tiyin: dto.min_order_tiyin ?? null,
+          usage_limit: dto.usage_limit ?? null,
+          is_active: dto.is_active ?? true,
+          expires_at: dto.expires_at ? new Date(dto.expires_at) : null,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException({ code: 'PROMO_CODE_EXISTS', message: `Promo code '${code}' already exists.` });
       }
+      throw e;
     }
+  }
+
+  private async findPromoOrThrow(id: string) {
+    const promo = await this.prisma.promoCode.findUnique({ where: { id } });
+    if (!promo) {
+      throw new NotFoundException({ code: 'PROMO_CODE_NOT_FOUND', message: 'Promo code not found' });
+    }
+    return promo;
+  }
+
+  async updatePromoCode(id: string, dto: AdminUpdatePromoCodeDto) {
+    await this.findPromoOrThrow(id);
+    const data: Prisma.PromoCodeUpdateInput = {};
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.discount_percent !== undefined) data.discount_percent = dto.discount_percent;
+    if (dto.max_discount_tiyin !== undefined) data.max_discount_tiyin = dto.max_discount_tiyin;
+    if (dto.min_order_tiyin !== undefined) data.min_order_tiyin = dto.min_order_tiyin;
+    if (dto.usage_limit !== undefined) data.usage_limit = dto.usage_limit;
+    if (dto.is_active !== undefined) data.is_active = dto.is_active;
+    if (dto.expires_at !== undefined) data.expires_at = dto.expires_at ? new Date(dto.expires_at) : null;
+    return this.prisma.promoCode.update({ where: { id }, data });
+  }
+
+  async deletePromoCode(id: string) {
+    await this.findPromoOrThrow(id);
+    await this.prisma.promoCode.delete({ where: { id } });
+    return { success: true };
+  }
+
+  // ───────────────────────────── dashboard ─────────────────────────────
+
+  /**
+   * Admin dashboard numbers, 30-day timeline, top shops and recent orders.
+   * Day boundaries use Tashkent local time (UTC+5).
+   */
+  async getDashboardStats() {
+    const todayKey = localDayKey(new Date());
+    const todayStart = localDayStart(todayKey);
+    const since30 = new Date(todayStart.getTime() - 29 * DAY_MS);
+
+    const [
+      customers,
+      sellers,
+      shops,
+      activeShopsList,
+      products,
+      orders,
+      ordersToday,
+      deliveredAgg,
+      deliveredTodayAgg,
+      statusGroups,
+      last30Orders,
+      topShopRows,
+      recentOrders,
+    ] = await Promise.all([
+      this.prisma.user.count({ where: { role: 'customer' } }),
+      this.prisma.user.count({ where: { role: 'seller' } }),
+      this.prisma.shop.count(),
+      this.prisma.shop.findMany({
+        where: { is_active: true },
+        select: { open_time: true, close_time: true, is_open: true },
+      }),
+      this.prisma.product.count({ where: { deleted_at: null } }),
+      this.prisma.order.count(),
+      this.prisma.order.count({ where: { created_at: { gte: todayStart } } }),
+      this.prisma.order.aggregate({
+        where: { status: 'delivered' },
+        _sum: { total_amount: true, commission_amount: true },
+        _count: { _all: true },
+      }),
+      this.prisma.order.aggregate({
+        where: { status: 'delivered', created_at: { gte: todayStart } },
+        _sum: { total_amount: true },
+      }),
+      this.prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.order.findMany({
+        where: { created_at: { gte: since30 } },
+        select: { created_at: true, total_amount: true, status: true },
+      }),
+      this.prisma.order.groupBy({
+        by: ['shop_id'],
+        where: { status: 'delivered', created_at: { gte: since30 } },
+        _sum: { total_amount: true },
+        _count: { _all: true },
+        orderBy: { _sum: { total_amount: 'desc' } },
+        take: 5,
+      }),
+      this.prisma.order.findMany({ select: ORDER_SUMMARY_SELECT, orderBy: { created_at: 'desc' }, take: 8 }),
+    ]);
+
+    const ordersByStatus: Record<string, number> = Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0]));
+    for (const g of statusGroups) ordersByStatus[g.status] = g._count._all;
+
+    const revenueTiyin = deliveredAgg._sum.total_amount ?? 0;
+    const deliveredCount = deliveredAgg._count._all;
+
+    const dayMap = new Map<string, { date: string; orders: number; revenueTiyin: number }>();
+    for (let i = 0; i < 30; i++) {
+      const key = localDayKey(new Date(since30.getTime() + i * DAY_MS));
+      dayMap.set(key, { date: key, orders: 0, revenueTiyin: 0 });
+    }
+    for (const o of last30Orders) {
+      const entry = dayMap.get(localDayKey(o.created_at));
+      if (!entry) continue;
+      entry.orders += 1;
+      if (o.status === 'delivered') entry.revenueTiyin += o.total_amount;
+    }
+
+    const topShopNames = await this.prisma.shop.findMany({
+      where: { id: { in: topShopRows.map((r) => r.shop_id) } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(topShopNames.map((s) => [s.id, s.name]));
 
     return {
-      summary: {
-        totalOrders,
-        totalShops,
-        totalCustomers,
-        totalSellers,
-        needsAttentionCount,
+      totals: {
+        customers,
+        sellers,
+        shops,
+        activeShops: activeShopsList.length,
+        openShopsNow: activeShopsList.filter((s) => this.shopsService.isShopOpen(s.open_time, s.close_time, s.is_open)).length,
+        products,
+        orders,
+        ordersToday,
+        revenueTiyin,
+        revenueTodayTiyin: deliveredTodayAgg._sum.total_amount ?? 0,
+        commissionTiyin: deliveredAgg._sum.commission_amount ?? 0,
+        avgOrderTiyin: deliveredCount > 0 ? Math.round(revenueTiyin / deliveredCount) : 0,
+        cancelRatePercent: orders > 0 ? Math.round((ordersByStatus.cancelled / orders) * 1000) / 10 : 0,
       },
-      ordersPerDayLast30Days: Array.from(dayMap.values()),
+      ordersByStatus,
+      daily: Array.from(dayMap.values()),
+      topShops: topShopRows.map((r) => ({
+        id: r.shop_id,
+        name: nameById.get(r.shop_id) ?? '',
+        orders: r._count._all,
+        revenueTiyin: r._sum.total_amount ?? 0,
+      })),
+      recentOrders: recentOrders.map((o) => this.toOrderSummary(o)),
     };
   }
 }

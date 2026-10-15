@@ -58,8 +58,8 @@ export default function SellerStatsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Do'kon Statistikasi</Text>
-        <Text style={styles.headerSubtitle}>Sotuvlar va buyurtmalar ko'rsatkichlari</Text>
+        <Text style={styles.headerTitle}>{t('sellerUi.stats.title')}</Text>
+        <Text style={styles.headerSubtitle}>{t('sellerUi.stats.subtitle')}</Text>
       </View>
 
       <ScrollView
@@ -79,7 +79,7 @@ export default function SellerStatsScreen() {
           <Text style={styles.revenueAmount}>{formatPrice(today.revenueTiyin, currentLang)}</Text>
           <View style={styles.countBadge}>
             <ShoppingBag size={12} color="#166534" />
-            <Text style={styles.countText}>{today.orderCount} ta buyurtma</Text>
+            <Text style={styles.countText}>{t('sellerUi.stats.orderCount', { count: today.orderCount })}</Text>
           </View>
         </View>
 
@@ -95,7 +95,7 @@ export default function SellerStatsScreen() {
           <View style={[styles.countBadge, { backgroundColor: '#eff6ff' }]}>
             <ShoppingBag size={12} color="#1e40af" />
             <Text style={[styles.countText, { color: '#1e40af' }]}>
-              {thisWeek.orderCount} ta buyurtma
+              {t('sellerUi.stats.orderCount', { count: thisWeek.orderCount })}
             </Text>
           </View>
         </View>
@@ -112,7 +112,7 @@ export default function SellerStatsScreen() {
           <View style={[styles.countBadge, { backgroundColor: '#faf5ff' }]}>
             <ShoppingBag size={12} color="#6b21a8" />
             <Text style={[styles.countText, { color: '#6b21a8' }]}>
-              {thisMonth.orderCount} ta buyurtma
+              {t('sellerUi.stats.orderCount', { count: thisMonth.orderCount })}
             </Text>
           </View>
         </View>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,49 +10,66 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Linking,
+  ScrollView,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { mobileApi } from '../../../services/api';
 import { useCartStore } from '../../../store/useCartStore';
-import { formatPrice, SupportedLanguage, resolveLocalizedText } from '@localshop/shared';
+import { formatPrice, resolveLocalizedText } from '@localshop/shared';
 import {
   ArrowLeft,
   Clock,
-  MapPin,
   Search,
   Plus,
   Minus,
   ShoppingBag,
-  AlertCircle,
   Phone,
+  X,
+  ShieldCheck,
+  ChevronRight,
 } from 'lucide-react-native';
+import ProductDetailModal from '../../../components/ProductDetailModal';
+import { hapticFeedback } from '../../../utils/haptics';
+import { toSupportedLang } from '../../../utils/localize';
 
 export default function ShopDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const { addItem, updateQuantity, items: cartItems, shopId: activeShopId, clearCart } = useCartStore();
+  const {
+    addItem,
+    setItemQuantity,
+    increment,
+    decrement,
+    shopId: activeShopId,
+    clearCart,
+    getItemQuantity,
+    getTotalAmount,
+    getTotalItemsCount,
+  } = useCartStore();
 
   const [shop, setShop] = useState<any>(null);
-  const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
-  const currentLang = (i18n.language as SupportedLanguage) || SupportedLanguage.UZ;
+  const currentLang = toSupportedLang(i18n.language);
 
   const loadData = async () => {
     try {
-      const [shopData, catsData, prodsData] = await Promise.all([
+      const [shopData, prodsData] = await Promise.all([
         mobileApi.getShopDetails(id),
-        mobileApi.getCategories(),
-        mobileApi.getShopProducts(id, selectedCatId || undefined, searchQuery || undefined),
+        mobileApi.getShopProducts(id),
       ]);
       setShop(shopData);
-      setCategories(catsData);
-      setProducts(prodsData);
+      // Customers only see products the seller marked as available
+      setProducts((Array.isArray(prodsData) ? prodsData : []).filter((p: any) => p.is_available !== false));
     } catch (err) {
       console.warn('Failed to load shop details', err);
     } finally {
@@ -62,238 +79,410 @@ export default function ShopDetailScreen() {
 
   useEffect(() => {
     loadData();
-  }, [id, selectedCatId]);
+  }, [id]);
 
-  const handleSearch = () => {
-    mobileApi
-      .getShopProducts(id, selectedCatId || undefined, searchQuery || undefined)
-      .then(setProducts)
-      .catch(console.warn);
-  };
+  // Category tabs: only categories that actually have products in this shop
+  const categories = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const p of products) {
+      if (p.category && !map.has(p.category.id)) {
+        map.set(p.category.id, p.category);
+      }
+    }
+    return Array.from(map.values());
+  }, [products]);
 
-  const handleAddToCart = (product: any) => {
+  // Client-side filtering for ultra-fast instant UI response
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (selectedCatId && p.category_id !== selectedCatId) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const titleUz = (p.name_uz || '').toLowerCase();
+        const titleRu = (p.name_ru || '').toLowerCase();
+        const titleEn = (p.name_en || '').toLowerCase();
+        if (!titleUz.includes(q) && !titleRu.includes(q) && !titleEn.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [products, selectedCatId, searchQuery]);
+
+  /**
+   * Adds a product to the cart with closed-shop and single-shop checks.
+   * When `quantity` is given (product modal) the cart quantity is SET to it;
+   * otherwise one unit is added.
+   */
+  const handleAddToCart = (product: any, quantity?: number) => {
     if (!shop?.isCurrentlyOpen) {
+      hapticFeedback.warning();
       Alert.alert(t('common.closed'), t('shop.closedBanner'));
       return;
     }
 
-    const res = addItem(product, shop.id, shop.name);
+    const doAdd = () =>
+      quantity !== undefined
+        ? setItemQuantity(product, shop.id, shop.name, quantity)
+        : addItem(product, shop.id, shop.name);
+
+    hapticFeedback.light();
+    const res = doAdd();
     if (res.conflict) {
+      hapticFeedback.warning();
+      const replaceCart = () => {
+        clearCart();
+        doAdd();
+      };
+      if (Platform.OS === 'web') {
+        if (window.confirm(t('cart.multipleShopsWarning'))) replaceCart();
+        return;
+      }
       Alert.alert(
-        'Boshqa do\'kon mahsulotlari',
+        t('customer.shop.otherShopTitle'),
         t('cart.multipleShopsWarning'),
         [
           { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('cart.clearCart'),
-            style: 'destructive',
-            onPress: () => {
-              clearCart();
-              addItem(product, shop.id, shop.name);
-            },
-          },
+          { text: t('cart.clearCart'), style: 'destructive', onPress: replaceCart },
         ],
       );
     }
   };
 
+  const handleCallShop = () => {
+    if (shop?.phone) {
+      Linking.openURL(`tel:${shop.phone}`);
+    }
+  };
+
+  const isCartBelongToShop = activeShopId === id;
+  const cartTotalAmount = isCartBelongToShop ? getTotalAmount() : 0;
+  const cartItemsCount = isCartBelongToShop ? getTotalItemsCount() : 0;
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#16a34a" />
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#059669" />
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </SafeAreaView>
     );
   }
 
+  if (!shop) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <Text style={styles.errorText}>{t('customer.shop.notFound')}</Text>
+        <TouchableOpacity style={styles.backBtnError} onPress={() => router.back()}>
+          <Text style={styles.backBtnErrorText}>{t('common.back')}</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const isOpen = shop.isCurrentlyOpen;
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+
+      {/* Top Floating Back & Phone Header */}
+      <View style={styles.navHeader}>
+        <TouchableOpacity
+          style={styles.navCircleBtn}
+          onPress={() => {
+            hapticFeedback.selection();
+            router.back();
+          }}
+        >
           <ArrowLeft size={20} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {shop?.name}
-        </Text>
-        <TouchableOpacity
-          style={styles.cartIconBtn}
-          onPress={() => router.push('/(customer)/cart')}
-        >
-          <ShoppingBag size={20} color="#16a34a" />
-          {cartItems.length > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+
+        {shop.phone && (
+          <TouchableOpacity style={styles.navCircleBtn} onPress={handleCallShop}>
+            <Phone size={18} color="#059669" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Closed Banner if shop is closed */}
-      {!shop?.isCurrentlyOpen && (
-        <View style={styles.closedBanner}>
-          <AlertCircle size={16} color="#e11d48" />
-          <Text style={styles.closedBannerText}>{t('shop.closedBanner')}</Text>
-        </View>
-      )}
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            {/* Hero Cover Image */}
+            <View style={styles.heroCover}>
+              <Image
+                source={{
+                  uri:
+                    shop.logo_url ||
+                    'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=800&q=80',
+                }}
+                style={styles.heroImage}
+                resizeMode="cover"
+              />
+              <View style={styles.heroOverlay} />
+            </View>
 
-      {/* Header Info */}
-      <View style={styles.shopHeader}>
-        <View style={styles.shopHeaderTop}>
-          <View style={styles.shopLogo}>
-            {shop?.logo_url ? (
-              <Image source={{ uri: shop.logo_url }} style={styles.shopLogoImg} />
-            ) : (
-              <Text style={styles.shopLogoLetter}>{shop?.name.charAt(0)}</Text>
-            )}
-          </View>
-          <View style={styles.shopMetaInfo}>
-            <Text style={styles.shopNameText}>{shop?.name}</Text>
-            <View style={styles.metaRow}>
-              <Clock size={12} color="#64748b" />
-              <Text style={styles.metaText}>
-                {shop?.open_time} - {shop?.close_time}
-              </Text>
-              <View
-                style={[
-                  styles.statusPill,
-                  shop?.isCurrentlyOpen ? styles.statusPillOpen : styles.statusPillClosed,
-                ]}
-              >
-                <Text
+            {/* Shop Details Card */}
+            <View style={styles.shopDetailCard}>
+              <View style={styles.shopTitleRow}>
+                <Text style={styles.shopName}>{shop.name}</Text>
+              </View>
+
+              <Text style={styles.addressText}>{shop.address_text}</Text>
+
+              {/* Working Hours & Status */}
+              <View style={styles.metaRow}>
+                <View
                   style={[
-                    styles.statusPillText,
-                    shop?.isCurrentlyOpen ? styles.statusPillTextOpen : styles.statusPillTextClosed,
+                    styles.statusPill,
+                    isOpen ? styles.statusPillOpen : styles.statusPillClosed,
                   ]}
                 >
-                  {shop?.isCurrentlyOpen ? t('common.open') : t('common.closed')}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.metaRow}>
-              <MapPin size={12} color="#64748b" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {shop?.address_text}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* In-Shop Search Bar */}
-        <View style={styles.searchBar}>
-          <Search size={16} color="#94a3b8" />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            placeholder="Do'kondan qidirish..."
-            placeholderTextColor="#94a3b8"
-          />
-        </View>
-      </View>
-
-      {/* Categories Horizontal Scroll */}
-      <View style={styles.categoriesBar}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={[{ id: null, name_uz: t('shop.allCategories') }, ...categories]}
-          keyExtractor={(item) => item.id || 'all'}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-          renderItem={({ item }) => {
-            const isSelected = selectedCatId === item.id;
-            return (
-              <TouchableOpacity
-                style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                onPress={() => setSelectedCatId(item.id)}
-              >
-                <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
-                  {item.name_uz}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-
-      {/* Product List */}
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.productsGrid}
-        numColumns={2}
-        ListEmptyComponent={
-          <View style={styles.emptyProducts}>
-            <Text style={styles.emptyText}>Ushbu toifada mahsulotlar topilmadi</Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const cartItem = cartItems.find((i) => i.product.id === item.id);
-          const localizedName = resolveLocalizedText(
-            { uz: item.name_uz, ru: item.name_ru, en: item.name_en },
-            currentLang,
-          );
-          const isOutOfStock = !item.is_available || item.stock <= 0;
-
-          return (
-            <View style={[styles.productCard, isOutOfStock && styles.productOutOfStock]}>
-              <View style={styles.productImageWrapper}>
-                {item.image_url ? (
-                  <Image source={{ uri: item.image_url }} style={styles.productImage} />
-                ) : (
-                  <View style={styles.productPlaceholder}>
-                    <Text style={styles.productPlaceholderText}>🛍</Text>
-                  </View>
-                )}
-                {isOutOfStock && (
-                  <View style={styles.outOfStockBadge}>
-                    <Text style={styles.outOfStockText}>{t('shop.outOfStock')}</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.productDetails}>
-                <Text style={styles.productName} numberOfLines={2}>
-                  {localizedName}
-                </Text>
-                <Text style={styles.productPrice}>{formatPrice(item.price, currentLang)}</Text>
-
-                {/* Add to Cart or Quantity Adjuster */}
-                {isOutOfStock ? (
-                  <View style={styles.disabledBtn}>
-                    <Text style={styles.disabledBtnText}>{t('shop.outOfStock')}</Text>
-                  </View>
-                ) : cartItem ? (
-                  <View style={styles.qtyAdjuster}>
-                    <TouchableOpacity
-                      onPress={() => updateQuantity(item.id, cartItem.quantity - 1)}
-                      style={styles.qtyBtn}
-                    >
-                      <Minus size={14} color="#16a34a" />
-                    </TouchableOpacity>
-                    <Text style={styles.qtyValue}>{cartItem.quantity}</Text>
-                    <TouchableOpacity
-                      onPress={() => updateQuantity(item.id, cartItem.quantity + 1)}
-                      style={styles.qtyBtn}
-                    >
-                      <Plus size={14} color="#16a34a" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.addBtn}
-                    onPress={() => handleAddToCart(item)}
-                    activeOpacity={0.8}
+                  <View
+                    style={[
+                      styles.statusPillDot,
+                      { backgroundColor: isOpen ? '#10b981' : '#f43f5e' },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      { color: isOpen ? '#065f46' : '#9f1239' },
+                    ]}
                   >
-                    <Plus size={14} color="#ffffff" />
-                    <Text style={styles.addBtnText}>{t('shop.addToCart')}</Text>
+                    {isOpen ? t('common.open') : t('common.closed')}
+                  </Text>
+                </View>
+
+                <View style={styles.hoursBadge}>
+                  <Clock size={13} color="#64748b" />
+                  <Text style={styles.hoursText}>
+                    {shop.open_time} - {shop.close_time}
+                  </Text>
+                </View>
+
+                <View style={styles.deliveryBadge}>
+                  <ShieldCheck size={13} color="#059669" />
+                  <Text style={styles.deliveryBadgeText}>{t('common.freeDelivery')}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* In-Store Search Bar */}
+            <View style={styles.searchSection}>
+              <View style={styles.searchBar}>
+                <Search size={18} color="#94a3b8" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={t('customer.shop.searchPlaceholder')}
+                  placeholderTextColor="#94a3b8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <X size={16} color="#64748b" />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
+
+            {/* Category Tabs */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryTabsScroll}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.categoryTab,
+                  selectedCatId === null && styles.categoryTabActive,
+                ]}
+                onPress={() => {
+                  hapticFeedback.selection();
+                  setSelectedCatId(null);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    selectedCatId === null && styles.categoryTabTextActive,
+                  ]}
+                >
+                  {t('shop.allCategories')} ({products.length})
+                </Text>
+              </TouchableOpacity>
+
+              {categories.map((cat) => {
+                const isSelected = selectedCatId === cat.id;
+                const count = products.filter((p) => p.category_id === cat.id).length;
+                const catName = resolveLocalizedText(
+                  { uz: cat.name_uz, ru: cat.name_ru, en: cat.name_en },
+                  currentLang,
+                );
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.categoryTab, isSelected && styles.categoryTabActive]}
+                    onPress={() => {
+                      hapticFeedback.selection();
+                      setSelectedCatId(isSelected ? null : cat.id);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryTabText,
+                        isSelected && styles.categoryTabTextActive,
+                      ]}
+                    >
+                      {catName} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyProducts}>
+            <ShoppingBag size={48} color="#cbd5e1" />
+            <Text style={styles.emptyProductsTitle}>{t('customer.shop.noProducts')}</Text>
+            <Text style={styles.emptyProductsSub}>
+              {t('customer.shop.noProductsHint')}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const itemTitle = resolveLocalizedText(
+            { uz: item.name_uz, ru: item.name_ru, en: item.name_en },
+            currentLang,
+          );
+          const priceText = formatPrice(item.price, currentLang);
+          const quantityInCart = isCartBelongToShop ? getItemQuantity(item.id) : 0;
+          const isOutOfStock = item.stock <= 0;
+
+          return (
+            <TouchableOpacity
+              style={styles.productCard}
+              onPress={() => {
+                hapticFeedback.selection();
+                setSelectedProduct(item);
+              }}
+              activeOpacity={0.88}
+            >
+              {/* Product Thumbnail */}
+              <View style={styles.productImageWrapper}>
+                {item.image_url ? (
+                  <Image source={{ uri: item.image_url }} style={styles.productImage} />
+                ) : (
+                  <View style={styles.placeholderImg}>
+                    <ShoppingBag size={28} color="#94a3b8" />
+                  </View>
+                )}
+              </View>
+
+              {/* Product Details */}
+              <View style={styles.productInfo}>
+                <Text style={styles.productTitle} numberOfLines={2}>
+                  {itemTitle}
+                </Text>
+
+                <View style={styles.productFooter}>
+                  <Text style={styles.productPrice}>{priceText}</Text>
+
+                  {/* Add / Stepper CTA */}
+                  {isOutOfStock ? (
+                    <View style={styles.outOfStockPill}>
+                      <Text style={styles.outOfStockPillText}>{t('shop.outOfStock')}</Text>
+                    </View>
+                  ) : quantityInCart === 0 ? (
+                    <TouchableOpacity
+                      style={styles.addPillBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleAddToCart(item);
+                      }}
+                    >
+                      <Plus size={16} color="#059669" />
+                      <Text style={styles.addPillText}>{t('customer.shop.addShort')}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.stepperMini}>
+                      <TouchableOpacity
+                        style={styles.stepMiniBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          hapticFeedback.light();
+                          decrement(item.id);
+                        }}
+                      >
+                        <Minus size={14} color="#059669" />
+                      </TouchableOpacity>
+                      <Text style={styles.stepMiniQty}>{quantityInCart}</Text>
+                      <TouchableOpacity
+                        style={styles.stepMiniBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          hapticFeedback.light();
+                          increment(item, shop.id, shop.name);
+                        }}
+                      >
+                        <Plus size={14} color="#059669" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
           );
         }}
       />
+
+      {/* Floating Bottom Cart Bar (Appears when items are added) */}
+      {cartItemsCount > 0 && (
+        <View style={styles.floatingCartBar}>
+          <TouchableOpacity
+            style={styles.floatingCartBtn}
+            onPress={() => {
+              hapticFeedback.selection();
+              router.push('/(customer)/cart');
+            }}
+            activeOpacity={0.9}
+          >
+            <View style={styles.floatingCartLeft}>
+              <View style={styles.cartBadgeCircle}>
+                <Text style={styles.cartBadgeCircleText}>{cartItemsCount}</Text>
+              </View>
+              <View>
+                <Text style={styles.floatingCartTitle}>{t('customer.shop.inCart')}</Text>
+                <Text style={styles.floatingCartSum}>{formatPrice(cartTotalAmount, currentLang)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.floatingCartRight}>
+              <Text style={styles.floatingCheckoutText}>{t('cart.checkout')}</Text>
+              <ChevronRight size={18} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <ProductDetailModal
+          visible={!!selectedProduct}
+          product={selectedProduct}
+          currentQuantity={isCartBelongToShop ? getItemQuantity(selectedProduct.id) : 0}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={(prod, qty) => handleAddToCart(prod, qty)}
+          shopName={shop.name}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -301,299 +490,415 @@ export default function ShopDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
-  centerContainer: {
+  loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
-  topBar: {
+  loadingText: {
+    marginTop: 12,
+    fontSize: 15,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+  backBtnError: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#059669',
+    borderRadius: 14,
+  },
+  backBtnErrorText: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  navHeader: {
+    position: 'absolute',
+    top: 44,
+    left: 16,
+    right: 16,
+    zIndex: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
-  backBtn: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
+  navCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-    maxWidth: '70%',
+  listContent: {
+    paddingBottom: 100,
   },
-  cartIconBtn: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: '#f0fdf4',
+  heroCover: {
+    width: '100%',
+    height: 180,
     position: 'relative',
+    backgroundColor: '#0f172a',
   },
-  cartBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#16a34a',
-    borderRadius: 9,
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cartBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  closedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fff1f2',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#fecdd3',
-  },
-  closedBannerText: {
-    color: '#e11d48',
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-  },
-  shopHeader: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  shopHeaderTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  shopLogo: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  shopLogoImg: {
+  heroImage: {
     width: '100%',
     height: '100%',
   },
-  shopLogoLetter: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#16a34a',
+  heroOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15, 23, 42, 0.3)',
   },
-  shopMetaInfo: {
-    flex: 1,
+  shopDetailCard: {
+    backgroundColor: '#ffffff',
+    marginTop: -24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  shopNameText: {
-    fontSize: 16,
-    fontWeight: '800',
+  shopTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  shopName: {
+    fontSize: 22,
+    fontWeight: '900',
     color: '#0f172a',
+    flex: 1,
+    marginRight: 10,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  addressText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 12,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 3,
-  },
-  metaText: {
-    fontSize: 11,
-    color: '#64748b',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-    marginLeft: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
   statusPillOpen: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#ecfdf5',
   },
   statusPillClosed: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ffe4e6',
+  },
+  statusPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusPillText: {
-    fontSize: 9,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  hoursBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  hoursText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  deliveryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  deliveryBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#166534',
   },
-  statusPillTextOpen: {
-    color: '#15803d',
-  },
-  statusPillTextClosed: {
-    color: '#64748b',
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 44,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 40,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: '#0f172a',
+    marginLeft: 8,
+    fontWeight: '500',
   },
-  categoriesBar: {
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+  categoryTabsScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 8,
   },
-  categoryPill: {
+  categoryTab: {
+    paddingVertical: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#f1f5f9',
   },
-  categoryPillActive: {
-    backgroundColor: '#16a34a',
+  categoryTabActive: {
+    backgroundColor: '#059669',
   },
-  categoryPillText: {
-    fontSize: 12,
+  categoryTabText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#475569',
   },
-  categoryPillTextActive: {
+  categoryTabTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
   },
-  productsGrid: {
-    padding: 12,
-    paddingBottom: 32,
+  emptyProducts: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyProductsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 12,
+  },
+  emptyProductsSub: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 4,
   },
   productCard: {
-    flex: 1,
-    margin: 6,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    overflow: 'hidden',
-  },
-  productOutOfStock: {
-    opacity: 0.6,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+    alignItems: 'center',
   },
   productImageWrapper: {
-    width: '100%',
-    height: 120,
+    width: 80,
+    height: 80,
+    borderRadius: 16,
     backgroundColor: '#f8fafc',
+    overflow: 'hidden',
     position: 'relative',
+    marginRight: 14,
   },
   productImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
-  productPlaceholder: {
+  placeholderImg: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productPlaceholderText: {
-    fontSize: 32,
-  },
-  outOfStockBadge: {
+  unitChip: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#e11d48',
-    paddingHorizontal: 6,
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     paddingVertical: 2,
+    paddingHorizontal: 6,
     borderRadius: 6,
   },
-  outOfStockText: {
+  unitChipText: {
+    color: '#ffffff',
     fontSize: 9,
     fontWeight: '700',
-    color: '#ffffff',
   },
-  productDetails: {
-    padding: 10,
+  productInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  productName: {
-    fontSize: 12,
+  productTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#0f172a',
-    minHeight: 32,
+    marginBottom: 6,
+    lineHeight: 20,
   },
-  productPrice: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#16a34a',
-    marginVertical: 6,
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: '#16a34a',
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  addBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  qtyAdjuster: {
+  productFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
-  qtyBtn: {
-    padding: 4,
+  productPrice: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#059669',
   },
-  qtyValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  disabledBtn: {
+  outOfStockPill: {
     backgroundColor: '#f1f5f9',
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
-  disabledBtnText: {
+  outOfStockPillText: {
     fontSize: 11,
     color: '#94a3b8',
     fontWeight: '600',
   },
-  emptyProducts: {
-    padding: 40,
+  addPillBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
   },
-  emptyText: {
+  addPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  stepperMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  stepMiniBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepMiniQty: {
     fontSize: 13,
-    color: '#94a3b8',
+    fontWeight: '800',
+    color: '#059669',
+    marginHorizontal: 8,
+  },
+  floatingCartBar: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    zIndex: 99,
+  },
+  floatingCartBtn: {
+    backgroundColor: '#059669',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  floatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cartBadgeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadgeCircleText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  floatingCartTitle: {
+    fontSize: 11,
+    color: '#a7f3d0',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  floatingCartSum: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+  floatingCartRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  floatingCheckoutText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

@@ -1,11 +1,15 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useCartStore } from '../../store/useCartStore';
-import { Store, ShoppingBag, Clock, User } from 'lucide-react-native';
+import { Store, ShoppingBag, Clock, User, Map as MapIcon } from 'lucide-react-native';
 
 export default function CustomerTabsLayout() {
   const { t } = useTranslation();
+  // Keep icons clear of the phone's home indicator / gesture bar
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 8) + 6;
   const cartItemsCount = useCartStore((state) =>
     state.items.reduce((sum, i) => sum + i.quantity, 0),
   );
@@ -19,8 +23,8 @@ export default function CustomerTabsLayout() {
         tabBarStyle: {
           backgroundColor: '#ffffff',
           borderTopColor: '#f1f5f9',
-          height: 60,
-          paddingBottom: 8,
+          height: 58 + bottomPad,
+          paddingBottom: bottomPad,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -34,6 +38,13 @@ export default function CustomerTabsLayout() {
         options={{
           title: t('tabs.home'),
           tabBarIcon: ({ color, size }) => <Store size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: t('customer.tabs.map'),
+          tabBarIcon: ({ color, size }) => <MapIcon size={size} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -10,17 +10,31 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore';
 import { mobileApi } from '../../services/api';
-import { Store, Clock, Phone, MapPin, LogOut, Check } from 'lucide-react-native';
+import { Store, Clock, Phone, MapPin, LogOut, Check, Globe, ChevronRight } from 'lucide-react-native';
+import SellerImagePicker from '../../components/SellerImagePicker';
+import LanguageSelectorModal from '../../components/LanguageSelectorModal';
+
+const LANGUAGE_NAMES: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const notify = (title: string, msg: string) => {
+  if (Platform.OS === 'web') window.alert(`${title}: ${msg}`);
+  else Alert.alert(title, msg);
+};
 
 export default function SellerShopScreen() {
-  const { t } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
   const router = useRouter();
   const { logout } = useAuthStore();
+  const [langModalVisible, setLangModalVisible] = useState(false);
+  const currentLangCode = (i18nInstance.language || 'uz').slice(0, 2);
 
   const [shop, setShop] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +46,7 @@ export default function SellerShopScreen() {
   const [openTime, setOpenTime] = useState('08:00');
   const [closeTime, setCloseTime] = useState('23:00');
   const [isOpen, setIsOpen] = useState(true);
+  const [logoUrl, setLogoUrl] = useState('');
 
   useEffect(() => {
     mobileApi
@@ -44,6 +59,7 @@ export default function SellerShopScreen() {
         setOpenTime(data.open_time);
         setCloseTime(data.close_time);
         setIsOpen(data.is_open);
+        setLogoUrl(data.logo_url || '');
       })
       .catch(console.warn)
       .finally(() => setLoading(false));
@@ -55,39 +71,58 @@ export default function SellerShopScreen() {
       await mobileApi.updateSellerShop({ is_open: val });
     } catch (err: any) {
       setIsOpen(!val);
-      Alert.alert('Xatolik', err.message);
+      notify(t('sellerUi.common.error'), err.message);
     }
   };
 
   const handleSave = async () => {
+    const open = openTime.trim();
+    const close = closeTime.trim();
+    if (!TIME_RE.test(open) || !TIME_RE.test(close)) {
+      notify(t('sellerUi.common.error'), t('sellerUi.shop.timeFormatError'));
+      return;
+    }
+    if (!name.trim()) {
+      notify(t('sellerUi.common.error'), t('sellerUi.shop.nameRequired'));
+      return;
+    }
     setSaving(true);
     try {
       await mobileApi.updateSellerShop({
         name,
         phone,
         address_text: addressText,
-        open_time: openTime,
-        close_time: closeTime,
+        open_time: open,
+        close_time: close,
         is_open: isOpen,
+        logo_url: logoUrl,
       });
-      Alert.alert('Saqlandi', 'Do\'kon ma\'lumotlari muvaffaqiyatli yangilandi');
+      setOpenTime(open);
+      setCloseTime(close);
+      notify(t('sellerUi.shop.savedTitle'), t('sellerUi.shop.savedMessage'));
     } catch (err: any) {
-      Alert.alert('Xatolik', err.message);
+      notify(t('sellerUi.common.error'), err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const doLogout = async () => {
+    await logout();
+    router.replace('/(auth)/seller-login');
+  };
+
   const handleLogout = () => {
-    Alert.alert('Chiqish', 'Hisobingizdan chiqmoqchimisiz?', [
+    if (Platform.OS === 'web') {
+      if (window.confirm(t('sellerUi.shop.logoutConfirm'))) doLogout();
+      return;
+    }
+    Alert.alert(t('sellerUi.shop.logoutTitle'), t('sellerUi.shop.logoutConfirm'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Chiqish',
+        text: t('sellerUi.shop.logoutTitle'),
         style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/welcome');
-        },
+        onPress: doLogout,
       },
     ]);
   };
@@ -104,10 +139,10 @@ export default function SellerShopScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Do'kon Profili</Text>
+        <Text style={styles.headerTitle}>{t('sellerUi.shop.title')}</Text>
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
           <Check size={18} color="#ffffff" />
-          <Text style={styles.saveBtnText}>Saqlash</Text>
+          <Text style={styles.saveBtnText}>{t('common.save')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -118,56 +153,125 @@ export default function SellerShopScreen() {
             <View style={[styles.statusDot, isOpen ? styles.dotOpen : styles.dotClosed]} />
             <View>
               <Text style={styles.openClosedTitle}>
-                Do'kon Holati: {isOpen ? 'Ochiq (Buyurtmalar qabul qilinadi)' : 'Yopiq (Buyurtma to\'xtatilgan)'}
+                {t('sellerUi.shop.statusTitle', {
+                  status: isOpen ? t('sellerUi.shop.statusOpen') : t('sellerUi.shop.statusClosed'),
+                })}
               </Text>
               <Text style={styles.openClosedSubtitle}>
-                {isOpen ? 'Mijozlar sizdan buyurtma bera oladi' : 'Mijozlar buyurtma bera olmaydi'}
+                {isOpen ? t('sellerUi.shop.statusOpenHint') : t('sellerUi.shop.statusClosedHint')}
               </Text>
             </View>
           </View>
           <Switch
             value={isOpen}
             onValueChange={handleToggleOpen}
+            accessibilityLabel={t('seller.openClosedToggle')}
             trackColor={{ false: '#fecdd3', true: '#86efac' }}
             thumbColor={isOpen ? '#16a34a' : '#e11d48'}
           />
         </View>
 
+        {/* Shop Logo */}
+        <View style={styles.card}>
+          <View style={styles.labelRow}>
+            <Store size={14} color="#475569" />
+            <Text style={styles.labelInline}>{t('sellerUi.shop.logo')}</Text>
+          </View>
+          <SellerImagePicker
+            value={logoUrl}
+            onChange={setLogoUrl}
+            size={110}
+            rounded
+            placeholderText={t('sellerUi.shop.noLogo')}
+          />
+          <Text style={styles.hint}>{t('sellerUi.shop.saveHint')}</Text>
+        </View>
+
         {/* Shop Form Card */}
         <View style={styles.card}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Do'kon Nomi</Text>
+            <View style={styles.labelRow}>
+              <Store size={13} color="#475569" />
+              <Text style={styles.labelInline}>{t('sellerUi.shop.name')}</Text>
+            </View>
             <TextInput style={styles.input} value={name} onChangeText={setName} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Telefon Raqami</Text>
+            <View style={styles.labelRow}>
+              <Phone size={13} color="#475569" />
+              <Text style={styles.labelInline}>{t('sellerUi.shop.phone')}</Text>
+            </View>
             <TextInput style={styles.input} value={phone} onChangeText={setPhone} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Manzil</Text>
+            <View style={styles.labelRow}>
+              <MapPin size={13} color="#475569" />
+              <Text style={styles.labelInline}>{t('sellerUi.shop.address')}</Text>
+            </View>
             <TextInput style={styles.input} value={addressText} onChangeText={setAddressText} />
           </View>
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Ochilish vaqti</Text>
-              <TextInput style={styles.input} value={openTime} onChangeText={setOpenTime} />
+              <View style={styles.labelRow}>
+                <Clock size={13} color="#475569" />
+                <Text style={styles.labelInline}>{t('sellerUi.shop.openTime')}</Text>
+              </View>
+              <TextInput
+                style={[styles.input, !TIME_RE.test(openTime.trim()) && styles.inputError]}
+                value={openTime}
+                onChangeText={setOpenTime}
+                placeholder="08:00"
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
             </View>
             <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Yopilish vaqti</Text>
-              <TextInput style={styles.input} value={closeTime} onChangeText={setCloseTime} />
+              <View style={styles.labelRow}>
+                <Clock size={13} color="#475569" />
+                <Text style={styles.labelInline}>{t('sellerUi.shop.closeTime')}</Text>
+              </View>
+              <TextInput
+                style={[styles.input, !TIME_RE.test(closeTime.trim()) && styles.inputError]}
+                value={closeTime}
+                onChangeText={setCloseTime}
+                placeholder="23:00"
+                maxLength={5}
+                keyboardType="numbers-and-punctuation"
+              />
             </View>
           </View>
         </View>
 
+        {/* App language */}
+        <TouchableOpacity
+          style={[styles.card, styles.langRow]}
+          onPress={() => setLangModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('authUi.changeLanguage')}
+        >
+          <View style={styles.labelRow}>
+            <Globe size={14} color="#475569" />
+            <Text style={styles.labelInline}>{t('sellerUi.shop.language')}</Text>
+          </View>
+          <View style={styles.langValue}>
+            <Text style={styles.langValueText}>
+              {LANGUAGE_NAMES[currentLangCode] || currentLangCode}
+            </Text>
+            <ChevronRight size={16} color="#94a3b8" />
+          </View>
+        </TouchableOpacity>
+
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <LogOut size={18} color="#e11d48" />
-          <Text style={styles.logoutText}>Do'kondan chiqish</Text>
+          <Text style={styles.logoutText}>{t('sellerUi.shop.logout')}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <LanguageSelectorModal visible={langModalVisible} onClose={() => setLangModalVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -289,6 +393,41 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  labelInline: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  inputError: {
+    borderColor: '#e11d48',
+  },
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  langValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  langValueText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  hint: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 8,
   },
   logoutBtn: {
     flexDirection: 'row',

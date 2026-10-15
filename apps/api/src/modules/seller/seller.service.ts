@@ -108,7 +108,7 @@ export class SellerService {
         ...(dto.description_ru !== undefined ? { description_ru: dto.description_ru } : {}),
         ...(dto.description_en !== undefined ? { description_en: dto.description_en } : {}),
         ...(dto.price !== undefined ? { price: dto.price } : {}),
-        ...(dto.image_url !== undefined ? { image_url: dto.image_url } : {}),
+        ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
         ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
         ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
       },
@@ -147,11 +147,10 @@ export class SellerService {
     // Start of today (00:00)
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Start of this week (Monday)
+    // Start of this week (Monday 00:00) — computed without mutating `now`
     const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
+    const daysSinceMonday = day === 0 ? 6 : day - 1;
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
 
     // Start of this month (1st)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

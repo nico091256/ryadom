@@ -270,6 +270,140 @@ async function main() {
   }
   console.log(`Products seeded: ${productsData.length}`);
 
+  // 9. Seed Additional Shops (mostly within 3 km of the demo customer, a few in other districts)
+  const IMG = {
+    shop: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80',
+    bread: 'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?auto=format&fit=crop&w=400&q=80',
+    loaf: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
+    milk: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=400&q=80',
+    cream: 'https://images.unsplash.com/photo-1528750997573-59b89d56f4f7?auto=format&fit=crop&w=400&q=80',
+    cola: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80',
+    water: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?auto=format&fit=crop&w=400&q=80',
+    apple: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=400&q=80',
+    cucumber: 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?auto=format&fit=crop&w=400&q=80',
+  };
+
+  // [category index, uz, ru, en, price in UZS, image]
+  type ProductTpl = [number, string, string, string, number, string | null];
+  const catalog: Record<string, ProductTpl> = {
+    nonSamarqand: [0, 'Samarqand noni', 'Самаркандская лепешка', 'Samarkand Flatbread', 8000, IMG.bread],
+    nonOq: [0, 'Buxanka oq non', 'Формовой белый хлеб', 'White Loaf Bread', 4000, IMG.loaf],
+    patir: [0, 'Patir non', 'Патыр', 'Patir Bread', 10000, IMG.bread],
+    somsa: [0, 'Tandir somsa', 'Самса из тандыра', 'Tandoor Samsa', 7000, null],
+    kruassan: [0, 'Kruassan', 'Круассан', 'Croissant', 9000, null],
+    sut: [1, 'Musaffo sut 3.2% 1L', 'Молоко Musaffo 3.2% 1л', 'Musaffo Milk 3.2% 1L', 13000, IMG.milk],
+    smetana: [1, 'Bio Smetana 20% 400g', 'Сметана Bio 20% 400г', 'Sour Cream Bio 20% 400g', 15000, IMG.cream],
+    qatiq: [1, 'Qatiq 1L', 'Катык 1л', 'Katyk Yogurt 1L', 11000, IMG.milk],
+    tvorog: [1, 'Tvorog 9% 500g', 'Творог 9% 500г', 'Cottage Cheese 9% 500g', 22000, null],
+    pishloq: [1, 'Pishloq Gollandskiy 300g', 'Сыр Голландский 300г', 'Dutch Cheese 300g', 35000, null],
+    cola: [2, 'Coca-Cola Classic 1.5L', 'Coca-Cola Классическая 1.5л', 'Coca-Cola Classic 1.5L', 14000, IMG.cola],
+    suv: [2, "Hydrolife tog' suvi 1.5L", 'Горная вода Hydrolife 1.5л', 'Hydrolife Mountain Water 1.5L', 5000, IMG.water],
+    sharbat: [2, "Bliss olma sharbati 1L", 'Яблочный сок Bliss 1л', 'Bliss Apple Juice 1L', 16000, null],
+    choy: [2, "Ko'k choy 95-raqam 100g", 'Зелёный чай №95 100г', 'Green Tea No.95 100g', 12000, null],
+    olma: [3, 'Qizil olma (1 kg)', 'Яблоки красные (1 кг)', 'Red Apples (1 kg)', 16000, IMG.apple],
+    bodring: [3, 'Yangi bodring (1 kg)', 'Свежие огурцы (1 кг)', 'Fresh Cucumbers (1 kg)', 12000, IMG.cucumber],
+    pomidor: [3, 'Pomidor (1 kg)', 'Помидоры (1 кг)', 'Tomatoes (1 kg)', 18000, null],
+    banan: [3, 'Banan (1 kg)', 'Бананы (1 кг)', 'Bananas (1 kg)', 25000, null],
+    kartoshka: [3, 'Kartoshka (1 kg)', 'Картофель (1 кг)', 'Potatoes (1 kg)', 6000, null],
+    piyoz: [3, 'Piyoz (1 kg)', 'Лук (1 кг)', 'Onions (1 kg)', 5000, null],
+    shokolad: [4, 'Snickers 50g', 'Snickers 50г', 'Snickers 50g', 9000, null],
+    chips: [4, 'Lays chips 150g', 'Чипсы Lays 150г', 'Lays Chips 150g', 17000, null],
+    pechenye: [4, 'Yubileynoe pechenyesi', 'Печенье Юбилейное', 'Yubileynoe Cookies', 11000, null],
+    holva: [4, 'Kunjutli holva 250g', 'Кунжутная халва 250г', 'Sesame Halva 250g', 20000, null],
+  };
+
+  const extraShops = [
+    { login: 'seller_bunyodkor', name: 'Bunyodkor Market', address: "Toshkent sh., Bunyodkor shoh ko'chasi, 14", lat: 41.2885, lng: 69.2205, open: '07:00', close: '23:59', logo: IMG.shop,
+      items: ['nonSamarqand', 'sut', 'qatiq', 'cola', 'suv', 'olma', 'pomidor', 'kartoshka', 'shokolad', 'chips'] },
+    { login: 'seller_novza', name: 'Novza Non Markazi', address: "Toshkent sh., Novza, Chilonzor ko'chasi, 3", lat: 41.2925, lng: 69.2230, open: '06:00', close: '21:00', logo: IMG.bread,
+      items: ['nonSamarqand', 'nonOq', 'patir', 'somsa', 'kruassan', 'choy'] },
+    { login: 'seller_qatortol', name: "Qatortol Meva-Sabzavot", address: "Toshkent sh., Qatortol ko'chasi, 21", lat: 41.2790, lng: 69.2050, open: '07:00', close: '22:00', logo: IMG.apple,
+      items: ['olma', 'bodring', 'pomidor', 'banan', 'kartoshka', 'piyoz'] },
+    { login: 'seller_sut', name: 'Sut Dunyosi', address: 'Toshkent sh., Chilonzor 9-mavze, 4-uy', lat: 41.2755, lng: 69.2190, open: '07:00', close: '22:00', logo: IMG.milk,
+      items: ['sut', 'smetana', 'qatiq', 'tvorog', 'pishloq', 'nonOq'] },
+    { login: 'seller_24', name: '24/7 Minimarket', address: "Toshkent sh., Muqimiy ko'chasi, 58", lat: 41.2950, lng: 69.2120, open: '00:00', close: '23:59', logo: IMG.cola,
+      items: ['cola', 'suv', 'sharbat', 'chips', 'shokolad', 'pechenye', 'nonOq', 'sut'] },
+    { login: 'seller_shirin', name: 'Shirin Lazzat', address: 'Toshkent sh., Chilonzor 2-mavze, 17-uy', lat: 41.2860, lng: 69.2010, open: '09:00', close: '22:00', logo: null,
+      items: ['shokolad', 'pechenye', 'holva', 'kruassan', 'choy', 'sharbat'] },
+    { login: 'seller_oila', name: 'Oila Supermarket', address: "Toshkent sh., Lutfiy ko'chasi, 6", lat: 41.2720, lng: 69.2290, open: '08:00', close: '23:00', logo: IMG.cucumber,
+      items: ['nonSamarqand', 'sut', 'tvorog', 'pishloq', 'cola', 'suv', 'sharbat', 'olma', 'banan', 'kartoshka', 'piyoz', 'pechenye'] },
+    { login: 'seller_yunusobod', name: 'Yunusobod Savdo', address: 'Toshkent sh., Yunusobod 4-mavze, 12', lat: 41.3640, lng: 69.2870, open: '08:00', close: '23:00', logo: IMG.shop,
+      items: ['nonOq', 'sut', 'cola', 'olma', 'chips', 'choy'] },
+    { login: 'seller_buyukipak', name: "Buyuk Ipak Yo'li Market", address: "Toshkent sh., Mirzo Ulug'bek tumani, Buyuk Ipak Yo'li, 45", lat: 41.3260, lng: 69.3350, open: '07:00', close: '23:00', logo: IMG.water,
+      items: ['nonSamarqand', 'qatiq', 'suv', 'pomidor', 'bodring', 'holva'] },
+    { login: 'seller_sergeli', name: 'Sergeli Oziq-Ovqat', address: 'Toshkent sh., Sergeli 6-mavze, 30', lat: 41.2270, lng: 69.2220, open: '08:00', close: '22:00', logo: IMG.loaf,
+      items: ['nonOq', 'patir', 'sut', 'smetana', 'kartoshka', 'piyoz', 'cola'] },
+  ];
+
+  let extraProducts = 0;
+  for (const [i, s] of extraShops.entries()) {
+    const owner = await prisma.user.upsert({
+      where: { login: s.login },
+      update: {},
+      create: {
+        login: s.login,
+        phone: `+99890100${String(i + 1).padStart(4, '0')}`,
+        name: `${s.name} egasi`,
+        password_hash: sellerPasswordHash,
+        role: UserRole.seller,
+        language: 'uz',
+        is_blocked: false,
+        must_change_password: true,
+      },
+    });
+
+    await prisma.shop.deleteMany({ where: { owner_id: owner.id } });
+    const extraShop = await prisma.shop.create({
+      data: {
+        owner_id: owner.id,
+        city_id: tashkent.id,
+        name: s.name,
+        logo_url: s.logo,
+        phone: owner.phone!,
+        address_text: s.address,
+        lat: s.lat,
+        lng: s.lng,
+        open_time: s.open,
+        close_time: s.close,
+        is_open: true,
+        is_active: true,
+        commission_rate_percent: 0,
+      },
+    });
+
+    for (const key of s.items) {
+      const [catIdx, uz, ru, en, priceUzs, image] = catalog[key];
+      // Small per-shop price variation so shops don't look identical
+      const price = Math.round((priceUzs * (0.9 + ((i * 7 + key.length) % 5) * 0.05)) / 500) * 500;
+      await prisma.product.create({
+        data: {
+          shop_id: extraShop.id,
+          category_id: categories[catIdx].id,
+          name_uz: uz,
+          name_ru: ru,
+          name_en: en,
+          price: price * 100, // tiyin
+          stock: 20 + ((i + key.length) % 6) * 10,
+          is_available: true,
+          image_url: image,
+        },
+      });
+      extraProducts++;
+    }
+  }
+  console.log(`Extra shops seeded: ${extraShops.length} (products: ${extraProducts})`);
+
+  // 10. Seed Promo Codes (managed from the admin panel afterwards)
+  const promoCodes = [
+    { code: 'YANGI10', description: 'Yangi mijozlar uchun 10% chegirma', discount_percent: 10 },
+    { code: 'LOCALSHOP', description: 'Umumiy 10% chegirma', discount_percent: 10 },
+    { code: 'TEZ10', description: 'Tezkor yetkazish aksiyasi', discount_percent: 10 },
+  ];
+  for (const promo of promoCodes) {
+    await prisma.promoCode.upsert({ where: { code: promo.code }, update: {}, create: promo });
+  }
+  console.log(`Promo codes seeded: ${promoCodes.length}`);
+
   console.log('--- Database Seeding Complete ---');
 }
 

@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "LocalShop",
+    "appName": "Ryadom",
     "som": "сум",
     "m": "м",
     "km": "км",
@@ -54,7 +54,24 @@
     "nearbyShops": "Ближайшие магазины",
     "noShopsNearby": "В радиусе 3 км открытых магазинов не найдено",
     "listView": "Список",
-    "mapView": "Карта"
+    "mapView": "Карта",
+    "searchPlaceholder": "Поиск магазинов и товаров...",
+    "allCategories": "Все категории",
+    "filterAll": "Все",
+    "filterOpen": "Открытые",
+    "filterNear": "Ближайшие (до 1 км)",
+    "filterTop": "Топ рейтинг",
+    "minOrder": "Мин. заказ",
+    "activeOrderTitle": "Активный заказ",
+    "trackOrder": "Отследить",
+    "promoFree": "Бесплатная доставка 🚀",
+    "promoFreeSub": "Из всех магазинов рядом",
+    "promoFast": "Быстрая доставка ⚡",
+    "promoFastSub": "За 15-20 минут у вашей двери",
+    "promoBread": "Свежий хлеб и молоко 🍞",
+    "promoBreadSub": "Каждое утро свежие поставки",
+    "promoSpecial": "Спецпредложения 🔥",
+    "promoSpecialSub": "Скидки и акции"
   },
   "shop": {
     "allCategories": "Все товары",
