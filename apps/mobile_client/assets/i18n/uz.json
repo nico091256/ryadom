@@ -1,0 +1,37 @@
+{
+  "common": {
+    "appName": "Ryadom",
+    "som": "so'm",
+    "loading": "Yuklanmoqda...",
+    "save": "Saqlash",
+    "cancel": "Bekor qilish",
+    "confirm": "Tasdiqlash",
+    "retry": "Qaytadan urinish",
+    "back": "Orqaga",
+    "search": "Qidiruv",
+    "error": "Xatolik yuz berdi",
+    "logout": "Chiqish"
+  },
+  "welcome": {
+    "title": "Mahallangizdagi yaqin do'konlar",
+    "subtitle": "3 km masofadagi do'konlardan tez va bepul yetkazib berish",
+    "chooseLanguage": "Tilni tanlang",
+    "continue": "Davom etish"
+  },
+  "auth": {
+    "phoneTitle": "Telefon raqamingiz",
+    "phoneSubtitle": "Kirish yoki ro'yxatdan o'tish uchun telefon raqamingizni kiriting",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "sendCode": "SMS kodni olish",
+    "smsTitle": "Tasdiqlash kodi",
+    "smsSubtitle": "{{phone}} raqamiga yuborilgan 6 xonali kodni kiriting",
+    "verify": "Tasdiqlash",
+    "resendCode": "Kodni qayta yuborish",
+    "resendIn": "Qayta yuborish ({{seconds}}s)",
+    "namePrompt": "Ismingizni kiriting",
+    "saveName": "Saqlash va boshlash",
+    "invalidPhone": "Telefon raqamini to'liq kiriting",
+    "sendCodeFailed": "SMS kod yuborilmadi",
+    "verifyFailed": "Kod noto'g'ri yoki muddati o'tgan"
+  }
+}

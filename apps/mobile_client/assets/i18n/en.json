@@ -1,0 +1,37 @@
+{
+  "common": {
+    "appName": "Ryadom",
+    "som": "UZS",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "back": "Back",
+    "search": "Search",
+    "error": "An error occurred",
+    "logout": "Log out"
+  },
+  "welcome": {
+    "title": "Your Neighbourhood Shops",
+    "subtitle": "Fast and free delivery from local shops within 3 km",
+    "chooseLanguage": "Choose Language",
+    "continue": "Continue"
+  },
+  "auth": {
+    "phoneTitle": "Your Phone Number",
+    "phoneSubtitle": "Enter your phone number to sign in or register",
+    "phonePlaceholder": "+998 90 123 45 67",
+    "sendCode": "Get SMS Code",
+    "smsTitle": "Verification Code",
+    "smsSubtitle": "Enter the 6-digit code sent to {{phone}}",
+    "verify": "Verify",
+    "resendCode": "Resend code",
+    "resendIn": "Resend in ({{seconds}}s)",
+    "namePrompt": "What is your name?",
+    "saveName": "Save and Get Started",
+    "invalidPhone": "Enter your full phone number",
+    "sendCodeFailed": "Failed to send the SMS code",
+    "verifyFailed": "The code is wrong or has expired"
+  }
+}

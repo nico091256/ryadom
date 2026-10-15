@@ -46,7 +46,8 @@ coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
-/build/
+apps/mobile_client/build/
+apps/mobile_store/build/
 # Packages pin via path deps within this monorepo; apps should commit their own pubspec.lock.
 packages/*/pubspec.lock
 
