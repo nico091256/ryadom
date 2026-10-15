@@ -3,10 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Banknote, Clock, MapPin, Package, Pencil, Phone, ShoppingBag, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Banknote, Check, Clock, MapPin, Package, Pencil, Phone, ShieldOff, ShoppingBag, Trash2, User } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Product, ShopDetail } from '@/lib/types';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { SHOP_STATUS_META } from '@/lib/constants';
 import {
   Badge,
   Button,
@@ -114,6 +115,48 @@ export default function ShopDetailPage() {
     }
   };
 
+  const approve = async () => {
+    if (!shop) return;
+    setTogglingShop(true);
+    try {
+      const updated = await api.approveShop(shop.id);
+      setShop((s) => (s ? { ...s, ...updated } : s));
+      toast.success("Do'kon tasdiqlandi", "Endi mijozlarga ko'rinadi");
+    } catch (e) {
+      toast.error("Tasdiqlab bo'lmadi", errorMessage(e));
+    } finally {
+      setTogglingShop(false);
+    }
+  };
+
+  const block = async () => {
+    if (!shop) return;
+    setTogglingShop(true);
+    try {
+      const updated = await api.blockShop(shop.id);
+      setShop((s) => (s ? { ...s, ...updated } : s));
+      toast.success("Do'kon bloklandi");
+    } catch (e) {
+      toast.error("Bloklab bo'lmadi", errorMessage(e));
+    } finally {
+      setTogglingShop(false);
+    }
+  };
+
+  const unblock = async () => {
+    if (!shop) return;
+    setTogglingShop(true);
+    try {
+      const updated = await api.unblockShop(shop.id);
+      setShop((s) => (s ? { ...s, ...updated } : s));
+      toast.success('Blokdan chiqarildi');
+    } catch (e) {
+      toast.error("Blokdan chiqarib bo'lmadi", errorMessage(e));
+    } finally {
+      setTogglingShop(false);
+    }
+  };
+
   const products = useMemo(() => {
     const list = shop?.products ?? [];
     const term = q.trim().toLowerCase();
@@ -153,17 +196,12 @@ export default function ShopDetailPage() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-semibold tracking-tight text-slate-900">{shop.name}</h1>
-                {!shop.is_active ? (
-                  <Badge tone="gray" dot>
-                    Nofaol
-                  </Badge>
-                ) : shop.isCurrentlyOpen ? (
-                  <Badge tone="green" dot>
-                    Hozir ochiq
-                  </Badge>
-                ) : (
-                  <Badge tone="amber" dot>
-                    Yopiq
+                <Badge tone={SHOP_STATUS_META[shop.status].tone} dot>
+                  {SHOP_STATUS_META[shop.status].label}
+                </Badge>
+                {shop.status === 'active' && (
+                  <Badge tone={shop.isCurrentlyOpen ? 'green' : 'amber'} dot>
+                    {shop.isCurrentlyOpen ? 'Hozir ochiq' : 'Yopiq'}
                   </Badge>
                 )}
               </div>
@@ -183,10 +221,32 @@ export default function ShopDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                Faol
-                <Switch checked={shop.is_active} onChange={toggleShop} disabled={togglingShop} label="Faol" />
-              </label>
+              {shop.status === 'pending' && (
+                <>
+                  <Button icon={<Check className="h-4 w-4" />} loading={togglingShop} onClick={approve}>
+                    Tasdiqlash
+                  </Button>
+                  <Button variant="secondary" icon={<ShieldOff className="h-4 w-4" />} disabled={togglingShop} onClick={block}>
+                    Rad etish
+                  </Button>
+                </>
+              )}
+              {shop.status === 'blocked' && (
+                <Button variant="secondary" loading={togglingShop} onClick={unblock}>
+                  Blokdan chiqarish
+                </Button>
+              )}
+              {shop.status === 'active' && (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    Faol
+                    <Switch checked={shop.is_active} onChange={toggleShop} disabled={togglingShop} label="Faol" />
+                  </label>
+                  <Button variant="secondary" icon={<ShieldOff className="h-4 w-4" />} disabled={togglingShop} onClick={block}>
+                    Bloklash
+                  </Button>
+                </>
+              )}
               <Button variant="secondary" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditing(true)}>
                 Tahrirlash
               </Button>

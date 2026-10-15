@@ -68,6 +68,7 @@ function toPaginated<T>(res: any, page = 1, limit = 20): Paginated<T> {
 function normalizeShop<T extends Partial<Shop>>(s: any): T {
   return {
     ...s,
+    status: s.status ?? (s.is_active ? 'active' : 'blocked'),
     productCount: s.productCount ?? s._count?.products ?? 0,
     orderCount: s.orderCount ?? s._count?.orders ?? 0,
     revenueTiyin: s.revenueTiyin ?? 0,
@@ -237,6 +238,21 @@ class ApiService {
     return this.request<{ login: string; tempPassword: string }>(`/admin/shops/${id}/reset-password`, {
       method: 'POST',
     });
+  }
+
+  async approveShop(id: string) {
+    const res = await this.request(`/admin/shops/${id}/approve`, { method: 'POST' });
+    return normalizeShop<Shop>(res);
+  }
+
+  async blockShop(id: string) {
+    const res = await this.request(`/admin/shops/${id}/block`, { method: 'POST' });
+    return normalizeShop<Shop>(res);
+  }
+
+  async unblockShop(id: string) {
+    const res = await this.request(`/admin/shops/${id}/unblock`, { method: 'POST' });
+    return normalizeShop<Shop>(res);
   }
 
   // ---------- Products ----------

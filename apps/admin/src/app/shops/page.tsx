@@ -3,11 +3,12 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronRight, Pencil, Plus, Store } from 'lucide-react';
+import { Check, ChevronRight, Pencil, Plus, ShieldOff, Store } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Paginated, Shop } from '@/lib/types';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { useDebounce } from '@/lib/hooks';
+import { SHOP_STATUS_META } from '@/lib/constants';
 import {
   Badge,
   Button,
@@ -32,7 +33,7 @@ import { ShopLogo } from '@/components/shops/ShopLogo';
 import { CreateShopModal, CredentialsModal, Credentials, EditShopModal } from '@/components/shops/ShopForms';
 
 const LIMIT = 20;
-type StatusFilter = 'all' | 'active' | 'inactive';
+type StatusFilter = 'all' | 'pending' | 'active' | 'blocked';
 
 function ShopsInner() {
   const toast = useToast();
@@ -88,6 +89,45 @@ function ShopsInner() {
     }
   };
 
+  const approve = async (shop: Shop) => {
+    setToggling(shop.id);
+    try {
+      const updated = await api.approveShop(shop.id);
+      patchRow(shop.id, updated);
+      toast.success("Do'kon tasdiqlandi", `${shop.name} endi mijozlarga ko'rinadi`);
+    } catch (e) {
+      toast.error("Tasdiqlab bo'lmadi", errorMessage(e));
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const block = async (shop: Shop) => {
+    setToggling(shop.id);
+    try {
+      const updated = await api.blockShop(shop.id);
+      patchRow(shop.id, updated);
+      toast.success("Do'kon bloklandi", shop.name);
+    } catch (e) {
+      toast.error("Bloklab bo'lmadi", errorMessage(e));
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const unblock = async (shop: Shop) => {
+    setToggling(shop.id);
+    try {
+      const updated = await api.unblockShop(shop.id);
+      patchRow(shop.id, updated);
+      toast.success("Blokdan chiqarildi", shop.name);
+    } catch (e) {
+      toast.error("Blokdan chiqarib bo'lmadi", errorMessage(e));
+    } finally {
+      setToggling(null);
+    }
+  };
+
   const closeCreate = () => {
     setCreateOpen(false);
     if (params?.get('new')) router.replace('/shops');
@@ -112,8 +152,9 @@ function ShopsInner() {
           <Tabs<StatusFilter>
             items={[
               { value: 'all', label: 'Hammasi' },
+              { value: 'pending', label: 'Tasdiqlash kutilmoqda' },
               { value: 'active', label: 'Faol' },
-              { value: 'inactive', label: 'Nofaol' },
+              { value: 'blocked', label: 'Bloklangan' },
             ]}
             value={status}
             onChange={setStatus}
@@ -177,19 +218,12 @@ function ShopsInner() {
                       </TD>
                       <TD>
                         <div className="flex flex-col items-start gap-1">
-                          {s.is_active ? (
-                            s.isCurrentlyOpen ? (
-                              <Badge tone="green" dot>
-                                Hozir ochiq
-                              </Badge>
-                            ) : (
-                              <Badge tone="amber" dot>
-                                Yopiq
-                              </Badge>
-                            )
-                          ) : (
-                            <Badge tone="gray" dot>
-                              Nofaol
+                          <Badge tone={SHOP_STATUS_META[s.status].tone} dot>
+                            {SHOP_STATUS_META[s.status].label}
+                          </Badge>
+                          {s.status === 'active' && (
+                            <Badge tone={s.isCurrentlyOpen ? 'green' : 'amber'} dot>
+                              {s.isCurrentlyOpen ? 'Hozir ochiq' : 'Yopiq'}
                             </Badge>
                           )}
                           <span className="text-xs text-slate-400">
@@ -207,16 +241,73 @@ function ShopsInner() {
                         {formatMoney(s.revenueTiyin)}
                       </TD>
                       <TD align="center">
-                        <Switch
-                          size="sm"
-                          checked={s.is_active}
-                          disabled={toggling === s.id}
-                          onChange={(v) => toggleActive(s, v)}
-                          label={s.is_active ? "O'chirish" : 'Faollashtirish'}
-                        />
+                        {s.status === 'active' ? (
+                          <Switch
+                            size="sm"
+                            checked={s.is_active}
+                            disabled={toggling === s.id}
+                            onChange={(v) => toggleActive(s, v)}
+                            label={s.is_active ? "O'chirish" : 'Faollashtirish'}
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </TD>
                       <TD align="right">
                         <div className="flex items-center justify-end gap-1">
+                          {s.status === 'pending' && (
+                            <>
+                              <Button
+                                size="sm"
+                                icon={<Check className="h-3.5 w-3.5" />}
+                                loading={toggling === s.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  approve(s);
+                                }}
+                              >
+                                Tasdiqlash
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                icon={<ShieldOff className="h-3.5 w-3.5" />}
+                                disabled={toggling === s.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  block(s);
+                                }}
+                              >
+                                Rad etish
+                              </Button>
+                            </>
+                          )}
+                          {s.status === 'blocked' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={toggling === s.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                unblock(s);
+                              }}
+                            >
+                              Blokdan chiqarish
+                            </Button>
+                          )}
+                          {s.status === 'active' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Bloklash"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                block(s);
+                              }}
+                            >
+                              <ShieldOff className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"

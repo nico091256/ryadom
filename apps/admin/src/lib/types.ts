@@ -1,7 +1,8 @@
-export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
+export type OrderStatus = 'new' | 'accepted' | 'on_the_way' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'cash' | 'online';
 export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
 export type UserRole = 'customer' | 'seller' | 'admin';
+export type ShopStatus = 'pending' | 'active' | 'blocked';
 
 export interface Paginated<T> {
   data: T[];
@@ -122,6 +123,7 @@ export interface Shop {
   close_time: string;
   is_open: boolean;
   is_active: boolean;
+  status: ShopStatus;
   commission_rate_percent: number;
   created_at: string;
   updated_at: string;
