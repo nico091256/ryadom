@@ -41,4 +41,13 @@ storage/
 coverage/
 .nyc_output/
 
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+/build/
+# Packages pin via path deps within this monorepo; apps should commit their own pubspec.lock.
+packages/*/pubspec.lock
+
 ECC/
