@@ -1,0 +1,2817 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/send-code": {
+      "post": {
+        "operationId": "AuthController_sendCode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SMS code dispatched successfully"
+          }
+        },
+        "summary": "Send SMS verification code to customer phone",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "operationId": "AuthController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified and authenticated"
+          }
+        },
+        "summary": "Verify SMS code and receive JWT tokens (auto-creates customer)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated successfully"
+          }
+        },
+        "summary": "Login for shopkeeper or platform admin with username & password",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens refreshed"
+          }
+        },
+        "summary": "Exchange refresh token for a new access token (rotates the refresh token)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged out"
+          }
+        },
+        "summary": "Revoke a single refresh token (logout on this device)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully"
+          }
+        },
+        "summary": "Change password (mandatory on first seller login)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "UsersController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get currently authenticated user profile",
+        "tags": [
+          "Profile"
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_updateProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update profile details (name, language)",
+        "tags": [
+          "Profile"
+        ]
+      }
+    },
+    "/addresses": {
+      "get": {
+        "operationId": "AddressesController_getAddresses",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get saved customer addresses",
+        "tags": [
+          "Addresses"
+        ]
+      },
+      "post": {
+        "operationId": "AddressesController_createAddress",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Save new delivery address",
+        "tags": [
+          "Addresses"
+        ]
+      }
+    },
+    "/addresses/{id}": {
+      "put": {
+        "operationId": "AddressesController_updateAddress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update existing delivery address",
+        "tags": [
+          "Addresses"
+        ]
+      },
+      "delete": {
+        "operationId": "AddressesController_deleteAddress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete saved address",
+        "tags": [
+          "Addresses"
+        ]
+      }
+    },
+    "/devices": {
+      "post": {
+        "operationId": "DevicesController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register (or refresh) this device's FCM push token",
+        "tags": [
+          "Profile"
+        ]
+      }
+    },
+    "/devices/{token}": {
+      "delete": {
+        "operationId": "DevicesController_unregister",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unregister a device push token (e.g. on logout)",
+        "tags": [
+          "Profile"
+        ]
+      }
+    },
+    "/shops/register": {
+      "post": {
+        "operationId": "ShopsController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterShopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Self-service shop registration; creates the shop as pending admin approval",
+        "tags": [
+          "Shops"
+        ]
+      }
+    },
+    "/shops/nearby": {
+      "get": {
+        "operationId": "ShopsController_getNearbyShops",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "radius",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Only shops with available products in this category",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get nearby active shops within 3km, sorted by distance",
+        "tags": [
+          "Shops"
+        ]
+      }
+    },
+    "/shops/{id}": {
+      "get": {
+        "operationId": "ShopsController_getShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get shop details by ID",
+        "tags": [
+          "Shops"
+        ]
+      }
+    },
+    "/shops/{id}/products": {
+      "get": {
+        "operationId": "ShopsController_getShopProducts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get products of a shop with category and search filters",
+        "tags": [
+          "Shops"
+        ]
+      }
+    },
+    "/categories": {
+      "get": {
+        "operationId": "CategoriesController_getCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get global product categories tree",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/categories/{id}": {
+      "get": {
+        "operationId": "CategoriesController_getCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get single category details",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/cart": {
+      "get": {
+        "operationId": "CartController_getCart",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current customer shopping cart",
+        "tags": [
+          "Cart"
+        ]
+      },
+      "put": {
+        "operationId": "CartController_updateCart",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace or update items in customer cart",
+        "tags": [
+          "Cart"
+        ]
+      },
+      "delete": {
+        "operationId": "CartController_clearCart",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Clear customer shopping cart",
+        "tags": [
+          "Cart"
+        ]
+      }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "OrdersController_createOrder",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional client-generated key; retried requests with the same key return the original result instead of creating a duplicate order.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create new order from customer active shopping cart",
+        "tags": [
+          "Orders"
+        ]
+      },
+      "get": {
+        "operationId": "OrdersController_getOrders",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "new",
+                "accepted",
+                "on_the_way",
+                "delivered",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "shopId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paymentMethod",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "cash",
+                "online"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List orders (Customer: own; Seller: shop; Admin: all with filters)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_getOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get single order details with items and status audit history",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}/accept": {
+      "post": {
+        "operationId": "OrdersController_acceptOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Seller accepts a new order",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}/reject": {
+      "post": {
+        "operationId": "OrdersController_rejectOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Seller rejects a new order (requires reason)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrdersController_cancelOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel order (Customer: while new; Seller: with reason)",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/orders/{id}/status": {
+      "patch": {
+        "operationId": "OrdersController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Seller advances order to on_the_way or delivered",
+        "tags": [
+          "Orders"
+        ]
+      }
+    },
+    "/seller/shop": {
+      "get": {
+        "operationId": "SellerController_getShop",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current seller shop details",
+        "tags": [
+          "Seller"
+        ]
+      },
+      "put": {
+        "operationId": "SellerController_updateShop",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShopProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update shop profile, hours, and Open/Closed switch",
+        "tags": [
+          "Seller"
+        ]
+      }
+    },
+    "/seller/products": {
+      "get": {
+        "operationId": "SellerController_getProducts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all products belonging to seller shop",
+        "tags": [
+          "Seller"
+        ]
+      },
+      "post": {
+        "operationId": "SellerController_createProduct",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create new product in seller shop",
+        "tags": [
+          "Seller"
+        ]
+      }
+    },
+    "/seller/products/{id}": {
+      "put": {
+        "operationId": "SellerController_updateProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update existing product",
+        "tags": [
+          "Seller"
+        ]
+      },
+      "delete": {
+        "operationId": "SellerController_deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft delete product from shop",
+        "tags": [
+          "Seller"
+        ]
+      }
+    },
+    "/seller/stats": {
+      "get": {
+        "operationId": "SellerController_getStats",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get orders count and revenue metrics for today, this week, this month",
+        "tags": [
+          "Seller"
+        ]
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "operationId": "AdminController_getDashboardStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Platform dashboard: totals, status breakdown, 30-day trend, top shops, recent orders",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/orders": {
+      "get": {
+        "operationId": "AdminController_getOrders",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shopId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paymentMethod",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Order id prefix, customer phone or name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "YYYY-MM-DD",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "YYYY-MM-DD (inclusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all orders with filters (paginated)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/orders/{id}": {
+      "get": {
+        "operationId": "AdminController_getOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Order details with items and status history",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/orders/{id}/cancel": {
+      "post": {
+        "operationId": "AdminController_cancelOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCancelOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Force-cancel an order (any non-final status), restoring stock",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops": {
+      "post": {
+        "operationId": "AdminController_createShop",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateShopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a shop together with its shopkeeper account",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "get": {
+        "operationId": "AdminController_getShops",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List shops with owner accounts and stats (paginated)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops/{id}": {
+      "get": {
+        "operationId": "AdminController_getShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Shop details with products and stats",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminController_updateShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateShopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update shop details, hours, location, commission or active status",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops/{id}/approve": {
+      "post": {
+        "operationId": "AdminController_approveShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve a self-registered (pending) shop, making it visible to customers",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops/{id}/block": {
+      "post": {
+        "operationId": "AdminController_blockShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Block a shop (hidden from customers, cannot accept orders)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops/{id}/unblock": {
+      "post": {
+        "operationId": "AdminController_unblockShop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unblock a previously blocked shop",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/shops/{id}/reset-password": {
+      "post": {
+        "operationId": "AdminController_resetShopPassword",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reset the shopkeeper password to a random temporary one",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/products/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Moderate a product (toggle availability)",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminController_deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soft-delete a product",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "operationId": "AdminController_getUsers",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "customer",
+                "seller",
+                "admin"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "blocked",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List and search platform users (paginated)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/users/{id}": {
+      "get": {
+        "operationId": "AdminController_getUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "User details with addresses, recent orders and shop",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/block": {
+      "patch": {
+        "operationId": "AdminController_toggleBlockUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminBlockUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Block or unblock a user account (admins cannot be blocked)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/categories": {
+      "get": {
+        "operationId": "AdminController_getCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List categories with product counts",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminController_createCategory",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a global category",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/categories/{id}": {
+      "put": {
+        "operationId": "AdminController_updateCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a global category",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminController_deleteCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a category (409 if products use it)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/promo-codes": {
+      "get": {
+        "operationId": "AdminController_getPromoCodes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List promo codes (newest first)",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminController_createPromoCode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreatePromoCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a promo code",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/promo-codes/{id}": {
+      "patch": {
+        "operationId": "AdminController_updatePromoCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdatePromoCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a promo code (code itself is not editable)",
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminController_deletePromoCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a promo code",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/uploads/image": {
+      "post": {
+        "operationId": "UploadsController_uploadImage",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload an image (product photo, shop logo/cover). Returns a server-relative URL.",
+        "tags": [
+          "Uploads"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Local Shop Delivery Platform API",
+    "description": "Hyper-local shop delivery platform backend API for customers, shopkeepers, and administrators in Uzbekistan.",
+    "version": "2.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "SMS verification and JWT authentication"
+    },
+    {
+      "name": "Profile",
+      "description": "User profile, addresses and device push tokens"
+    },
+    {
+      "name": "Addresses",
+      "description": "Customer delivery addresses"
+    },
+    {
+      "name": "Shops",
+      "description": "Nearby shops, self-registration and product catalog browsing"
+    },
+    {
+      "name": "Cart",
+      "description": "Single-shop cart operations"
+    },
+    {
+      "name": "Orders",
+      "description": "Order placement, lifecycle state machine, and status updates"
+    },
+    {
+      "name": "Seller",
+      "description": "Shopkeeper catalog management and store operations"
+    },
+    {
+      "name": "Admin",
+      "description": "Platform administration, shop onboarding, categories, and metrics"
+    },
+    {
+      "name": "Uploads",
+      "description": "Image uploads"
+    }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "SendCodeDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "example": "+998901234567",
+            "description": "Customer international phone number"
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "VerifyCodeDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "example": "+998901234567",
+            "description": "Phone number"
+          },
+          "code": {
+            "type": "string",
+            "example": "123456",
+            "description": "6-digit SMS verification code"
+          }
+        },
+        "required": [
+          "phone",
+          "code"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "login": {
+            "type": "string",
+            "example": "seller_chilonzor",
+            "description": "Shopkeeper or Admin login username"
+          },
+          "password": {
+            "type": "string",
+            "example": "Shopkeeper123!",
+            "description": "Account password"
+          }
+        },
+        "required": [
+          "login",
+          "password"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token provided on authentication"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "example": "Shopkeeper123!",
+            "description": "Current password"
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "NewSecretPass456!",
+            "description": "New strong password"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Sardor Aliyev"
+          },
+          "language": {
+            "type": "string",
+            "example": "uz",
+            "enum": [
+              "uz",
+              "ru",
+              "en"
+            ]
+          }
+        }
+      },
+      "CreateAddressDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Uy",
+            "description": "Address label: Uy, Ish, etc."
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor 5-mavze, 12-uy"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.284
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.216
+          },
+          "city_id": {
+            "type": "string",
+            "example": "00000000-0000-0000-0000-000000000001"
+          },
+          "entrance": {
+            "type": "string",
+            "example": "2"
+          },
+          "floor": {
+            "type": "string",
+            "example": "5"
+          },
+          "apartment": {
+            "type": "string",
+            "example": "45"
+          },
+          "door_code": {
+            "type": "string",
+            "example": "45K1234"
+          }
+        },
+        "required": [
+          "title",
+          "address_text",
+          "lat",
+          "lng"
+        ]
+      },
+      "UpdateAddressDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Uy"
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor 5-mavze, 12-uy"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.284
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.216
+          },
+          "entrance": {
+            "type": "string",
+            "example": "2"
+          },
+          "floor": {
+            "type": "string",
+            "example": "5"
+          },
+          "apartment": {
+            "type": "string",
+            "example": "45"
+          },
+          "door_code": {
+            "type": "string",
+            "example": "45K1234"
+          }
+        }
+      },
+      "RegisterDeviceDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "example": "f7v3n2...",
+            "description": "FCM registration token for this device"
+          },
+          "platform": {
+            "type": "string",
+            "example": "android",
+            "enum": [
+              "android",
+              "ios",
+              "web",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "platform"
+        ]
+      },
+      "RegisterShopDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Chilonzor Oziq-Ovqat",
+            "description": "Shop name"
+          },
+          "owner_name": {
+            "type": "string",
+            "example": "Bakhtiyor Aliyev",
+            "description": "Shop owner's full name"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+998909876543"
+          },
+          "login": {
+            "type": "string",
+            "example": "seller_newshop",
+            "description": "Login username chosen by the registrant"
+          },
+          "password": {
+            "type": "string",
+            "example": "MyOwnPassword123!",
+            "description": "Password chosen by the registrant"
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor ko'chasi, 28-do'kon"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.2825
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.215
+          },
+          "city_id": {
+            "type": "string",
+            "example": "00000000-0000-0000-0000-000000000001"
+          },
+          "open_time": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "close_time": {
+            "type": "string",
+            "example": "23:00"
+          }
+        },
+        "required": [
+          "name",
+          "owner_name",
+          "phone",
+          "login",
+          "password",
+          "address_text",
+          "lat",
+          "lng"
+        ]
+      },
+      "CartItemInputDto": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "example": "product-uuid"
+          },
+          "quantity": {
+            "type": "number",
+            "example": 2
+          }
+        },
+        "required": [
+          "product_id",
+          "quantity"
+        ]
+      },
+      "UpdateCartDto": {
+        "type": "object",
+        "properties": {
+          "shop_id": {
+            "type": "string",
+            "example": "shop-uuid"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItemInputDto"
+            }
+          },
+          "clearOtherShop": {
+            "type": "boolean",
+            "example": false,
+            "description": "Force overwrite existing cart if from different shop"
+          }
+        },
+        "required": [
+          "shop_id",
+          "items"
+        ]
+      },
+      "CreateOrderDto": {
+        "type": "object",
+        "properties": {
+          "address_id": {
+            "type": "string",
+            "example": "address-uuid",
+            "description": "Saved address ID or custom address"
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor 5-mavze, 12-uy"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.284
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.216
+          },
+          "customer_phone": {
+            "type": "string",
+            "example": "+998901234567"
+          },
+          "payment_method": {
+            "type": "string",
+            "example": "cash",
+            "enum": [
+              "cash",
+              "online"
+            ]
+          },
+          "comment": {
+            "type": "string",
+            "example": "Iltimos eshik qo'ng'irog'ini chaling"
+          },
+          "promo_code": {
+            "type": "string",
+            "example": "YANGI10",
+            "description": "Optional promo code (validated server-side)"
+          }
+        },
+        "required": [
+          "address_text",
+          "lat",
+          "lng",
+          "customer_phone",
+          "payment_method"
+        ]
+      },
+      "RejectOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Mahsulot tugab qolgan",
+            "description": "Reason is strictly required when rejecting"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CancelOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Rejalar o'zgardi"
+          }
+        }
+      },
+      "UpdateOrderStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "on_the_way",
+            "enum": [
+              "on_the_way",
+              "delivered"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "UpdateShopProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Chilonzor Oziq-Ovqat"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+998909876543"
+          },
+          "logo_url": {
+            "type": "string",
+            "example": "https://images.unsplash.com/..."
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor ko'chasi, 28-do'kon"
+          },
+          "open_time": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "close_time": {
+            "type": "string",
+            "example": "23:00"
+          },
+          "is_open": {
+            "type": "boolean",
+            "example": true,
+            "description": "Prominent Open / Closed toggle switch"
+          }
+        }
+      },
+      "CreateProductDto": {
+        "type": "object",
+        "properties": {
+          "name_uz": {
+            "type": "string",
+            "example": "Samarqand noni"
+          },
+          "name_ru": {
+            "type": "string",
+            "example": "Самаркандская лепешка"
+          },
+          "name_en": {
+            "type": "string",
+            "example": "Samarkand Flatbread"
+          },
+          "category_id": {
+            "type": "string",
+            "example": "category-uuid"
+          },
+          "description_uz": {
+            "type": "string",
+            "example": "Issiq va xushbo'y an'anaviy tandir noni"
+          },
+          "description_ru": {
+            "type": "string",
+            "example": "Традиционная самаркандская лепешка"
+          },
+          "description_en": {
+            "type": "string",
+            "example": "Fresh traditional Samarkand tandoor bread"
+          },
+          "price": {
+            "type": "number",
+            "example": 800000,
+            "description": "Price in tiyin (e.g. 8000 UZS = 800000 tiyin)"
+          },
+          "image_url": {
+            "type": "string",
+            "example": "https://images.unsplash.com/..."
+          },
+          "stock": {
+            "type": "number",
+            "example": 50,
+            "description": "Stock quantity"
+          },
+          "is_available": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "name_uz",
+          "category_id",
+          "price",
+          "stock"
+        ]
+      },
+      "UpdateProductDto": {
+        "type": "object",
+        "properties": {
+          "name_uz": {
+            "type": "string",
+            "example": "Samarqand noni"
+          },
+          "name_ru": {
+            "type": "string",
+            "example": "Самаркандская лепешка"
+          },
+          "name_en": {
+            "type": "string",
+            "example": "Samarkand Flatbread"
+          },
+          "category_id": {
+            "type": "string",
+            "example": "category-uuid"
+          },
+          "description_uz": {
+            "type": "string"
+          },
+          "description_ru": {
+            "type": "string"
+          },
+          "description_en": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "example": 850000
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "stock": {
+            "type": "number",
+            "example": 45
+          },
+          "is_available": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "AdminCancelOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Mijoz bilan bog'lanib bo'lmadi"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "AdminCreateShopDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Chilonzor Oziq-Ovqat"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+998909876543"
+          },
+          "address_text": {
+            "type": "string",
+            "example": "Toshkent sh., Chilonzor ko'chasi, 28-do'kon"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.2825
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.215
+          },
+          "city_id": {
+            "type": "string",
+            "example": "00000000-0000-0000-0000-000000000001"
+          },
+          "open_time": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "close_time": {
+            "type": "string",
+            "example": "23:00"
+          },
+          "seller_login": {
+            "type": "string",
+            "example": "seller_newshop",
+            "description": "Generated shopkeeper login username"
+          },
+          "seller_password": {
+            "type": "string",
+            "example": "ShopkeeperInitialPass123!",
+            "description": "Initial password given to shopkeeper"
+          },
+          "seller_name": {
+            "type": "string",
+            "example": "Bakhtiyor Seller"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "address_text",
+          "lat",
+          "lng",
+          "seller_login",
+          "seller_password"
+        ]
+      },
+      "AdminUpdateShopDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address_text": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "is_open": {
+            "type": "boolean"
+          },
+          "commission_rate_percent": {
+            "type": "number"
+          },
+          "open_time": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "close_time": {
+            "type": "string",
+            "example": "23:00"
+          },
+          "logo_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "AdminUpdateProductDto": {
+        "type": "object",
+        "properties": {
+          "is_available": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdminBlockUserDto": {
+        "type": "object",
+        "properties": {
+          "is_blocked": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "is_blocked"
+        ]
+      },
+      "AdminCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name_uz": {
+            "type": "string",
+            "example": "Meva va sabzavotlar"
+          },
+          "name_ru": {
+            "type": "string",
+            "example": "Овощи и фрукты"
+          },
+          "name_en": {
+            "type": "string",
+            "example": "Fruits & Vegetables"
+          },
+          "icon_url": {
+            "type": "string",
+            "example": "apple-alt"
+          },
+          "parent_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name_uz"
+        ]
+      },
+      "AdminCreatePromoCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "YANGI10"
+          },
+          "description": {
+            "type": "string",
+            "example": "Yangi mijozlar uchun 10% chegirma"
+          },
+          "discount_percent": {
+            "type": "number",
+            "example": 10,
+            "description": "Discount percent 1..100"
+          },
+          "max_discount_tiyin": {
+            "type": "number",
+            "example": 2000000,
+            "nullable": true,
+            "description": "Discount cap in tiyin"
+          },
+          "min_order_tiyin": {
+            "type": "number",
+            "example": 5000000,
+            "nullable": true,
+            "description": "Minimum basket total in tiyin"
+          },
+          "usage_limit": {
+            "type": "number",
+            "example": 100,
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "expires_at": {
+            "type": "string",
+            "example": "2026-12-31T23:59:59.000Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "code",
+          "discount_percent"
+        ]
+      },
+      "AdminUpdatePromoCodeDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "discount_percent": {
+            "type": "number"
+          },
+          "max_discount_tiyin": {
+            "type": "number",
+            "nullable": true
+          },
+          "min_order_tiyin": {
+            "type": "number",
+            "nullable": true
+          },
+          "usage_limit": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

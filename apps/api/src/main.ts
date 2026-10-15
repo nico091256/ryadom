@@ -1,9 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { buildSwaggerDocument } from './swagger.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -29,25 +30,7 @@ async function bootstrap() {
   );
 
   // OpenAPI (Swagger) API documentation served at /docs (Section 11)
-  const config = new DocumentBuilder()
-    .setTitle('Local Shop Delivery Platform API')
-    .setDescription(
-      'Hyper-local shop delivery platform backend API for customers, shopkeepers, and administrators in Uzbekistan.',
-    )
-    .setVersion('2.0')
-    .addBearerAuth()
-    .addTag('Auth', 'SMS verification and JWT authentication')
-    .addTag('Profile', 'User profile and push token registration')
-    .addTag('Addresses', 'Customer delivery addresses')
-    .addTag('Shops', 'Nearby shops and product catalog browsing')
-    .addTag('Cart', 'Single-shop cart operations')
-    .addTag('Orders', 'Order placement, lifecycle state machine, and status updates')
-    .addTag('Seller', 'Shopkeeper catalog management and store operations')
-    .addTag('Admin', 'Platform administration, shop onboarding, categories, and metrics')
-    .addTag('Uploads', 'Image uploads')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
+  const document = buildSwaggerDocument(app);
   SwaggerModule.setup('docs', app, document, {
     customSiteTitle: 'LocalShop API Docs',
   });

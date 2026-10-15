@@ -1,0 +1,15 @@
+name: localshop_shared
+description: >
+  Hand-ported Dart counterpart of packages/shared (TypeScript): the order
+  status machine, cancellation rules, currency/locale formatting, and wire
+  constants shared with the NestJS backend. Pure Dart, no Flutter dependency,
+  so it can be used from both mobile_client and mobile_store.
+version: 1.0.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^4.0.0
