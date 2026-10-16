@@ -102,3 +102,51 @@ jobs:
 
       - name: Run API e2e tests
         run: pnpm --filter @localshop/api test:e2e
+
+  flutter:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [mobile_client, mobile_store]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: apps/${{ matrix.app }}
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        working-directory: apps/${{ matrix.app }}
+        run: flutter test
+
+      - name: Build (web smoke test)
+        working-directory: apps/${{ matrix.app }}
+        run: flutter build web --no-wasm-dry-run
+
+  shared_dart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Test shared Dart package
+        working-directory: packages/shared_dart
+        run: |
+          dart pub get
+          dart analyze
+          dart test

@@ -1,4 +1,4 @@
-# Local Shop Delivery Platform (v2)
+# Ryadom
 
 A full-stack mobile marketplace and delivery platform for neighbourhood shops in Uzbekistan (starting in Tashkent). Customers discover hyper-local shops within a 3 km radius, place orders with free delivery, and track order fulfillment in real time. Shopkeepers manage their store catalog, receive audible order notifications, and deliver orders personally to customers.
 
@@ -6,21 +6,23 @@ A full-stack mobile marketplace and delivery platform for neighbourhood shops in
 
 ## 🏗 Repository Architecture
 
-This project is organized as a high-performance **pnpm monorepo**:
+The backend, admin panel, and shared TypeScript package are a **pnpm monorepo**. The two mobile apps are separate **Flutter** projects (own native Android/iOS/web platform folders) that share Dart business logic via `packages/shared_dart`, not part of the pnpm workspace:
 
 ```text
 ├── apps/
-│   ├── api/            # NestJS Backend API (REST, WebSocket Socket.IO, Swagger, BullMQ)
-│   ├── mobile/         # React Native + Expo App (Expo Router, Customer + Shopkeeper roles)
-│   └── admin/          # Next.js 14 + Tailwind CSS Admin Web Panel
+│   ├── api/                  # NestJS Backend API (REST, WebSocket Socket.IO, Swagger, BullMQ) — pnpm
+│   ├── admin/                # Next.js 14 + Tailwind CSS Admin Web Panel — pnpm
+│   ├── mobile_client/        # Flutter customer app (browse, order, track) — standalone Flutter project
+│   └── mobile_store/         # Flutter shopkeeper app (fulfill orders, catalog) — standalone Flutter project
 ├── packages/
-│   └── shared/         # Shared TypeScript interfaces, enums, DTOs, and constants
+│   ├── shared/                # Shared TypeScript interfaces, enums, DTOs, constants (api + admin) — pnpm
+│   └── shared_dart/           # Dart port of the same business logic (both Flutter apps)
 ├── docs/
 │   ├── ASSUMPTIONS.md  # Key architectural decisions & assumptions
 │   ├── PROGRESS.md     # Milestone tracking (M0 through M7)
-│   └── API_NOTES.md    # Detailed API endpoint & WebSocket specs
+│   └── openapi.json    # Exported OpenAPI spec (pnpm --filter @localshop/api export:openapi)
 ├── docker-compose.yml  # Docker environment for API, PostgreSQL + PostGIS, and Redis
-└── pnpm-workspace.yaml # Monorepo workspace configuration
+└── pnpm-workspace.yaml # pnpm workspace configuration (apps/api, apps/admin, packages/shared only)
 ```
 
 ---
@@ -72,11 +74,14 @@ pnpm dev:admin
 ```
 Access the admin portal at: `http://localhost:3000`
 
-#### Start Mobile App (Expo)
+#### Start a Mobile App (Flutter)
+Each Flutter app is a standalone project (not part of the pnpm workspace):
 ```bash
-pnpm dev:mobile
+cd apps/mobile_client   # or apps/mobile_store
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://<your-lan-ip>:4000/api/v1
 ```
-Press `a` for Android Emulator, `i` for iOS Simulator, or scan the QR code using Expo Go.
+Omit `--dart-define` to use the dev defaults (Android emulator alias / localhost). Both apps declare a path dependency on `packages/shared_dart` — no separate install step needed for it.
 
 ---
 
@@ -97,11 +102,10 @@ Press `a` for Android Emulator, `i` for iOS Simulator, or scan the QR code using
 ## 📋 Order Lifecycle State Machine
 
 1. **`new`** -> Order created by Customer. Stock is reserved atomically. Seller receives instant alert.
-2. **`accepted`** -> Seller confirms order within 5 minutes. (If 5 min lapses, flagged `needs_attention` for Admin).
-3. **`preparing`** -> Seller is packing the order.
-4. **`on_the_way`** -> Seller is delivering the order to customer's address.
-5. **`delivered`** -> Seller hands order to customer and confirms cash payment received.
-6. **`cancelled`** -> Can be cancelled from `new` (customer or seller), or `accepted`/`preparing` (seller with reason). Reserved stock is immediately restored.
+2. **`accepted`** -> Seller confirms order. If still `new` after 10 minutes, a BullMQ job auto-cancels it (stock restored).
+3. **`on_the_way`** -> Seller is delivering the order to customer's address.
+4. **`delivered`** -> Seller hands order to customer and confirms cash payment received.
+5. **`cancelled`** -> Can be cancelled from `new` (customer or seller) or `accepted` (seller with reason); not cancellable once `on_the_way`. Reserved stock is immediately restored.
 
 ---
 
