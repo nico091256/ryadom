@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_client/features/cart/domain/cart_state.dart';
 import 'package:mobile_client/features/cart/presentation/cart_controller.dart';
 import 'package:mobile_client/features/shops/domain/product.dart';
 
@@ -75,5 +76,46 @@ void main() {
     notifier.setQuantity('p1', 0);
 
     expect(container.read(cartControllerProvider).isEmpty, isTrue);
+  });
+
+  test('reorder replaces the cart with multiple items from specified shop', () {
+    final notifier = container.read(cartControllerProvider.notifier);
+    notifier.addOrIncrement(_product('old_p'), 'Old Shop');
+
+    notifier.reorder(
+      shopId: 'reorder-shop',
+      shopName: 'Reorder Shop',
+      items: [
+        CartItem(product: _product('r1', shopId: 'reorder-shop', price: 15000), quantity: 2),
+        CartItem(product: _product('r2', shopId: 'reorder-shop', price: 20000), quantity: 1),
+      ],
+    );
+
+    final state = container.read(cartControllerProvider);
+    expect(state.shopId, 'reorder-shop');
+    expect(state.shopName, 'Reorder Shop');
+    expect(state.items.length, 2);
+    expect(state.itemCount, 3);
+    expect(state.totalAmount, 50000);
+  });
+
+  test('CartState serializes to JSON and deserializes correctly', () {
+    final original = CartState(
+      shopId: 'shop-abc',
+      shopName: 'Test Shop',
+      items: [
+        CartItem(product: _product('p1', shopId: 'shop-abc', price: 5000), quantity: 3),
+      ],
+    );
+
+    final json = original.toJson();
+    final restored = CartState.fromJson(json);
+
+    expect(restored.shopId, original.shopId);
+    expect(restored.shopName, original.shopName);
+    expect(restored.items.length, 1);
+    expect(restored.items.first.product.id, 'p1');
+    expect(restored.items.first.quantity, 3);
+    expect(restored.totalAmount, 15000);
   });
 }

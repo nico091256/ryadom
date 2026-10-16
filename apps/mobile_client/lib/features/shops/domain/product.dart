@@ -12,6 +12,13 @@ class ProductCategory {
         nameRu: json['name_ru'] as String?,
         nameEn: json['name_en'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name_uz': nameUz,
+        'name_ru': nameRu,
+        'name_en': nameEn,
+      };
 }
 
 class Product {
@@ -57,4 +64,19 @@ class Product {
         isAvailable: json['is_available'] as bool? ?? true,
         category: json['category'] != null ? ProductCategory.fromJson(json['category'] as Map<String, dynamic>) : null,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'shop_id': shopId,
+        'category_id': categoryId,
+        'name_uz': nameUz,
+        'name_ru': nameRu,
+        'name_en': nameEn,
+        'description_uz': descriptionUz,
+        'price': price,
+        'image_url': imageUrl,
+        'stock': stock,
+        'is_available': isAvailable,
+        'category': category?.toJson(),
+      };
 }

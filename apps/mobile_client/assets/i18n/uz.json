@@ -112,7 +112,9 @@
     "activeTab": "Faol buyurtmalar",
     "historyTab": "Buyurtmalar tarixi",
     "emptyActive": "Hozircha faol buyurtmangiz yo'q",
-    "emptyHistory": "Buyurtmalar tarixi bo'sh"
+    "emptyHistory": "Buyurtmalar tarixi bo'sh",
+    "reorder": "Qayta buyurtma",
+    "reorderSuccess": "Mahsulotlar savatchaga qo'shildi"
   },
   "profile": {
     "title": "Profil",

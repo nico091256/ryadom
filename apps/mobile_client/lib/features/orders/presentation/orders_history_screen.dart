@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:localshop_shared/localshop_shared.dart';
 import '../../../app/theme.dart';
 import '../../../core/providers.dart';
+import '../../cart/domain/cart_state.dart';
+import '../../cart/presentation/cart_controller.dart';
+import '../../shops/domain/product.dart';
 import '../domain/order.dart';
 import 'orders_history_controller.dart';
 
@@ -51,8 +54,8 @@ class _OrdersHistoryScreenState extends ConsumerState<OrdersHistoryScreen> with 
           return TabBarView(
             controller: _tabController,
             children: [
-              _OrderList(orders: active, emptyText: ref.t('orders.emptyActive')),
-              _OrderList(orders: history, emptyText: ref.t('orders.emptyHistory')),
+              _OrderList(orders: active, emptyText: ref.t('orders.emptyActive'), isHistory: false),
+              _OrderList(orders: history, emptyText: ref.t('orders.emptyHistory'), isHistory: true),
             ],
           );
         },
@@ -64,9 +67,71 @@ class _OrdersHistoryScreenState extends ConsumerState<OrdersHistoryScreen> with 
 }
 
 class _OrderList extends ConsumerWidget {
-  const _OrderList({required this.orders, required this.emptyText});
+  const _OrderList({required this.orders, required this.emptyText, required this.isHistory});
   final List<Order> orders;
   final String emptyText;
+  final bool isHistory;
+
+  Future<void> _handleReorder(BuildContext context, WidgetRef ref, Order order) async {
+    final cart = ref.read(cartControllerProvider);
+    final targetShopId = order.shopId ?? 'shp_${order.shopName.hashCode}';
+    final targetShopName = order.shopName ?? 'Do\'kon';
+
+    if (cart.shopId != null && cart.shopId != targetShopId && !cart.isEmpty) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(ref.t('cart.title')),
+          content: Text(ref.t('cart.multipleShopsWarning')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(ref.t('common.cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(ref.t('common.confirm')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    final cartItems = order.items.map((item) {
+      return CartItem(
+        product: Product(
+          id: item.productId ?? 'prd_${item.productName.hashCode}',
+          shopId: targetShopId,
+          categoryId: '',
+          nameUz: item.productName,
+          price: item.unitPrice,
+          stock: 99,
+          isAvailable: true,
+        ),
+        quantity: item.quantity,
+      );
+    }).toList();
+
+    ref.read(cartControllerProvider.notifier).reorder(
+      shopId: targetShopId,
+      shopName: targetShopName,
+      items: cartItems,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ref.t('orders.reorderSuccess')),
+          action: SnackBarAction(
+            label: ref.t('cart.goToCart'),
+            onPressed: () => context.push('/cart'),
+          ),
+        ),
+      );
+      context.push('/cart');
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,20 +153,52 @@ class _OrderList extends ConsumerWidget {
             onTap: () => context.push('/order/${order.id}'),
             child: Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
-              child: Row(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(order.shopName ?? '#${order.shortId}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(ref.t('orderStatus.${order.status.value}'), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                      Text(formatPrice(order.totalAmount, lang), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  if (isHistory && order.items.isNotEmpty) ...[
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(order.shopName ?? '#${order.shortId}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 4),
-                        Text(ref.t('orderStatus.${order.status.value}'), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        Text(
+                          '${order.items.length} ta mahsulot',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            side: const BorderSide(color: AppTheme.seed),
+                            foregroundColor: AppTheme.seed,
+                          ),
+                          onPressed: () => _handleReorder(context, ref, order),
+                          icon: const Icon(Icons.replay, size: 16),
+                          label: Text(ref.t('orders.reorder'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
-                  ),
-                  Text(formatPrice(order.totalAmount, lang), style: const TextStyle(fontWeight: FontWeight.w800)),
+                  ],
                 ],
               ),
             ),

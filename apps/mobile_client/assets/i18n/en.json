@@ -112,7 +112,9 @@
     "activeTab": "Active orders",
     "historyTab": "Order history",
     "emptyActive": "You have no active orders yet",
-    "emptyHistory": "Your order history is empty"
+    "emptyHistory": "Your order history is empty",
+    "reorder": "Reorder",
+    "reorderSuccess": "Items added to cart"
   },
   "profile": {
     "title": "Profile",

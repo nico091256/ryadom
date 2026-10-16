@@ -1,8 +1,14 @@
 import 'package:localshop_shared/localshop_shared.dart';
 
 class OrderItem {
-  const OrderItem({required this.productName, required this.unitPrice, required this.quantity});
+  const OrderItem({
+    this.productId,
+    required this.productName,
+    required this.unitPrice,
+    required this.quantity,
+  });
 
+  final String? productId;
   final String productName;
   final int unitPrice;
   final int quantity;
@@ -10,6 +16,7 @@ class OrderItem {
   int get subtotal => unitPrice * quantity;
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
+        productId: json['product_id'] as String?,
         productName: json['product_name'] as String,
         unitPrice: (json['unit_price'] as num).toInt(),
         quantity: (json['quantity'] as num).toInt(),
@@ -33,6 +40,7 @@ class OrderStatusEvent {
 class Order {
   const Order({
     required this.id,
+    this.shopId,
     required this.status,
     required this.paymentMethod,
     required this.totalAmount,
@@ -47,6 +55,7 @@ class Order {
   });
 
   final String id;
+  final String? shopId;
   final OrderStatus status;
   final PaymentMethod paymentMethod;
   final int totalAmount;
@@ -68,6 +77,7 @@ class Order {
     final shop = json['shop'] as Map<String, dynamic>?;
     return Order(
       id: json['id'] as String,
+      shopId: json['shop_id'] as String? ?? (shop?['id'] as String?),
       status: OrderStatus.fromValue(json['status'] as String),
       paymentMethod: PaymentMethod.fromValue(json['payment_method'] as String),
       totalAmount: (json['total_amount'] as num).toInt(),
