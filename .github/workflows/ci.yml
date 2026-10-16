@@ -98,10 +98,10 @@ jobs:
         run: pnpm --filter @localshop/shared build
 
       - name: Apply Prisma migrations
-        run: pnpm --filter @localshop/api exec prisma migrate deploy
+        run: pnpm --filter @localshop/backend exec prisma migrate deploy
 
-      - name: Run API e2e tests
-        run: pnpm --filter @localshop/api test:e2e
+      - name: Run backend e2e tests
+        run: pnpm --filter @localshop/backend test:e2e
 
   flutter:
     runs-on: ubuntu-latest

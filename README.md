@@ -10,7 +10,7 @@ The backend, admin panel, and shared TypeScript package are a **pnpm monorepo**.
 
 ```text
 ├── apps/
-│   ├── api/                  # NestJS Backend API (REST, WebSocket Socket.IO, Swagger, BullMQ) — pnpm
+│   ├── backend/              # NestJS Backend API (REST, WebSocket Socket.IO, Swagger, BullMQ) — pnpm
 │   ├── admin/                # Next.js 14 + Tailwind CSS Admin Web Panel — pnpm
 │   ├── mobile_client/        # Flutter customer app (browse, order, track) — standalone Flutter project
 │   └── mobile_store/         # Flutter shopkeeper app (fulfill orders, catalog) — standalone Flutter project
@@ -20,9 +20,9 @@ The backend, admin panel, and shared TypeScript package are a **pnpm monorepo**.
 ├── docs/
 │   ├── ASSUMPTIONS.md  # Key architectural decisions & assumptions
 │   ├── PROGRESS.md     # Milestone tracking (M0 through M7)
-│   └── openapi.json    # Exported OpenAPI spec (pnpm --filter @localshop/api export:openapi)
-├── docker-compose.yml  # Docker environment for API, PostgreSQL + PostGIS, and Redis
-└── pnpm-workspace.yaml # pnpm workspace configuration (apps/api, apps/admin, packages/shared only)
+│   └── openapi.json    # Exported OpenAPI spec (pnpm --filter @localshop/backend export:openapi)
+├── docker-compose.yml  # Docker environment for backend, PostgreSQL + PostGIS, and Redis
+└── pnpm-workspace.yaml # pnpm workspace configuration (apps/backend, apps/admin, packages/shared only)
 ```
 
 ---
@@ -54,17 +54,17 @@ pnpm install
 ### 4. Database Setup & Seeding
 ```bash
 # Generate Prisma Client & Run Migrations
-pnpm --filter @localshop/api db:migrate
+pnpm --filter @localshop/backend prisma:migrate
 
 # Seed Database with Tashkent, Categories, Demo Shop, and Users
-pnpm --filter @localshop/api db:seed
+pnpm --filter @localshop/backend db:seed
 ```
 
 ### 5. Running the Applications
 
 #### Start NestJS Backend API (Port 4000)
 ```bash
-pnpm dev:api
+pnpm dev:backend
 ```
 Swagger API documentation will be available at: `http://localhost:4000/docs`
 

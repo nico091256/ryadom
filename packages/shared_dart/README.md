@@ -7,7 +7,7 @@ formatting, localized-text fallback, Socket.IO event names and error codes.
 
 **Keep this in sync by hand** whenever `packages/shared/src/{enums,constants,utils}.ts`
 changes — nothing regenerates it automatically. The test file mirrors
-`apps/api/src/common/utils.spec.ts` line for line so a divergence is easy to
+`apps/backend/src/common/utils.spec.ts` line for line so a divergence is easy to
 spot.
 
 Used via a path dependency from both `apps/mobile_client` and

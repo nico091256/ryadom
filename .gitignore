@@ -34,7 +34,7 @@ Thumbs.db
 
 # Storage & Uploads (runtime upload storage only — not src/modules/uploads)
 /uploads/
-apps/api/uploads/
+apps/backend/uploads/
 storage/
 
 # Coverage & test artifacts

@@ -222,7 +222,7 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  apps/api:
+  apps/backend:
     dependencies:
       '@localshop/shared':
         specifier: workspace:*

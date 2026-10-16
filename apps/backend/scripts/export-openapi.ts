@@ -4,7 +4,7 @@
  * apps' generated Dart clients/models (see docs/openapi.json consumers in
  * apps/mobile_client and apps/mobile_store) stay in sync with the backend.
  *
- * Usage: pnpm --filter @localshop/api export:openapi
+ * Usage: pnpm --filter @localshop/backend export:openapi
  */
 import { NestFactory } from '@nestjs/core';
 import { writeFileSync } from 'fs';

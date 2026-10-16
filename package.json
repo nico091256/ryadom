@@ -6,7 +6,7 @@
   "author": "Elshodbek Turayev",
   "license": "UNLICENSED",
   "scripts": {
-    "dev:api": "pnpm --filter @localshop/api start:dev",
+    "dev:backend": "pnpm --filter @localshop/backend start:dev",
     "dev:admin": "pnpm --filter @localshop/admin dev",
     "build": "pnpm -r build",
     "test": "pnpm -r --if-present test",
