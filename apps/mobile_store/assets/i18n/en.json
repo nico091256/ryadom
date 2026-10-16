@@ -1,0 +1,31 @@
+{
+  "common": {
+    "appName": "Ryadom Store",
+    "loading": "Loading...",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "error": "An error occurred",
+    "logout": "Log out"
+  },
+  "login": {
+    "title": "Shopkeeper Login",
+    "subtitle": "Enter the login and password given to you by the platform administrator",
+    "loginLabel": "Login",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "fieldsRequired": "Fill in both login and password",
+    "invalidCredentials": "Incorrect login or password"
+  },
+  "changePassword": {
+    "title": "Update your password",
+    "subtitle": "For security, replace the temporary password the administrator gave you with your own.",
+    "currentLabel": "Current temporary password",
+    "newLabel": "New password (at least 6 characters)",
+    "confirmLabel": "Confirm new password",
+    "submit": "Update password",
+    "tooShort": "The new password must be at least 6 characters",
+    "mismatch": "The new passwords don't match",
+    "failed": "Failed to change password"
+  }
+}

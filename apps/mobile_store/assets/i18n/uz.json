@@ -1,0 +1,31 @@
+{
+  "common": {
+    "appName": "Ryadom Do'kon",
+    "loading": "Yuklanmoqda...",
+    "cancel": "Bekor qilish",
+    "confirm": "Tasdiqlash",
+    "save": "Saqlash",
+    "error": "Xatolik yuz berdi",
+    "logout": "Chiqish"
+  },
+  "login": {
+    "title": "Do'konchi kirishi",
+    "subtitle": "Platforma administratori tomonidan berilgan login va parolingizni kiriting",
+    "loginLabel": "Login",
+    "passwordLabel": "Parol",
+    "submit": "Kirish",
+    "fieldsRequired": "Login va parolni to'ldiring",
+    "invalidCredentials": "Login yoki parol noto'g'ri"
+  },
+  "changePassword": {
+    "title": "Parolni yangilang",
+    "subtitle": "Xavfsizlik maqsadida administrator bergan boshlang'ich parolni o'zingizning yangi shaxsiy parolingizga almashtiring.",
+    "currentLabel": "Joriy boshlang'ich parol",
+    "newLabel": "Yangi maxfiy parol (kamida 6 belgi)",
+    "confirmLabel": "Yangi parolni tasdiqlang",
+    "submit": "Parolni yangilash",
+    "tooShort": "Yangi parol kamida 6 belgidan iborat bo'lishi shart",
+    "mismatch": "Yangi parollar bir-biriga mos kelmadi",
+    "failed": "Parolni o'zgartirishda xatolik"
+  }
+}
