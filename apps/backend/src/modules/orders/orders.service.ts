@@ -12,7 +12,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { PaymentsService } from '../payments/payments.service';
-import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto } from './orders.dto';
+import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
 import { ORDER_AUTO_CANCEL_JOB, ORDER_AUTO_CANCEL_QUEUE } from './orders.constants';
 import {
   ALLOWED_STATUS_TRANSITIONS,
@@ -613,5 +613,44 @@ ${promoLine}` : promoLine;
     }
 
     return updatedOrder;
+  }
+
+  async reviewOrder(orderId: string, customerId: string, dto: ReviewOrderDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { shop: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'Order not found',
+      });
+    }
+
+    if (order.customer_id !== customerId) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'You are not allowed to review this order',
+      });
+    }
+
+    // Record review event in order history
+    await this.prisma.orderStatusHistory.create({
+      data: {
+        order_id: orderId,
+        status: order.status as any,
+        changed_by: customerId,
+        reason: `Baholandi: ${dto.stars} yulduz${dto.comment ? ` | ${dto.comment}` : ''}`,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Review recorded successfully',
+      orderId,
+      stars: dto.stars,
+      comment: dto.comment ?? null,
+    };
   }
 }

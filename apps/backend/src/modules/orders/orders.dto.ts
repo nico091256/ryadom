@@ -64,3 +64,15 @@ export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)
   status: OrderStatus;
 }
+
+export class ReviewOrderDto {
+  @ApiProperty({ example: 5, minimum: 1, maximum: 5 })
+  @IsNotEmpty()
+  @IsNumber()
+  stars: number;
+
+  @ApiProperty({ example: 'Juda tez yetkazildi, rahmat!', required: false })
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}

@@ -353,10 +353,29 @@ const server = http.createServer((req, res) => {
     }
 
     // Orders: single order
-    if (pathname.startsWith('/api/v1/orders/') && req.method === 'GET') {
+    if (pathname.startsWith('/api/v1/orders/') && !pathname.endsWith('/review') && req.method === 'GET') {
       const orderId = pathname.replace('/api/v1/orders/', '');
       const order = mockOrders.find(o => o.id === orderId) || mockOrders[0];
       return sendJson(200, order || {});
+    }
+
+    // Orders: review (PDF Page 17 spec: POST /orders/{id}/review)
+    if (pathname.startsWith('/api/v1/orders/') && pathname.endsWith('/review') && req.method === 'POST') {
+      const orderId = pathname.replace('/api/v1/orders/', '').replace('/review', '');
+      const order = mockOrders.find(o => o.id === orderId);
+      if (order) {
+        order.review = {
+          stars: parsedBody.stars || 5,
+          comment: parsedBody.comment || '',
+          created_at: new Date().toISOString(),
+        };
+      }
+      return sendJson(201, {
+        success: true,
+        message: 'Review saved successfully',
+        orderId,
+        review: parsedBody,
+      });
     }
 
     // Uploads

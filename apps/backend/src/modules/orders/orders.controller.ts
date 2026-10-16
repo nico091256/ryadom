@@ -18,7 +18,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ERROR_CODES, OrderStatus, PaymentMethod, UserRole } from '@localshop/shared';
-import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto } from './orders.dto';
+import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 
 @ApiTags('Orders')
@@ -147,5 +147,17 @@ export class OrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.ordersService.updateStatus(orderId, sellerId, dto);
+  }
+
+  @Post(':id/review')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'Customer submits a review/rating for delivered order (PDF Page 17)' })
+  async reviewOrder(
+    @Param('id') orderId: string,
+    @CurrentUser('id') customerId: string,
+    @Body() dto: ReviewOrderDto,
+  ) {
+    return this.ordersService.reviewOrder(orderId, customerId, dto);
   }
 }

@@ -156,9 +156,14 @@ class _ResendRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (secondsLeft > 0) {
+      final m = (secondsLeft ~/ 60).toString().padLeft(2, '0');
+      final s = (secondsLeft % 60).toString().padLeft(2, '0');
       return Text(
-        ref.t('auth.resendIn', {'seconds': '$secondsLeft'}),
-        style: AppText.bodyMedium.secondary.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+        'Qayta yuborish: $m:$s',
+        style: AppText.izoh.copyWith(
+          color: AppColors.textSecondary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       );
     }
     return Pressable(
