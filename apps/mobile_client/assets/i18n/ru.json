@@ -33,5 +33,19 @@
     "invalidPhone": "Введите номер телефона полностью",
     "sendCodeFailed": "Не удалось отправить СМС-код",
     "verifyFailed": "Код неверен или истёк"
+  },
+  "home": {
+    "deliverTo": "Адрес доставки",
+    "changeAddress": "Изменить",
+    "nearbyShops": "Ближайшие магазины",
+    "noShopsNearby": "Магазины в радиусе 3 км не найдены",
+    "searchPlaceholder": "Поиск магазинов...",
+    "open": "Открыто",
+    "closed": "Закрыто",
+    "locating": "Определение местоположения...",
+    "locationPermissionDenied": "Разрешите доступ к геолокации",
+    "locationServiceDisabled": "Проверьте, включён ли GPS",
+    "locationUnknownError": "Не удалось определить местоположение",
+    "useCurrentLocation": "Определить моё местоположение"
   }
 }

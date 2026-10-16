@@ -33,5 +33,19 @@
     "invalidPhone": "Telefon raqamini to'liq kiriting",
     "sendCodeFailed": "SMS kod yuborilmadi",
     "verifyFailed": "Kod noto'g'ri yoki muddati o'tgan"
+  },
+  "home": {
+    "deliverTo": "Yetkazish manzili",
+    "changeAddress": "O'zgartirish",
+    "nearbyShops": "Yaqin do'konlar",
+    "noShopsNearby": "3 km radiusda do'konlar topilmadi",
+    "searchPlaceholder": "Do'konlarni qidirish...",
+    "open": "Ochiq",
+    "closed": "Yopiq",
+    "locating": "Joylashuv aniqlanmoqda...",
+    "locationPermissionDenied": "Geolokatsiyaga ruxsat bering",
+    "locationServiceDisabled": "Telefonda GPS yoqilganini tekshiring",
+    "locationUnknownError": "Joylashuvni aniqlab bo'lmadi",
+    "useCurrentLocation": "Joriy joylashuvimni aniqlash"
   }
 }

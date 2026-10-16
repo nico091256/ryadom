@@ -33,5 +33,19 @@
     "invalidPhone": "Enter your full phone number",
     "sendCodeFailed": "Failed to send the SMS code",
     "verifyFailed": "The code is wrong or has expired"
+  },
+  "home": {
+    "deliverTo": "Delivery address",
+    "changeAddress": "Change",
+    "nearbyShops": "Nearby shops",
+    "noShopsNearby": "No shops found within 3 km",
+    "searchPlaceholder": "Search shops...",
+    "open": "Open",
+    "closed": "Closed",
+    "locating": "Locating...",
+    "locationPermissionDenied": "Please allow location access",
+    "locationServiceDisabled": "Check that GPS is turned on",
+    "locationUnknownError": "Could not determine your location",
+    "useCurrentLocation": "Use my current location"
   }
 }
