@@ -106,5 +106,23 @@
     "on_the_way": "В пути",
     "delivered": "Доставлен",
     "cancelled": "Отменён"
+  },
+  "orders": {
+    "title": "Мои заказы",
+    "activeTab": "Активные заказы",
+    "historyTab": "История заказов",
+    "emptyActive": "У вас пока нет активных заказов",
+    "emptyHistory": "История заказов пуста"
+  },
+  "profile": {
+    "title": "Профиль",
+    "defaultName": "Покупатель",
+    "appLanguage": "Язык приложения",
+    "logoutButton": "Выйти из аккаунта"
+  },
+  "tabs": {
+    "home": "Главная",
+    "orders": "Заказы",
+    "profile": "Профиль"
   }
 }

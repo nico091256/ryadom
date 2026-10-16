@@ -106,5 +106,23 @@
     "on_the_way": "Yetkazilmoqda",
     "delivered": "Yetkazildi",
     "cancelled": "Bekor qilindi"
+  },
+  "orders": {
+    "title": "Buyurtmalarim",
+    "activeTab": "Faol buyurtmalar",
+    "historyTab": "Buyurtmalar tarixi",
+    "emptyActive": "Hozircha faol buyurtmangiz yo'q",
+    "emptyHistory": "Buyurtmalar tarixi bo'sh"
+  },
+  "profile": {
+    "title": "Profil",
+    "defaultName": "Mijoz",
+    "appLanguage": "Ilova tili",
+    "logoutButton": "Hisobdan chiqish"
+  },
+  "tabs": {
+    "home": "Asosiy",
+    "orders": "Buyurtmalar",
+    "profile": "Profil"
   }
 }

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:localshop_shared/localshop_shared.dart';
 import '../../../app/theme.dart';
 import '../../../core/providers.dart';
-import '../../auth/presentation/auth_controller.dart';
 import '../../location/domain/selected_address.dart';
 import '../../location/presentation/address_controller.dart';
 import '../domain/shop.dart';
@@ -91,11 +90,6 @@ class _Header extends ConsumerWidget {
           TextButton(
             onPressed: () => _detectLocation(context, ref),
             child: Text(ref.t('home.changeAddress')),
-          ),
-          IconButton(
-            tooltip: 'Logout',
-            icon: const Icon(Icons.logout, size: 20, color: Color(0xFF94A3B8)),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
           ),
         ],
       ),

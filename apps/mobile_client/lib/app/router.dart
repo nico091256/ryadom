@@ -10,8 +10,8 @@ import '../features/auth/presentation/welcome_screen.dart';
 import '../features/cart/presentation/cart_screen.dart';
 import '../features/orders/presentation/checkout_screen.dart';
 import '../features/orders/presentation/order_tracking_screen.dart';
-import '../features/shops/presentation/home_screen.dart';
 import '../features/shops/presentation/shop_detail_screen.dart';
+import 'main_shell_screen.dart';
 
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
@@ -55,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => OtpScreen(phone: state.uri.queryParameters['phone'] ?? ''),
       ),
       GoRoute(path: '/auth/name', builder: (context, state) => const NameScreen()),
-      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      GoRoute(path: '/home', builder: (context, state) => const MainShellScreen()),
       GoRoute(path: '/shop/:id', builder: (context, state) => ShopDetailScreen(shopId: state.pathParameters['id']!)),
       GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
       GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),

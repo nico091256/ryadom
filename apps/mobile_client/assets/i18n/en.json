@@ -106,5 +106,23 @@
     "on_the_way": "On the way",
     "delivered": "Delivered",
     "cancelled": "Cancelled"
+  },
+  "orders": {
+    "title": "My orders",
+    "activeTab": "Active orders",
+    "historyTab": "Order history",
+    "emptyActive": "You have no active orders yet",
+    "emptyHistory": "Your order history is empty"
+  },
+  "profile": {
+    "title": "Profile",
+    "defaultName": "Customer",
+    "appLanguage": "App language",
+    "logoutButton": "Log out"
+  },
+  "tabs": {
+    "home": "Home",
+    "orders": "Orders",
+    "profile": "Profile"
   }
 }
