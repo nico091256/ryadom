@@ -46,7 +46,9 @@
     "locationPermissionDenied": "Разрешите доступ к геолокации",
     "locationServiceDisabled": "Проверьте, включён ли GPS",
     "locationUnknownError": "Не удалось определить местоположение",
-    "useCurrentLocation": "Определить моё местоположение"
+    "useCurrentLocation": "Определить моё местоположение",
+    "enterAddressManually": "Ввести адрес вручную",
+    "addressPlaceholder": "Например: Чиланзар 9-квартал, д. 12"
   },
   "shop": {
     "allCategories": "Все",

@@ -89,10 +89,69 @@ class _Header extends ConsumerWidget {
             ),
           ),
           TextButton(
-            onPressed: () => _detectLocation(context, ref),
+            onPressed: () => _showAddressOptions(context, ref),
             child: Text(ref.t('home.changeAddress')),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAddressOptions(BuildContext context, WidgetRef ref) {
+    final textController = TextEditingController(text: address.addressText);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(ref.t('home.deliverTo'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFE0F2FE),
+                child: Icon(Icons.my_location, color: AppTheme.seed),
+              ),
+              title: Text(ref.t('home.useCurrentLocation'), style: const TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _detectLocation(context, ref);
+              },
+            ),
+            const Divider(height: 24),
+            Text(ref.t('home.enterAddressManually'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: textController,
+              decoration: InputDecoration(
+                hintText: ref.t('home.addressPlaceholder'),
+                prefixIcon: const Icon(Icons.edit_location_outlined),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.seed),
+                onPressed: () {
+                  final text = textController.text.trim();
+                  if (text.isNotEmpty) {
+                    ref.read(addressControllerProvider.notifier).setManual(address.copyWith(addressText: text));
+                    ref.invalidate(nearbyShopsProvider);
+                  }
+                  Navigator.of(ctx).pop();
+                },
+                child: Text(ref.t('common.save')),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

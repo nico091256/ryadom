@@ -46,7 +46,9 @@
     "locationPermissionDenied": "Geolokatsiyaga ruxsat bering",
     "locationServiceDisabled": "Telefonda GPS yoqilganini tekshiring",
     "locationUnknownError": "Joylashuvni aniqlab bo'lmadi",
-    "useCurrentLocation": "Joriy joylashuvimni aniqlash"
+    "useCurrentLocation": "Joriy joylashuvimni aniqlash",
+    "enterAddressManually": "Manzilni qo'lda kiritish",
+    "addressPlaceholder": "Masalan: Chilonzor 9-mavze, 12-uy"
   },
   "shop": {
     "allCategories": "Barchasi",

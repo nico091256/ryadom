@@ -46,7 +46,9 @@
     "locationPermissionDenied": "Please allow location access",
     "locationServiceDisabled": "Check that GPS is turned on",
     "locationUnknownError": "Could not determine your location",
-    "useCurrentLocation": "Use my current location"
+    "useCurrentLocation": "Use my current location",
+    "enterAddressManually": "Enter address manually",
+    "addressPlaceholder": "e.g. Chilonzor 9th block, apt 12"
   },
   "shop": {
     "allCategories": "All",
