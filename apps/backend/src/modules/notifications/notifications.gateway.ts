@@ -9,7 +9,31 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { SOCKET_EVENTS } from '@localshop/shared';
+import { SOCKET_EVENTS, UserRole } from '@localshop/shared';
+import { PrismaService } from '../../common/prisma/prisma.service';
+
+interface SocketUser {
+  sub: string;
+  role: UserRole | string;
+}
+
+type JoinResult = { event: 'joined'; room: string } | { event: 'error'; code: string; message: string };
+
+const UNAUTHORIZED: JoinResult = {
+  event: 'error',
+  code: 'UNAUTHORIZED',
+  message: 'Authenticate the socket (handshake auth.token) before joining rooms.',
+};
+const FORBIDDEN: JoinResult = {
+  event: 'error',
+  code: 'FORBIDDEN',
+  message: 'You are not allowed to join this room.',
+};
+const BAD_REQUEST: JoinResult = {
+  event: 'error',
+  code: 'BAD_REQUEST',
+  message: 'Expected a non-empty id string.',
+};
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -23,6 +47,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
+    private prisma: PrismaService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -54,15 +79,60 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.debug(`Client disconnected: ${client.id}`);
   }
 
+  private currentUser(client: Socket): SocketUser | null {
+    const u = client.data?.user;
+    return u && typeof u.sub === 'string' ? (u as SocketUser) : null;
+  }
+
+  /**
+   * Shop rooms receive full order payloads (customer phone, address, items), so
+   * only the shop owner or a platform admin may subscribe.
+   */
   @SubscribeMessage(SOCKET_EVENTS.JOIN_SHOP_ROOM)
-  handleJoinShop(client: Socket, shopId: string) {
+  async handleJoinShop(client: Socket, shopId: unknown): Promise<JoinResult> {
+    if (typeof shopId !== 'string' || !shopId.trim()) return BAD_REQUEST;
+    const user = this.currentUser(client);
+    if (!user) return UNAUTHORIZED;
+
+    if (user.role !== UserRole.ADMIN) {
+      if (user.role !== UserRole.SELLER) return FORBIDDEN;
+      const shop = await this.prisma.shop.findUnique({ where: { id: shopId }, select: { owner_id: true } });
+      if (!shop || shop.owner_id !== user.sub) {
+        this.logger.warn(`Socket ${client.id} (user ${user.sub}) refused for room shop:${shopId}`);
+        return FORBIDDEN;
+      }
+    }
+
     client.join(`shop:${shopId}`);
     this.logger.log(`Socket ${client.id} joined room shop:${shopId}`);
     return { event: 'joined', room: `shop:${shopId}` };
   }
 
+  /**
+   * Order rooms are limited to the order's customer, the fulfilling shop's owner
+   * and platform admins.
+   */
   @SubscribeMessage(SOCKET_EVENTS.JOIN_ORDER_ROOM)
-  handleJoinOrder(client: Socket, orderId: string) {
+  async handleJoinOrder(client: Socket, orderId: unknown): Promise<JoinResult> {
+    if (typeof orderId !== 'string' || !orderId.trim()) return BAD_REQUEST;
+    const user = this.currentUser(client);
+    if (!user) return UNAUTHORIZED;
+
+    if (user.role !== UserRole.ADMIN) {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { customer_id: true, shop: { select: { owner_id: true } } },
+      });
+      const allowed =
+        !!order &&
+        ((user.role === UserRole.CUSTOMER && order.customer_id === user.sub) ||
+          (user.role === UserRole.SELLER && order.shop?.owner_id === user.sub));
+      if (!allowed) {
+        this.logger.warn(`Socket ${client.id} (user ${user.sub}) refused for room order:${orderId}`);
+        return FORBIDDEN;
+      }
+    }
+
     client.join(`order:${orderId}`);
     this.logger.log(`Socket ${client.id} joined room order:${orderId}`);
     return { event: 'joined', room: `order:${orderId}` };

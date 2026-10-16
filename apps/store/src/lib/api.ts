@@ -15,6 +15,9 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000
 /** API_URL with the trailing '/api/v1' (and any trailing slash) removed. Uploads and the socket live here. */
 export const API_ORIGIN = API_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
 
+/** Fired on `window` after a successful token refresh (socket re-auth hook). */
+export const TOKEN_REFRESHED_EVENT = 'ryadom:token-refreshed';
+
 const TOKEN_KEY = 'ryadom_store_token';
 const REFRESH_KEY = 'ryadom_store_refresh';
 const USER_KEY = 'ryadom_store_user';
@@ -214,6 +217,8 @@ class ApiService {
         if (!data?.accessToken || !data?.refreshToken) return false;
         // Refresh tokens rotate: the old one is now revoked, persist the new pair.
         this.saveTokens(data);
+        // Let long-lived consumers (the Socket.IO client) re-authenticate with the new token.
+        window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
         return true;
       } catch {
         return false;

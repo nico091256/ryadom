@@ -24,5 +24,6 @@ Tracking implementation milestones defined in Section 16 of the Technical Specif
 - [x] **M6: Admin Panel (Next.js)** — Dashboard, orders, shops (incl. pending-approval queue for self-registered shops — Phase E), categories, promo codes, users.
 - [ ] **M7: Hardening & Release** — End-to-end integration tests, test coverage verification, error tracking integration, performance optimization, production Docker Compose & deployment guide, Play Store/App Store submission.
   - [x] *Phase A*: unit tests for the new auth/orders behavior (23 passing); CI gates on tests (no more `|| true`); a real e2e job (Postgres+PostGIS + Redis services) covering the full order lifecycle, auto-cancel and idempotency.
-  - [x] *Flutter*: `apps/mobile_client` verified via `flutter analyze` (0 issues) and `flutter test` on every build step in this environment; CI workflow updated.
-  - [ ] Still open: Flutter CI job, Android/iOS release builds, app store submission, production deploy.
+  - [x] *Flutter*: `apps/mobile_client` verified via `flutter analyze` (0 issues) and `flutter test` on every build step in this environment; CI has a `flutter` job (analyze `--fatal-infos`, test, web build) and a `shared_dart` job.
+  - [x] *Realtime hardening (2026-10-16)*: Socket.IO `join:shop` / `join:order` now authorize the socket (shop owner / order customer / admin only) — previously any anonymous socket could subscribe to a shop's order feed; unit-tested in `notifications.gateway.spec.ts`. The store panel re-authenticates its socket after a token refresh.
+  - [ ] Still open: Android/iOS release builds, app store submission, production deploy (explicit CORS origin list, helmet/throttler, httpOnly-cookie sessions for the web panels, Firebase credentials).

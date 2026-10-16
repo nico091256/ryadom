@@ -22,7 +22,7 @@ Four apps, one per role/surface. The backend, the two web panels and the shared 
 │   ├── PROGRESS.md     # Milestone tracking (M0 through M7)
 │   └── openapi.json    # Exported OpenAPI spec (pnpm --filter @localshop/backend export:openapi)
 ├── docker-compose.yml  # Docker environment for backend, PostgreSQL + PostGIS, and Redis
-└── pnpm-workspace.yaml # pnpm workspace configuration (apps/backend, apps/admin, packages/shared only)
+└── pnpm-workspace.yaml # pnpm workspace configuration (apps/backend, apps/admin, apps/store, packages/shared)
 ```
 
 ---

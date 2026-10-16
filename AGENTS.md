@@ -13,10 +13,10 @@ Ushbu fayl Antigravity / Agent uchun har bir yangi sessiya va kontekstda majburi
 ---
 
 ## 2. Ish Muhiti va Cheklovlar (Windows Environment)
-* **OS:** Windows 11, Shell: PowerShell.
-* **Docker / Android SDK:** O'rnatilmagan (yo'q). Barcha mahalliy sinovlar Node.js / dev-server orqali amalga oshiriladi.
-* **Flutter:** `C:\flutter\bin` (tizim PATH'iga qo'shilgan). Buyruq: `flutter` yoki `C:\flutter\bin\flutter.bat`.
-* **Paket menejeri:** `pnpm` (Node v20).
+* **OS:** Windows 10 Pro, Shell: PowerShell 5.1 (`&&`, `??`, `?.` ishlamaydi).
+* **Docker / Android SDK:** O'rnatilmagan (yo'q). Barcha mahalliy sinovlar Node.js / dev-server orqali amalga oshiriladi; Flutter uchun `flutter analyze` + `flutter test` + `flutter build web`.
+* **Flutter:** `C:\flutter\bin` (agar PATH'da bo'lmasa: `$env:PATH = "C:\flutter\bin;$env:PATH"`). Buyruq: `flutter` yoki `C:\flutter\bin\flutter.bat`.
+* **Paket menejeri:** `pnpm` 12 (Node v20). PATH'da bo'lmasa `npx pnpm@12.11.2 <buyruq>`.
 * **Portlar:**
   * `4000` — Backend API (`http://localhost:4000/api/v1`)
   * `3000` — Platform Admin paneli (Next.js)
