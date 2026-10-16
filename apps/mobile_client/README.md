@@ -3,7 +3,7 @@
 Customer-facing app: find nearby shops, order, and track delivery.
 
 Standalone Flutter project (not part of the pnpm workspace). Shares business
-logic (order status machine, money/locale formatting) with `mobile_store` via
+logic (order status machine, money/locale formatting) with the backend via
 a path dependency on `../../packages/shared_dart`.
 
 ## Run

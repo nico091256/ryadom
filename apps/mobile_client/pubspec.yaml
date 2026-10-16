@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
-  # Shared business logic (order state machine, formatting) with mobile_store
+  # Shared business logic (order state machine, formatting) with backend
   localshop_shared:
     path: ../../packages/shared_dart
 

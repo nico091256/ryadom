@@ -3,7 +3,7 @@ description: >
   Hand-ported Dart counterpart of packages/shared (TypeScript): the order
   status machine, cancellation rules, currency/locale formatting, and wire
   constants shared with the NestJS backend. Pure Dart, no Flutter dependency,
-  so it can be used from both mobile_client and mobile_store.
+  so it can be used from mobile_client.
 version: 1.0.0
 publish_to: "none"
 

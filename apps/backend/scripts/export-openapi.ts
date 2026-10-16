@@ -2,7 +2,7 @@
  * Exports the live OpenAPI document to docs/openapi.json without booting a
  * listening HTTP server. Run after any API route/DTO change so the Flutter
  * apps' generated Dart clients/models (see docs/openapi.json consumers in
- * apps/mobile_client and apps/mobile_store) stay in sync with the backend.
+ * apps/mobile_client) stay in sync with the backend.
  *
  * Usage: pnpm --filter @localshop/backend export:openapi
  */

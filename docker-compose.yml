@@ -71,6 +71,20 @@ services:
     depends_on:
       - api
 
+  store:
+    build:
+      context: .
+      dockerfile: apps/store/Dockerfile
+    container_name: localshop-store
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
   redis_data:

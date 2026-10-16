@@ -6,17 +6,17 @@ A full-stack mobile marketplace and delivery platform for neighbourhood shops in
 
 ## 🏗 Repository Architecture
 
-The backend, admin panel, and shared TypeScript package are a **pnpm monorepo**. The two mobile apps are separate **Flutter** projects (own native Android/iOS/web platform folders) that share Dart business logic via `packages/shared_dart`, not part of the pnpm workspace:
+Four apps, one per role/surface. The backend, the two web panels and the shared TypeScript package are a **pnpm monorepo**. The customer app is a separate **Flutter** project (own native Android/iOS/web platform folders), not part of the pnpm workspace:
 
 ```text
 ├── apps/
 │   ├── backend/              # NestJS Backend API (REST, WebSocket Socket.IO, Swagger, BullMQ) — pnpm
-│   ├── admin/                # Next.js 14 + Tailwind CSS Admin Web Panel — pnpm
-│   ├── mobile_client/        # Flutter customer app (browse, order, track) — standalone Flutter project
-│   └── mobile_store/         # Flutter shopkeeper app (fulfill orders, catalog) — standalone Flutter project
+│   ├── admin/                # Platform admin panel — Next.js 14 + Tailwind (port 3000) — pnpm
+│   ├── store/                # Shopkeeper (do'konchi) panel — Next.js 14 + Tailwind (port 3001) — pnpm
+│   └── mobile_client/        # Customer app (browse, order, track) — standalone Flutter project
 ├── packages/
-│   ├── shared/                # Shared TypeScript interfaces, enums, DTOs, constants (api + admin) — pnpm
-│   └── shared_dart/           # Dart port of the same business logic (both Flutter apps)
+│   ├── shared/                # Shared TypeScript interfaces, enums, DTOs, constants (backend + web panels) — pnpm
+│   └── shared_dart/           # Dart port of the same business logic (mobile_client)
 ├── docs/
 │   ├── ASSUMPTIONS.md  # Key architectural decisions & assumptions
 │   ├── PROGRESS.md     # Milestone tracking (M0 through M7)
@@ -74,14 +74,20 @@ pnpm dev:admin
 ```
 Access the admin portal at: `http://localhost:3000`
 
-#### Start a Mobile App (Flutter)
-Each Flutter app is a standalone project (not part of the pnpm workspace):
+#### Start Shopkeeper Web Panel (Port 3001)
 ```bash
-cd apps/mobile_client   # or apps/mobile_store
+pnpm dev:store
+```
+Shopkeepers sign in at `http://localhost:3001` with the login/password the admin issued them (first login forces a password change).
+
+#### Start the Customer Mobile App (Flutter)
+A standalone Flutter project (not part of the pnpm workspace):
+```bash
+cd apps/mobile_client
 flutter pub get
 flutter run --dart-define=API_BASE_URL=http://<your-lan-ip>:4000/api/v1
 ```
-Omit `--dart-define` to use the dev defaults (Android emulator alias / localhost). Both apps declare a path dependency on `packages/shared_dart` — no separate install step needed for it.
+Omit `--dart-define` to use the dev defaults (Android emulator alias / localhost). It declares a path dependency on `packages/shared_dart` — no separate install step needed for it.
 
 ---
 

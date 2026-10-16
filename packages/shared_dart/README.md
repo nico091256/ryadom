@@ -10,8 +10,7 @@ changes — nothing regenerates it automatically. The test file mirrors
 `apps/backend/src/common/utils.spec.ts` line for line so a divergence is easy to
 spot.
 
-Used via a path dependency from both `apps/mobile_client` and
-`apps/mobile_store`:
+Used via a path dependency from `apps/mobile_client`:
 
 ```yaml
 dependencies:

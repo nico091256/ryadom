@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [mobile_client, mobile_store]
+        app: [mobile_client]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
