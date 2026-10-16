@@ -60,5 +60,61 @@
     "on_the_way": "Yo'lda",
     "delivered": "Yetkazildi",
     "cancelled": "Bekor qilindi"
+  },
+  "tabs": {
+    "orders": "Buyurtmalar",
+    "products": "Mahsulotlar",
+    "shop": "Do'kon",
+    "stats": "Statistika"
+  },
+  "products": {
+    "title": "Mahsulotlar",
+    "add": "Qo'shish",
+    "searchPlaceholder": "Mahsulot nomi orqali qidirish...",
+    "empty": "Mahsulotlar topilmadi",
+    "stock": "Qoldiq: {{count}} ta",
+    "available": "Sotuvda",
+    "deleteConfirm": "Mahsulotni o'chirishni tasdiqlaysizmi?",
+    "deleteTitle": "Mahsulotni o'chirish"
+  },
+  "editor": {
+    "titleEdit": "Mahsulotni tahrirlash",
+    "titleNew": "Yangi mahsulot",
+    "nameUz": "Nomi (o'zbekcha) *",
+    "nameRu": "Nomi (ruscha)",
+    "nameEn": "Nomi (inglizcha)",
+    "descUz": "Tavsif",
+    "price": "Narxi (so'mda) *",
+    "stock": "Qoldiq (dona) *",
+    "category": "Kategoriya",
+    "availableSwitch": "Sotuvda mavjud",
+    "save": "Saqlash",
+    "nameRequired": "Mahsulot nomini kiriting",
+    "priceInvalid": "Narxni to'g'ri kiriting",
+    "saveFailed": "Saqlashda xatolik",
+    "image": "Mahsulot rasmi",
+    "pickImage": "Rasm tanlash",
+    "uploading": "Yuklanmoqda..."
+  },
+  "shopSettings": {
+    "title": "Do'kon profili",
+    "statusOpen": "Ochiq (buyurtmalar qabul qilinadi)",
+    "statusClosed": "Yopiq (buyurtma to'xtatilgan)",
+    "name": "Do'kon nomi",
+    "phone": "Telefon raqami",
+    "address": "Manzil",
+    "openTime": "Ochilish vaqti",
+    "closeTime": "Yopilish vaqti",
+    "logo": "Do'kon logotipi",
+    "saved": "Saqlandi",
+    "saveFailed": "Saqlashda xatolik"
+  },
+  "stats": {
+    "title": "Statistika",
+    "today": "Bugun",
+    "thisWeek": "Shu hafta",
+    "thisMonth": "Shu oy",
+    "orders": "{{count}} ta buyurtma",
+    "revenue": "Tushum"
   }
 }

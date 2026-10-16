@@ -5,7 +5,7 @@ import '../features/auth/presentation/auth_controller.dart';
 import '../features/auth/presentation/change_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
-import '../features/orders/presentation/orders_board_screen.dart';
+import 'main_shell_screen.dart';
 
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
@@ -50,7 +50,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/change-password', builder: (context, state) => const ChangePasswordScreen()),
-      GoRoute(path: '/orders', builder: (context, state) => const OrdersBoardScreen()),
+      GoRoute(path: '/orders', builder: (context, state) => const MainShellScreen()),
     ],
   );
 });

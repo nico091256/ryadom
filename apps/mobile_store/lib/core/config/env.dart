@@ -29,4 +29,15 @@ class Env {
     final idx = api.indexOf('/api');
     return idx == -1 ? api : api.substring(0, idx);
   }
+
+  /// Root for server-relative media paths like "/uploads/abc.webp" — static
+  /// files are served from the API host without the /api/v1 prefix.
+  static String get mediaBaseUrl => socketUrl;
+
+  /// Resolves a server-relative path (or passes through an already-absolute
+  /// url) to something an Image widget can load directly.
+  static String resolveMediaUrl(String pathOrUrl) {
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl;
+    return '$mediaBaseUrl$pathOrUrl';
+  }
 }

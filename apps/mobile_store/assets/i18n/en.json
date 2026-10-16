@@ -60,5 +60,61 @@
     "on_the_way": "On the way",
     "delivered": "Delivered",
     "cancelled": "Cancelled"
+  },
+  "tabs": {
+    "orders": "Orders",
+    "products": "Products",
+    "shop": "Shop",
+    "stats": "Stats"
+  },
+  "products": {
+    "title": "Products",
+    "add": "Add",
+    "searchPlaceholder": "Search by product name...",
+    "empty": "No products found",
+    "stock": "Stock: {{count}}",
+    "available": "In stock",
+    "deleteConfirm": "Delete this product?",
+    "deleteTitle": "Delete product"
+  },
+  "editor": {
+    "titleEdit": "Edit product",
+    "titleNew": "New product",
+    "nameUz": "Name (Uzbek) *",
+    "nameRu": "Name (Russian)",
+    "nameEn": "Name (English)",
+    "descUz": "Description",
+    "price": "Price (UZS) *",
+    "stock": "Stock (units) *",
+    "category": "Category",
+    "availableSwitch": "Available for sale",
+    "save": "Save",
+    "nameRequired": "Enter the product name",
+    "priceInvalid": "Enter a valid price",
+    "saveFailed": "Failed to save",
+    "image": "Product photo",
+    "pickImage": "Pick a photo",
+    "uploading": "Uploading..."
+  },
+  "shopSettings": {
+    "title": "Shop profile",
+    "statusOpen": "Open (accepting orders)",
+    "statusClosed": "Closed (not accepting orders)",
+    "name": "Shop name",
+    "phone": "Phone number",
+    "address": "Address",
+    "openTime": "Opening time",
+    "closeTime": "Closing time",
+    "logo": "Shop logo",
+    "saved": "Saved",
+    "saveFailed": "Failed to save"
+  },
+  "stats": {
+    "title": "Stats",
+    "today": "Today",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "orders": "{{count}} orders",
+    "revenue": "Revenue"
   }
 }

@@ -28,9 +28,22 @@ class ApiClient {
   Future<dynamic> post(String path, {Object? data, Map<String, String>? headers}) =>
       _run(() => _dio.post(path, data: data, options: headers != null ? Options(headers: headers) : null));
 
+  Future<dynamic> put(String path, {Object? data}) => _run(() => _dio.put(path, data: data));
+
   Future<dynamic> patch(String path, {Object? data}) => _run(() => _dio.patch(path, data: data));
 
   Future<dynamic> delete(String path) => _run(() => _dio.delete(path));
+
+  /// Uploads an image file to POST /uploads/image and returns the response's
+  /// server-relative url (e.g. "/uploads/abc.webp") — the caller resolves it
+  /// to an absolute url (see Env for the media root, same host as the API
+  /// minus the /api/v1 suffix).
+  Future<String> uploadImage(String filePath) async {
+    final fileName = filePath.split(RegExp(r'[\\/]')).last;
+    final form = FormData.fromMap({'file': await MultipartFile.fromFile(filePath, filename: fileName)});
+    final data = await _run(() => _dio.post('/uploads/image', data: form)) as Map<String, dynamic>;
+    return data['url'] as String;
+  }
 
   Future<dynamic> _run(Future<Response> Function() request) async {
     try {

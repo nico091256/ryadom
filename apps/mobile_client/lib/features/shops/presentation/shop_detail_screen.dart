@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:localshop_shared/localshop_shared.dart';
 import '../../../app/theme.dart';
+import '../../../core/config/env.dart';
 import '../../../core/providers.dart';
 import '../../../core/utils/launch_url.dart';
 import '../../cart/presentation/cart_controller.dart';
@@ -101,7 +102,7 @@ class _ShopHeader extends StatelessWidget {
               width: 48,
               height: 48,
               child: shop.logoUrl != null
-                  ? CachedNetworkImage(imageUrl: shop.logoUrl!, fit: BoxFit.cover)
+                  ? CachedNetworkImage(imageUrl: Env.resolveMediaUrl(shop.logoUrl!), fit: BoxFit.cover)
                   : Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.storefront, color: Color(0xFF94A3B8))),
             ),
           ),
@@ -219,7 +220,7 @@ class _ProductRow extends ConsumerWidget {
               width: 56,
               height: 56,
               child: product.imageUrl != null
-                  ? CachedNetworkImage(imageUrl: product.imageUrl!, fit: BoxFit.cover)
+                  ? CachedNetworkImage(imageUrl: Env.resolveMediaUrl(product.imageUrl!), fit: BoxFit.cover)
                   : Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF94A3B8))),
             ),
           ),
