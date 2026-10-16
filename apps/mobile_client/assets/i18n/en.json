@@ -66,5 +66,45 @@
     "checkout": "Place order",
     "multipleShopsWarning": "Your cart has items from another shop. Clear it and continue?",
     "goToCart": "Go to cart"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "deliveryAddress": "Delivery address",
+    "contactPhone": "Contact phone",
+    "paymentMethod": "Payment method",
+    "cashOnDelivery": "Cash (pay on delivery)",
+    "changeQuestion": "Need change prepared?",
+    "changeExact": "Exact amount",
+    "commentTitle": "Note for the courier",
+    "commentPlaceholder": "E.g. door code",
+    "summaryTitle": "Order summary",
+    "summaryItems": "Items ({{count}})",
+    "summaryDelivery": "Delivery",
+    "placeOrder": "Confirm order",
+    "errorPhone": "Enter your phone number"
+  },
+  "address": {
+    "entrance": "Entrance",
+    "floor": "Floor",
+    "apartment": "Apartment",
+    "doorCode": "Door code"
+  },
+  "order": {
+    "title": "Order",
+    "liveTracking": "Live tracking",
+    "stagesTitle": "Order stages",
+    "itemsTitle": "Order items",
+    "totalPaid": "Total paid",
+    "cancelOrder": "Cancel order",
+    "cancelQuestion": "Are you sure you want to cancel this order?",
+    "callShop": "Call shop",
+    "backToHome": "Back to home"
+  },
+  "orderStatus": {
+    "new": "New",
+    "accepted": "Accepted",
+    "on_the_way": "On the way",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
   }
 }

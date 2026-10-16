@@ -66,5 +66,45 @@
     "checkout": "Оформить заказ",
     "multipleShopsWarning": "В корзине есть товары из другого магазина. Очистить и продолжить?",
     "goToCart": "Перейти в корзину"
+  },
+  "checkout": {
+    "title": "Оформление заказа",
+    "deliveryAddress": "Адрес доставки",
+    "contactPhone": "Контактный телефон",
+    "paymentMethod": "Способ оплаты",
+    "cashOnDelivery": "Наличными (при получении)",
+    "changeQuestion": "Нужна ли сдача?",
+    "changeExact": "Без сдачи",
+    "commentTitle": "Комментарий для курьера",
+    "commentPlaceholder": "Например, код от двери",
+    "summaryTitle": "Итог покупки",
+    "summaryItems": "Товары ({{count}} шт.)",
+    "summaryDelivery": "Доставка",
+    "placeOrder": "Подтвердить заказ",
+    "errorPhone": "Введите номер телефона"
+  },
+  "address": {
+    "entrance": "Подъезд",
+    "floor": "Этаж",
+    "apartment": "Квартира",
+    "doorCode": "Домофон"
+  },
+  "order": {
+    "title": "Заказ",
+    "liveTracking": "Отслеживание в реальном времени",
+    "stagesTitle": "Этапы заказа",
+    "itemsTitle": "Состав заказа",
+    "totalPaid": "Итого к оплате",
+    "cancelOrder": "Отменить заказ",
+    "cancelQuestion": "Вы действительно хотите отменить заказ?",
+    "callShop": "Позвонить в магазин",
+    "backToHome": "На главную"
+  },
+  "orderStatus": {
+    "new": "Новый",
+    "accepted": "Принят",
+    "on_the_way": "В пути",
+    "delivered": "Доставлен",
+    "cancelled": "Отменён"
   }
 }

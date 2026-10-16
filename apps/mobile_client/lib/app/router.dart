@@ -8,6 +8,8 @@ import '../features/auth/presentation/phone_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/cart/presentation/cart_screen.dart';
+import '../features/orders/presentation/checkout_screen.dart';
+import '../features/orders/presentation/order_tracking_screen.dart';
 import '../features/shops/presentation/home_screen.dart';
 import '../features/shops/presentation/shop_detail_screen.dart';
 
@@ -56,6 +58,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/shop/:id', builder: (context, state) => ShopDetailScreen(shopId: state.pathParameters['id']!)),
       GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
+      GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),
+      GoRoute(path: '/order/:id', builder: (context, state) => OrderTrackingScreen(orderId: state.pathParameters['id']!)),
     ],
   );
 });

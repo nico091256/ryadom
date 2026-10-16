@@ -66,5 +66,45 @@
     "checkout": "Buyurtma berish",
     "multipleShopsWarning": "Savatchangizda boshqa do'kon mahsulotlari bor. Uni tozalab davom etasizmi?",
     "goToCart": "Savatchaga o'tish"
+  },
+  "checkout": {
+    "title": "Buyurtmani rasmiylashtirish",
+    "deliveryAddress": "Yetkazish manzili",
+    "contactPhone": "Aloqa telefoni",
+    "paymentMethod": "To'lov turi",
+    "cashOnDelivery": "Naqd (yetkazilganda to'lash)",
+    "changeQuestion": "Qaytim tayyorlab kelinsinmi?",
+    "changeExact": "Aniq summa",
+    "commentTitle": "Kuryerga eslatma yoki izoh",
+    "commentPlaceholder": "Masalan, eshik kodi",
+    "summaryTitle": "Xarid hisobi",
+    "summaryItems": "Mahsulotlar ({{count}} dona)",
+    "summaryDelivery": "Yetkazib berish",
+    "placeOrder": "Buyurtmani tasdiqlash",
+    "errorPhone": "Telefon raqamingizni kiriting"
+  },
+  "address": {
+    "entrance": "Podyezd",
+    "floor": "Qavat",
+    "apartment": "Xonadon",
+    "doorCode": "Domofon"
+  },
+  "order": {
+    "title": "Buyurtma",
+    "liveTracking": "Jonli kuzatuv",
+    "stagesTitle": "Buyurtma bosqichlari",
+    "itemsTitle": "Buyurtma tarkibi",
+    "totalPaid": "Jami to'lov",
+    "cancelOrder": "Buyurtmani bekor qilish",
+    "cancelQuestion": "Haqiqatan ham buyurtmani bekor qilmoqchimisiz?",
+    "callShop": "Do'konga qo'ng'iroq",
+    "backToHome": "Bosh sahifaga qaytish"
+  },
+  "orderStatus": {
+    "new": "Yangi",
+    "accepted": "Qabul qilindi",
+    "on_the_way": "Yetkazilmoqda",
+    "delivered": "Yetkazildi",
+    "cancelled": "Bekor qilindi"
   }
 }
