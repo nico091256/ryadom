@@ -10,7 +10,9 @@ import '../../location/presentation/address_controller.dart';
 import '../../location/presentation/address_picker_sheet.dart';
 import '../domain/shop.dart';
 import 'home_controller.dart';
+import 'widgets/category_row.dart';
 import 'widgets/home_header.dart';
+import 'widgets/recent_order_card.dart';
 import 'widgets/shop_card.dart';
 import 'widgets/shops_map_view.dart';
 
@@ -136,22 +138,29 @@ class _ShopListState extends ConsumerState<_ShopList> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, 0),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, AppSpacing.lg),
               child: AppSearchBar(
                 controller: widget.searchController,
-                hint: ref.t('home.searchPlaceholder'),
+                hint: 'Mahsulot qidirish',
                 onChanged: (v) => ref.read(shopSearchQueryProvider.notifier).state = v,
               ),
             ),
           ),
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, 0),
-              child: ValuePropsRow(),
+          SliverToBoxAdapter(
+            child: CategoryRow(
+              onCategorySelected: (cat) {
+                widget.searchController.text = cat;
+                ref.read(shopSearchQueryProvider.notifier).state = cat;
+              },
             ),
           ),
           SliverToBoxAdapter(
-            child: SectionHeader(title: ref.t('home.nearbyShops'), count: shops?.length),
+            child: SectionHeader(
+              title: ref.t('home.nearbyShops'),
+              count: shops?.length,
+              actionLabel: 'Xaritada',
+              onAction: widget.onToggleMap,
+            ),
           ),
           shopsAsync.when(
             data: (shops) => shops.isEmpty
@@ -188,6 +197,9 @@ class _ShopListState extends ConsumerState<_ShopList> {
                 onAction: () => ref.invalidate(nearbyShopsProvider),
               ),
             ),
+          ),
+          const SliverToBoxAdapter(
+            child: RecentOrderCard(),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
         ],

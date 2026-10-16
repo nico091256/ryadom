@@ -40,9 +40,9 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final (bg, fg, border, shadow) = _palette();
     final height = switch (size) {
-      AppButtonSize.sm => 38.0,
-      AppButtonSize.md => 46.0,
-      AppButtonSize.lg => 54.0,
+      AppButtonSize.sm => 40.0,
+      AppButtonSize.md => kButtonHeightSecondary, // 48.0 per PDF
+      AppButtonSize.lg => kButtonHeightPrimary,   // 56.0 per PDF
     };
     final textStyle = (size == AppButtonSize.sm ? AppText.buttonSm : AppText.button).copyWith(color: fg);
     final iconSize = size == AppButtonSize.sm ? 16.0 : 20.0;
@@ -78,7 +78,7 @@ class AppButton extends StatelessWidget {
         height: height,
         padding: EdgeInsets.symmetric(horizontal: hPad),
         decoration: BoxDecoration(
-          color: _enabled ? bg : (variant == AppButtonVariant.primary ? AppColors.ink200 : bg.withValues(alpha: 0.6)),
+          color: _enabled ? bg : (variant == AppButtonVariant.primary ? AppColors.border : bg.withValues(alpha: 0.6)),
           borderRadius: AppRadius.control,
           border: border != null ? Border.all(color: border) : null,
           boxShadow: _enabled ? shadow : AppShadows.none,
@@ -99,8 +99,8 @@ class AppButton extends StatelessWidget {
   }
 
   (Color, Color, Color?, List<BoxShadow>) _palette() => switch (variant) {
-        AppButtonVariant.primary => (AppColors.brand, AppColors.white, null, AppShadows.brand),
-        AppButtonVariant.secondary => (AppColors.green50, AppColors.green700, null, AppShadows.none),
+        AppButtonVariant.primary => (AppColors.brand, AppColors.surface, null, AppShadows.brand),
+        AppButtonVariant.secondary => (AppColors.brandSoft, AppColors.brand, null, AppShadows.none),
         AppButtonVariant.ghost => (Colors.transparent, AppColors.textPrimary, null, AppShadows.none),
         AppButtonVariant.outline => (AppColors.surface, AppColors.textPrimary, AppColors.border, AppShadows.none),
         AppButtonVariant.danger => (AppColors.dangerSoft, AppColors.danger, null, AppShadows.none),

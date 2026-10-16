@@ -13,6 +13,7 @@ import '../domain/order.dart';
 import 'order_tracking_controller.dart';
 import 'orders_providers.dart';
 import 'widgets/order_card.dart' show orderShortRef;
+import 'widgets/order_rating_sheet.dart';
 import 'widgets/order_skeletons.dart';
 import 'widgets/order_status_ui.dart';
 import 'widgets/order_timeline.dart';
@@ -187,8 +188,70 @@ class _OrderBody extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.xl),
         AppSection(title: ref.t('order.itemsTitle'), child: _ItemsList(order: order)),
-        const SizedBox(height: AppSpacing.xxl),
-        if (phone != null && phone.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.xl),
+        if (status == OrderStatus.onTheWay || status == OrderStatus.accepted) ...[
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accentLight,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(LucideIcons.user, size: 24, color: AppColors.accent),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(order.shopName != null ? '${order.shopName} kuryeri' : 'Kuryer', style: AppText.bodyStrong.copyWith(fontSize: 16)),
+                      const SizedBox(height: 2),
+                      Text('Sizning kuryeringiz', style: AppText.izoh),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    if (phone != null && phone.isNotEmpty) launchCallerUrl(phone);
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: AppColors.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(LucideIcons.phone, size: 20, color: AppColors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+        if (status == OrderStatus.delivered) ...[
+          AppButton(
+            label: 'Xizmatni baholash',
+            icon: LucideIcons.star,
+            variant: AppButtonVariant.primary,
+            onPressed: () => showOrderRatingSheet(
+              context,
+              orderId: order.id,
+              onSubmit: (stars, comment) async {
+                // Submitted locally & gracefully
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (phone != null && phone.isNotEmpty && status != OrderStatus.onTheWay) ...[
           AppButton(
             label: ref.t('order.callShop'),
             icon: LucideIcons.phone,

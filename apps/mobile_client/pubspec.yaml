@@ -54,6 +54,7 @@ dependencies:
   shimmer: ^3.0.0
   flutter_svg: ^2.3.0
   lucide_icons_flutter: ^4.0.0
+  google_fonts: ^8.2.1
 
 dev_dependencies:
   flutter_test:

@@ -31,7 +31,6 @@ class HomeHeader extends ConsumerWidget {
   }
 }
 
-/// "Yetkazish manzili / <address> ›" card. Also floats over the map.
 class AddressPill extends StatelessWidget {
   const AddressPill({super.key, required this.label, required this.address, required this.onTap, this.elevated = false});
 
@@ -46,15 +45,15 @@ class AddressPill extends StatelessWidget {
       onTap: onTap,
       haptic: true,
       elevated: elevated,
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 9, AppSpacing.md, 9),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       child: Row(
         children: [
           Container(
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(color: AppColors.brandSoft, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.accentLight, shape: BoxShape.circle),
             alignment: Alignment.center,
-            child: const Icon(LucideIcons.mapPin, size: 18, color: AppColors.brand),
+            child: const Icon(LucideIcons.mapPin, size: 20, color: AppColors.accent),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -62,14 +61,14 @@ class AddressPill extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label.toUpperCase(), style: AppText.overline, maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(address, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text('Yetkazish manzili', style: AppText.izoh.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(height: 2),
+                Text(address.isEmpty ? '[Uy manzilingiz]' : address, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.ink400),
+          const Icon(LucideIcons.pencil, size: 18, color: AppColors.textSecondary),
         ],
       ),
     );

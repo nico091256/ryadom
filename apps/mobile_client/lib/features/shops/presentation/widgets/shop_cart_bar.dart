@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../cart/presentation/cart_controller.dart';
 
@@ -43,7 +42,7 @@ class ShopCartBar extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(AppRadius.lg),
                 child: Container(
                   height: kShopCartBarHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   decoration: BoxDecoration(
                     color: AppColors.brand,
                     borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -51,13 +50,13 @@ class ShopCartBar extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      _CountPill(count: count),
-                      const SizedBox(width: AppSpacing.md),
+                      const Icon(LucideIcons.shoppingBag, size: 20, color: AppColors.white),
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
-                        child: Text(ref.t('cart.goToCart'), style: AppText.button.onBrand, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text('Savat · $count ta mahsulot', style: AppText.button.onBrand, maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                       const SizedBox(width: AppSpacing.md),
-                      AnimatedPriceText(total, style: AppText.price.onBrand),
+                      AnimatedPriceText(total, style: AppText.priceLg.onBrand),
                     ],
                   ),
                 ),
@@ -65,31 +64,6 @@ class ShopCartBar extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CountPill extends StatelessWidget {
-  const _CountPill({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 30),
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      decoration: BoxDecoration(color: AppColors.white.withValues(alpha: 0.22), borderRadius: AppRadius.chip),
-      alignment: Alignment.center,
-      child: AnimatedSwitcher(
-        duration: AppDurations.fast,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(scale: Tween(begin: 0.7, end: 1.0).animate(anim), child: child),
-        ),
-        child: Text('$count', key: ValueKey(count), style: AppText.numeric.onBrand.weight(700)),
       ),
     );
   }
