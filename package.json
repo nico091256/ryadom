@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev:backend": "pnpm --filter @localshop/backend start:dev",
+    "dev:mock": "node tools/mock-server.js",
     "dev:admin": "pnpm --filter @localshop/admin dev",
     "dev:store": "pnpm --filter @localshop/store dev",
     "build": "pnpm -r build",
