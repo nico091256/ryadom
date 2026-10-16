@@ -257,6 +257,22 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       notifications: [],
       refreshTokens: [],
       deviceTokens: [],
+      promoCodes: [
+        {
+          id: 'promo-1',
+          code: 'YANGI10',
+          description: 'Yangi mijozlar uchun 10% chegirma',
+          discount_percent: 10,
+          max_discount_tiyin: 2000000,
+          min_order_tiyin: 1000000,
+          usage_limit: null,
+          usage_count: 0,
+          is_active: true,
+          expires_at: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ],
     };
   }
 
@@ -278,6 +294,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       { key: 'notification', storeKey: 'notifications' },
       { key: 'refreshToken', storeKey: 'refreshTokens' },
       { key: 'deviceToken', storeKey: 'deviceTokens' },
+      { key: 'promoCode', storeKey: 'promoCodes' },
     ];
 
     for (const { key, storeKey } of models) {
@@ -292,10 +309,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return Promise.all(cb);
     };
 
-    // Override $queryRaw
+    // Raw SQL (PostGIS nearby search) is not available in memory mode; callers
+    // catch this and fall back to the Haversine implementation.
     (this as any).$queryRaw = async () => {
-      return this.memoryStore.shops;
+      throw new Error('Raw SQL is not supported by the in-memory store');
     };
+    (this as any).$executeRaw = (this as any).$queryRaw;
   }
 
   private createModelMemoryHandler(storeKey: string) {
@@ -305,18 +324,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     };
 
     return {
-      findUnique: async ({ where, include }: any) => {
+      findUnique: async ({ where, include, select }: any) => {
         const item = getStore().find((i) => this.matchesWhere(i, where));
-        return item ? this.enrichItem(item, storeKey, include) : null;
+        return item ? this.enrichItem(item, storeKey, include, select) : null;
       },
-      findFirst: async ({ where, include, orderBy }: any) => {
+      findFirst: async ({ where, include, select, orderBy }: any) => {
         let items = getStore().filter((i) => this.matchesWhere(i, where));
         if (orderBy) {
           items = this.sortItems(items, orderBy);
         }
-        return items.length > 0 ? this.enrichItem(items[0], storeKey, include) : null;
+        return items.length > 0 ? this.enrichItem(items[0], storeKey, include, select) : null;
       },
-      findMany: async ({ where, include, orderBy, skip, take }: any = {}) => {
+      findMany: async ({ where, include, select, orderBy, skip, take }: any = {}) => {
         let items = getStore();
         if (where) {
           items = items.filter((i) => this.matchesWhere(i, where));
@@ -330,9 +349,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (take !== undefined) {
           items = items.slice(0, take);
         }
-        return items.map((i) => this.enrichItem(i, storeKey, include));
+        return items.map((i) => this.enrichItem(i, storeKey, include, select));
       },
-      create: async ({ data, include }: any) => {
+      create: async ({ data, include, select }: any) => {
         const newItem = {
           id: data.id || uuidv4(),
           created_at: new Date(),
@@ -362,7 +381,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
 
         getStore().push(newItem);
-        return this.enrichItem(newItem, storeKey, include);
+        return this.enrichItem(newItem, storeKey, include, select);
       },
       createMany: async ({ data }: any) => {
         const records = data.map((d: any) => ({
@@ -374,33 +393,59 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         getStore().push(...records);
         return { count: records.length };
       },
-      update: async ({ where, data, include }: any) => {
+      update: async ({ where, data, include, select }: any) => {
         const index = getStore().findIndex((i) => this.matchesWhere(i, where));
         if (index === -1) throw new Error('Record not found');
 
         const current = getStore()[index];
-        const updated = { ...current, ...data, updated_at: new Date() };
-
-        if (data.stock?.increment !== undefined) {
-          updated.stock = (current.stock || 0) + data.stock.increment;
-        }
-        if (data.attempts?.increment !== undefined) {
-          updated.attempts = (current.attempts || 0) + data.attempts.increment;
-        }
+        const updated = this.applyUpdate(current, data);
 
         getStore()[index] = updated;
-        return this.enrichItem(updated, storeKey, include);
+        return this.enrichItem(updated, storeKey, include, select);
       },
       updateMany: async ({ where, data }: any) => {
         let count = 0;
         const items = getStore();
         for (let i = 0; i < items.length; i++) {
           if (this.matchesWhere(items[i], where)) {
-            items[i] = { ...items[i], ...data, updated_at: new Date() };
+            items[i] = this.applyUpdate(items[i], data);
             count++;
           }
         }
         return { count };
+      },
+      groupBy: async ({ by, where, _sum, _count, _avg, orderBy, take }: any) => {
+        const items = where ? getStore().filter((i) => this.matchesWhere(i, where)) : getStore();
+        const keys: string[] = Array.isArray(by) ? by : [by];
+        const groups = new Map<string, any>();
+        for (const item of items) {
+          const groupKey = keys.map((k) => String(item[k])).join('|');
+          let group = groups.get(groupKey);
+          if (!group) {
+            group = {};
+            keys.forEach((k) => (group[k] = item[k]));
+            groups.set(groupKey, group);
+          }
+          this.accumulate(group, item, { _sum, _count, _avg });
+        }
+        let rows = [...groups.values()].map((g) => this.finalizeAggregate(g));
+        if (orderBy) {
+          const [k, v] = Object.entries(orderBy)[0] as [string, any];
+          const pick = (row: any) => (v && typeof v === 'object' ? row[k]?.[Object.keys(v)[0]] ?? 0 : row[k]);
+          const dir = (v && typeof v === 'object' ? Object.values(v)[0] : v) === 'desc' ? -1 : 1;
+          rows.sort((a, b) => (pick(a) < pick(b) ? -1 : pick(a) > pick(b) ? 1 : 0) * dir);
+        }
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows;
+      },
+      aggregate: async ({ where, _sum, _count, _avg }: any = {}) => {
+        const items = where ? getStore().filter((i) => this.matchesWhere(i, where)) : getStore();
+        const acc: any = {};
+        for (const item of items) this.accumulate(acc, item, { _sum, _count, _avg });
+        // Prisma returns the requested keys even for an empty set.
+        if (_sum) acc._sum = { ...Object.fromEntries(Object.keys(_sum).map((f) => [f, null])), ...(acc._sum ?? {}) };
+        if (_count) acc._count = { ...Object.fromEntries(Object.keys(_count).map((f) => [f, 0])), ...(acc._count ?? {}) };
+        return this.finalizeAggregate(acc);
       },
       delete: async ({ where }: any) => {
         const index = getStore().findIndex((i) => this.matchesWhere(i, where));
@@ -423,16 +468,82 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (!where) return getStore().length;
         return getStore().filter((i) => this.matchesWhere(i, where)).length;
       },
-      upsert: async ({ where, update, create }: any) => {
-        const existing = getStore().find((i) => this.matchesWhere(i, where));
-        if (existing) {
-          return this.enrichItem({ ...existing, ...update }, storeKey);
+      upsert: async ({ where, update, create, include, select }: any) => {
+        const index = getStore().findIndex((i) => this.matchesWhere(i, where));
+        if (index !== -1) {
+          const updated = this.applyUpdate(getStore()[index], update);
+          getStore()[index] = updated;
+          return this.enrichItem(updated, storeKey, include, select);
         }
         const newItem = { id: uuidv4(), created_at: new Date(), updated_at: new Date(), ...create };
         getStore().push(newItem);
-        return this.enrichItem(newItem, storeKey);
+        return this.enrichItem(newItem, storeKey, include, select);
       },
     };
+  }
+
+  /** Applies Prisma-style update data (plain values plus { increment } / { decrement }). */
+  private applyUpdate(current: any, data: any) {
+    const updated: any = { ...current, updated_at: new Date() };
+    for (const [field, value] of Object.entries(data || {})) {
+      if (value && typeof value === 'object' && !(value instanceof Date) && !Array.isArray(value)) {
+        const v = value as any;
+        if (v.increment !== undefined) {
+          updated[field] = (Number(current[field]) || 0) + Number(v.increment);
+          continue;
+        }
+        if (v.decrement !== undefined) {
+          updated[field] = (Number(current[field]) || 0) - Number(v.decrement);
+          continue;
+        }
+        if (v.set !== undefined) {
+          updated[field] = v.set;
+          continue;
+        }
+      }
+      updated[field] = value;
+    }
+    return updated;
+  }
+
+  private accumulate(acc: any, item: any, ops: { _sum?: any; _count?: any; _avg?: any }) {
+    if (ops._count) {
+      acc._count = acc._count ?? {};
+      for (const f of Object.keys(ops._count)) {
+        if (f === '_all' || item[f] !== null && item[f] !== undefined) acc._count[f] = (acc._count[f] ?? 0) + 1;
+      }
+    }
+    if (ops._sum) {
+      acc._sum = acc._sum ?? {};
+      for (const f of Object.keys(ops._sum)) acc._sum[f] = (acc._sum[f] ?? 0) + (Number(item[f]) || 0);
+    }
+    if (ops._avg) {
+      acc.__avg = acc.__avg ?? {};
+      for (const f of Object.keys(ops._avg)) {
+        const slot = (acc.__avg[f] = acc.__avg[f] ?? { sum: 0, n: 0 });
+        if (item[f] !== null && item[f] !== undefined) {
+          slot.sum += Number(item[f]) || 0;
+          slot.n += 1;
+        }
+      }
+    }
+  }
+
+  private finalizeAggregate(acc: any) {
+    if (acc.__avg) {
+      acc._avg = Object.fromEntries(
+        Object.entries(acc.__avg).map(([f, s]: [string, any]) => [f, s.n ? s.sum / s.n : null]),
+      );
+      delete acc.__avg;
+    }
+    return acc;
+  }
+
+  private compare(a: any, b: any): number {
+    if (a instanceof Date || b instanceof Date || (typeof a === 'string' && typeof b === 'string' && !isNaN(Date.parse(a)) && !isNaN(Date.parse(b)) && isNaN(Number(a)))) {
+      return new Date(a).getTime() - new Date(b).getTime();
+    }
+    return a < b ? -1 : a > b ? 1 : 0;
   }
 
   private matchesWhere(item: any, where: any): boolean {
@@ -442,27 +553,46 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       if (val === undefined) continue;
 
       if (key === 'OR' && Array.isArray(val)) {
-        const matchAny = val.some((cond) => this.matchesWhere(item, cond));
-        if (!matchAny) return false;
+        if (!val.some((cond) => this.matchesWhere(item, cond))) return false;
+        continue;
+      }
+      if (key === 'AND') {
+        const conds = Array.isArray(val) ? val : [val];
+        if (!conds.every((cond) => this.matchesWhere(item, cond))) return false;
+        continue;
+      }
+      if (key === 'NOT') {
+        const conds = Array.isArray(val) ? val : [val];
+        if (conds.some((cond) => this.matchesWhere(item, cond))) return false;
         continue;
       }
 
-      if (val && typeof val === 'object') {
-        if (val.in && Array.isArray(val.in)) {
-          if (!val.in.includes(item[key])) return false;
-        } else if (val.not !== undefined) {
-          if (item[key] === val.not) return false;
-        } else if (val.gte !== undefined) {
-          if (new Date(item[key]) < new Date(val.gte)) return false;
-        } else if (val.lte !== undefined) {
-          if (new Date(item[key]) > new Date(val.lte)) return false;
-        } else if (val.contains !== undefined) {
-          const itemVal = (item[key] || '').toLowerCase();
-          const target = val.contains.toLowerCase();
-          if (!itemVal.includes(target)) return false;
+      if (val === null) {
+        if (item[key] !== null && item[key] !== undefined) return false;
+        continue;
+      }
+
+      if (val && typeof val === 'object' && !(val instanceof Date)) {
+        const current = item[key];
+        if (val.equals !== undefined && current !== val.equals) return false;
+        if (Array.isArray(val.in) && !val.in.includes(current)) return false;
+        if (Array.isArray(val.notIn) && val.notIn.includes(current)) return false;
+        if (val.not !== undefined) {
+          if (val.not === null ? current === null || current === undefined : current === val.not) return false;
         }
-      } else {
-        if (item[key] !== val) return false;
+        if (val.gte !== undefined && this.compare(current, val.gte) < 0) return false;
+        if (val.gt !== undefined && this.compare(current, val.gt) <= 0) return false;
+        if (val.lte !== undefined && this.compare(current, val.lte) > 0) return false;
+        if (val.lt !== undefined && this.compare(current, val.lt) >= 0) return false;
+        if (val.contains !== undefined) {
+          if (!String(current ?? '').toLowerCase().includes(String(val.contains).toLowerCase())) return false;
+        }
+        if (val.startsWith !== undefined) {
+          if (!String(current ?? '').toLowerCase().startsWith(String(val.startsWith).toLowerCase())) return false;
+        }
+        // Relation filters (some/none/every/is/isNot) are not modelled in memory; treat as a match.
+      } else if (item[key] !== val) {
+        return false;
       }
     }
     return true;
@@ -481,61 +611,156 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
-  private enrichItem(item: any, storeKey: string, include?: any): any {
-    if (!include) return { ...item };
-    const clone = { ...item };
+  /**
+   * Relation graph of the in-memory store, keyed by Prisma relation field name.
+   * `many` relations resolve to arrays; `one` relations to a single row or null.
+   */
+  private relationResolvers(storeKey: string): Record<string, { many: boolean; store: string; resolve: (item: any) => any[] }> {
+    const rows = (store: string) => this.memoryStore[store] || [];
+    const byField = (store: string, field: string, value: any) => rows(store).filter((r) => r[field] === value);
+    const byId = (store: string, id: any) => rows(store).filter((r) => r.id === id);
+    const one = (store: string, resolve: (item: any) => any[]) => ({ many: false, store, resolve });
+    const many = (store: string, resolve: (item: any) => any[]) => ({ many: true, store, resolve });
 
-    if (storeKey === 'users') {
-      if (include.shops) {
-        clone.shops = this.memoryStore.shops.filter((s) => s.owner_id === item.id);
-      }
-      if (include.addresses) {
-        clone.addresses = this.memoryStore.addresses.filter((a) => a.user_id === item.id);
-      }
-    } else if (storeKey === 'shops') {
-      if (include.owner) {
-        clone.owner = this.memoryStore.users.find((u) => u.id === item.owner_id);
-      }
-      if (include.city) {
-        clone.city = this.memoryStore.cities.find((c) => c.id === item.city_id);
-      }
-      if (include._count) {
-        clone._count = {
-          products: this.memoryStore.products.filter((p) => p.shop_id === item.id && !p.deleted_at).length,
-          orders: this.memoryStore.orders.filter((o) => o.shop_id === item.id).length,
+    switch (storeKey) {
+      case 'users':
+        return {
+          shops: many('shops', (u) => byField('shops', 'owner_id', u.id)),
+          addresses: many('addresses', (u) => byField('addresses', 'user_id', u.id)),
+          orders: many('orders', (u) => byField('orders', 'customer_id', u.id)),
+          device_tokens: many('deviceTokens', (u) => byField('deviceTokens', 'user_id', u.id)),
+          refresh_tokens: many('refreshTokens', (u) => byField('refreshTokens', 'user_id', u.id)),
         };
+      case 'shops':
+        return {
+          owner: one('users', (s) => byId('users', s.owner_id)),
+          city: one('cities', (s) => byId('cities', s.city_id)),
+          products: many('products', (s) => byField('products', 'shop_id', s.id)),
+          orders: many('orders', (s) => byField('orders', 'shop_id', s.id)),
+          carts: many('carts', (s) => byField('carts', 'shop_id', s.id)),
+        };
+      case 'cities':
+        return {
+          shops: many('shops', (c) => byField('shops', 'city_id', c.id)),
+          addresses: many('addresses', (c) => byField('addresses', 'city_id', c.id)),
+        };
+      case 'products':
+        return {
+          category: one('categories', (p) => byId('categories', p.category_id)),
+          shop: one('shops', (p) => byId('shops', p.shop_id)),
+        };
+      case 'categories':
+        return {
+          parent: one('categories', (c) => byId('categories', c.parent_id)),
+          children: many('categories', (c) => byField('categories', 'parent_id', c.id)),
+          products: many('products', (c) => byField('products', 'category_id', c.id)),
+        };
+      case 'addresses':
+        return {
+          user: one('users', (a) => byId('users', a.user_id)),
+          city: one('cities', (a) => byId('cities', a.city_id)),
+        };
+      case 'carts':
+        return {
+          user: one('users', (c) => byId('users', c.user_id)),
+          shop: one('shops', (c) => byId('shops', c.shop_id)),
+          items: many('cartItems', (c) => byField('cartItems', 'cart_id', c.id)),
+        };
+      case 'cartItems':
+        return {
+          cart: one('carts', (ci) => byId('carts', ci.cart_id)),
+          product: one('products', (ci) => byId('products', ci.product_id)),
+        };
+      case 'orders':
+        return {
+          customer: one('users', (o) => byId('users', o.customer_id)),
+          shop: one('shops', (o) => byId('shops', o.shop_id)),
+          items: many('orderItems', (o) => byField('orderItems', 'order_id', o.id)),
+          status_history: many('orderStatusHistories', (o) => byField('orderStatusHistories', 'order_id', o.id)),
+          payments: many('payments', (o) => byField('payments', 'order_id', o.id)),
+        };
+      case 'orderItems':
+        return {
+          order: one('orders', (oi) => byId('orders', oi.order_id)),
+          product: one('products', (oi) => byId('products', oi.product_id)),
+        };
+      case 'orderStatusHistories':
+        return {
+          order: one('orders', (h) => byId('orders', h.order_id)),
+          actor: one('users', (h) => byId('users', h.changed_by)),
+        };
+      case 'payments':
+        return { order: one('orders', (p) => byId('orders', p.order_id)) };
+      case 'refreshTokens':
+      case 'deviceTokens':
+      case 'notifications':
+        return { user: one('users', (r) => byId('users', r.user_id)) };
+      default:
+        return {};
+    }
+  }
+
+  /** Resolves one relation for `item`, honouring nested include/select/where/orderBy/skip/take. */
+  private resolveRelation(
+    rel: { many: boolean; store: string; resolve: (item: any) => any[] },
+    item: any,
+    spec: any,
+    defaultNested?: any,
+  ): any {
+    const args = spec && typeof spec === 'object' ? spec : defaultNested || {};
+    let related = rel.resolve(item);
+    if (args.where) related = related.filter((r) => this.matchesWhere(r, args.where));
+    if (args.orderBy) related = this.sortItems(related, args.orderBy);
+    if (args.skip !== undefined) related = related.slice(args.skip);
+    if (args.take !== undefined) related = related.slice(0, args.take);
+    const enriched = related.map((r) => this.enrichItem(r, rel.store, args.include, args.select));
+    return rel.many ? enriched : enriched[0] ?? null;
+  }
+
+  private countRelations(storeKey: string, item: any, spec: any): Record<string, number> {
+    const relations = this.relationResolvers(storeKey);
+    const wanted = spec && typeof spec === 'object' && spec.select ? spec.select : null;
+    const keys = wanted ? Object.keys(wanted).filter((k) => wanted[k]) : Object.keys(relations).filter((k) => relations[k].many);
+    const counts: Record<string, number> = {};
+    for (const key of keys) {
+      const rel = relations[key];
+      if (!rel) continue;
+      let related = rel.resolve(item);
+      const where = wanted && wanted[key] && typeof wanted[key] === 'object' ? wanted[key].where : undefined;
+      if (where) related = related.filter((r) => this.matchesWhere(r, where));
+      counts[key] = related.length;
+    }
+    return counts;
+  }
+
+  /**
+   * Mirrors Prisma's `include` / `select` shaping on a plain row: relations are
+   * resolved from the memory store (recursively), `_count` is computed, and with
+   * `select` only the requested scalar fields are returned.
+   */
+  private enrichItem(item: any, storeKey: string, include?: any, select?: any): any {
+    const spec = select || include;
+    if (!spec) return { ...item };
+
+    const relations = this.relationResolvers(storeKey);
+    const out: any = select ? {} : { ...item };
+
+    for (const [key, value] of Object.entries(spec)) {
+      if (!value) continue;
+      if (key === '_count') {
+        out._count = this.countRelations(storeKey, item, value);
+        continue;
       }
-    } else if (storeKey === 'products') {
-      if (include.category) {
-        clone.category = this.memoryStore.categories.find((c) => c.id === item.category_id);
+      const rel = relations[key];
+      if (rel) {
+        // Carts historically came back with each item's product attached; keep that default.
+        const defaultNested = storeKey === 'carts' && key === 'items' ? { include: { product: true } } : undefined;
+        out[key] = this.resolveRelation(rel, item, value, defaultNested);
+        continue;
       }
-    } else if (storeKey === 'carts') {
-      if (include.shop) {
-        clone.shop = this.memoryStore.shops.find((s) => s.id === item.shop_id);
-      }
-      if (include.items) {
-        clone.items = this.memoryStore.cartItems
-          .filter((ci) => ci.cart_id === item.id)
-          .map((ci) => ({
-            ...ci,
-            product: this.memoryStore.products.find((p) => p.id === ci.product_id),
-          }));
-      }
-    } else if (storeKey === 'orders') {
-      if (include.items) {
-        clone.items = this.memoryStore.orderItems.filter((oi) => oi.order_id === item.id);
-      }
-      if (include.shop) {
-        clone.shop = this.memoryStore.shops.find((s) => s.id === item.shop_id);
-      }
-      if (include.customer) {
-        clone.customer = this.memoryStore.users.find((u) => u.id === item.customer_id);
-      }
-      if (include.status_history) {
-        clone.status_history = this.memoryStore.orderStatusHistories.filter((osh) => osh.order_id === item.id);
-      }
+      if (select) out[key] = item[key];
     }
 
-    return clone;
+    return out;
   }
 }

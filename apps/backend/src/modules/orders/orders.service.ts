@@ -195,13 +195,38 @@ ${promoLine}` : promoLine;
     this.pushNotificationService.sendNewOrderSellerPush(shop.owner_id, order.id, formattedTotal);
 
     // 8. Schedule the hard auto-cancel job (10-minute acceptance window)
-    await this.autoCancelQueue.add(
-      ORDER_AUTO_CANCEL_JOB,
-      { orderId: order.id },
-      { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: order.id, removeOnComplete: true, removeOnFail: true },
-    );
+    await this.scheduleAutoCancel(order.id);
 
     return order;
+  }
+
+  /**
+   * Enqueues the delayed auto-cancel job. The order itself is already committed, so a
+   * missing/unreachable Redis (local dev without Docker) must not fail or hang the
+   * request: BullMQ queues commands offline indefinitely, hence the explicit timeout.
+   */
+  private async scheduleAutoCancel(orderId: string): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Redis did not respond within 1.5s')), 1500);
+    });
+    try {
+      await Promise.race([
+        this.autoCancelQueue.add(
+          ORDER_AUTO_CANCEL_JOB,
+          { orderId },
+          { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
+        ),
+        timeout,
+      ]);
+    } catch (err: any) {
+      this.logger.error(
+        `Auto-cancel job for order ${orderId} was NOT scheduled (${err?.message ?? err}). ` +
+          'The order will not expire automatically until Redis is reachable.',
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**
