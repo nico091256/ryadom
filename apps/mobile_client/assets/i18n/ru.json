@@ -81,7 +81,9 @@
     "summaryItems": "Товары ({{count}} шт.)",
     "summaryDelivery": "Доставка",
     "placeOrder": "Подтвердить заказ",
-    "errorPhone": "Введите номер телефона"
+    "errorPhone": "Введите номер телефона",
+    "promoCode": "Промокод",
+    "promoCodePlaceholder": "Например: SALOM"
   },
   "address": {
     "entrance": "Подъезд",

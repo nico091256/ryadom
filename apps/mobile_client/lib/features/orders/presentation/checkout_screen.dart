@@ -25,6 +25,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _apartmentController = TextEditingController();
   final _doorCodeController = TextEditingController();
   final _commentController = TextEditingController();
+  final _promoCodeController = TextEditingController();
 
   String _changeFrom = 'exact';
   bool _placing = false;
@@ -45,6 +46,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _apartmentController.dispose();
     _doorCodeController.dispose();
     _commentController.dispose();
+    _promoCodeController.dispose();
     super.dispose();
   }
 
@@ -73,6 +75,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final changeNote = _changeFrom == 'exact' ? "Qaytim kerak emas" : "Qaytim: $_changeFrom so'mdan";
       comment = comment.isEmpty ? changeNote : '$comment | $changeNote';
 
+      final promo = _promoCodeController.text.trim();
       final order = await ref.read(ordersApiProvider).createOrder(CreateOrderPayload(
             addressText: fullAddress,
             lat: address.lat,
@@ -80,6 +83,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             customerPhone: _phoneController.text.trim(),
             paymentMethod: PaymentMethod.cash.value,
             comment: comment,
+            promoCode: promo.isNotEmpty ? promo : null,
           ));
 
       ref.read(cartControllerProvider.notifier).clear();
@@ -167,6 +171,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _SectionCard(
+              title: ref.t('checkout.promoCode'),
+              icon: Icons.local_offer_outlined,
+              child: TextField(
+                controller: _promoCodeController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: ref.t('checkout.promoCodePlaceholder'),
+                  prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                ),
               ),
             ),
             const SizedBox(height: 12),

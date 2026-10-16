@@ -81,7 +81,9 @@
     "summaryItems": "Items ({{count}})",
     "summaryDelivery": "Delivery",
     "placeOrder": "Confirm order",
-    "errorPhone": "Enter your phone number"
+    "errorPhone": "Enter your phone number",
+    "promoCode": "Promo Code",
+    "promoCodePlaceholder": "e.g. SALOM"
   },
   "address": {
     "entrance": "Entrance",

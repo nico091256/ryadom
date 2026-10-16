@@ -81,7 +81,9 @@
     "summaryItems": "Mahsulotlar ({{count}} dona)",
     "summaryDelivery": "Yetkazib berish",
     "placeOrder": "Buyurtmani tasdiqlash",
-    "errorPhone": "Telefon raqamingizni kiriting"
+    "errorPhone": "Telefon raqamingizni kiriting",
+    "promoCode": "Promo-kod",
+    "promoCodePlaceholder": "Masalan: SALOM"
   },
   "address": {
     "entrance": "Podyezd",
