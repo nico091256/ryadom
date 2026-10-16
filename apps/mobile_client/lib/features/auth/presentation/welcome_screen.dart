@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:localshop_shared/localshop_shared.dart';
-import '../../../app/theme.dart';
+
 import '../../../core/providers.dart';
+import '../../../ui/ui.dart';
+import 'widgets/language_segmented_control.dart';
+import 'widgets/onboarding_slides.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -11,70 +13,64 @@ class WelcomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    final slides = [
+      OnboardingSlide(illustration: AppIllustration.location, title: ref.t('welcome.slide1Title'), subtitle: ref.t('welcome.slide1Subtitle')),
+      OnboardingSlide(illustration: AppIllustration.noShops, title: ref.t('welcome.slide2Title'), subtitle: ref.t('welcome.slide2Subtitle')),
+      OnboardingSlide(illustration: AppIllustration.success, title: ref.t('welcome.slide3Title'), subtitle: ref.t('welcome.slide3Subtitle')),
+    ];
 
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              const Icon(Icons.storefront_rounded, color: AppTheme.seed, size: 64),
-              const SizedBox(height: 20),
-              Text(
-                ref.t('welcome.title'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          Expanded(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xxl, bottom: AppSpacing.xxl),
+                child: OnboardingSlides(slides: slides),
               ),
-              const SizedBox(height: 10),
-              Text(
-                ref.t('welcome.subtitle'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 32),
-              Text(ref.t('welcome.chooseLanguage'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                children: [
-                  _LanguageChip(label: "O'zbekcha", lang: SupportedLanguage.uz, selected: locale == SupportedLanguage.uz),
-                  _LanguageChip(label: 'Русский', lang: SupportedLanguage.ru, selected: locale == SupportedLanguage.ru),
-                  _LanguageChip(label: 'English', lang: SupportedLanguage.en, selected: locale == SupportedLanguage.en),
-                ],
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => context.go('/auth/phone'),
-                  child: Text(ref.t('welcome.continue')),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xxl, AppSpacing.xl, AppSpacing.xl + bottomInset),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
+              boxShadow: AppShadows.lg,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppSpacing.xs),
+                      child: Text(ref.t('welcome.chooseLanguage'), style: AppText.label),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    LanguageSegmentedControl(
+                      value: locale,
+                      onChanged: (lang) => ref.read(localeProvider.notifier).change(lang),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    AppButton(
+                      label: ref.t('welcome.continue'),
+                      icon: LucideIcons.arrowRight,
+                      onPressed: () => context.go('/auth/phone'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
+            ),
+          ).animate().fadeIn(duration: AppDurations.slow).moveY(begin: 24, end: 0, curve: AppCurves.emphasized),
+        ],
       ),
-    );
-  }
-}
-
-class _LanguageChip extends ConsumerWidget {
-  const _LanguageChip({required this.label, required this.lang, required this.selected});
-
-  final String label;
-  final SupportedLanguage lang;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      selectedColor: AppTheme.seed.withValues(alpha: 0.15),
-      labelStyle: TextStyle(color: selected ? AppTheme.seed : const Color(0xFF334155), fontWeight: FontWeight.w700),
-      onSelected: (_) => ref.read(localeProvider.notifier).change(lang),
     );
   }
 }

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
+import '../../../ui/ui.dart';
 import 'auth_controller.dart';
+import 'widgets/auth_page.dart';
 
 class NameScreen extends ConsumerStatefulWidget {
   const NameScreen({super.key});
@@ -20,6 +24,8 @@ class _NameScreenState extends ConsumerState<NameScreen> {
     super.dispose();
   }
 
+  bool get _isValid => _controller.text.trim().isNotEmpty;
+
   Future<void> _submit() async {
     final name = _controller.text.trim();
     if (name.isEmpty) return;
@@ -27,6 +33,9 @@ class _NameScreenState extends ConsumerState<NameScreen> {
     try {
       await ref.read(authControllerProvider.notifier).saveName(name);
       // Router redirect takes over once auth state has a named user.
+    } on AppException catch (e) {
+      if (!mounted) return;
+      showAppToast(context, e.message.isNotEmpty ? e.message : ref.t('common.error'), tone: ToastTone.error);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -34,35 +43,27 @@ class _NameScreenState extends ConsumerState<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(ref.t('auth.namePrompt'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _controller,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                onSubmitted: (_) => _submit(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(ref.t('auth.saveName')),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return AuthPage(
+      title: ref.t('auth.namePrompt'),
+      subtitle: ref.t('auth.nameSubtitle'),
+      bottom: AppButton(
+        label: ref.t('auth.saveName'),
+        loading: _loading,
+        onPressed: _isValid ? _submit : null,
+      ),
+      child: AppTextField(
+        controller: _controller,
+        icon: LucideIcons.user,
+        hint: ref.t('auth.namePlaceholder'),
+        autofocus: true,
+        enabled: !_loading,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        keyboardType: TextInputType.name,
+        maxLength: 60,
+        showClear: true,
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => _submit(),
       ),
     );
   }

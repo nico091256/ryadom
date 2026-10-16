@@ -35,7 +35,8 @@ void main() {
     expect(find.text('Buyurtmani rasmiylashtirish'), findsOneWidget);
     // The bottom action bar always shows the live cart total next to the
     // place-order button, regardless of how much of the form scrolls off-screen.
-    expect(find.text("5 000 so'm"), findsOneWidget);
+    // The summary section repeats the same amount when it is within the viewport.
+    expect(find.text("5 000 so'm"), findsAtLeastNWidgets(1));
     expect(find.text('Toshkent shahri'), findsOneWidget);
   });
 }

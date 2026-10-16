@@ -1,16 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:localshop_shared/localshop_shared.dart';
-import '../../../app/theme.dart';
+
 import '../../../core/providers.dart';
+import '../../../ui/ui.dart';
 import '../../cart/domain/cart_state.dart';
 import '../../cart/presentation/cart_controller.dart';
 import '../../shops/domain/product.dart';
 import '../domain/order.dart';
 import 'orders_history_controller.dart';
+import 'widgets/order_card.dart';
+import 'widgets/order_segmented_control.dart';
+import 'widgets/order_skeletons.dart';
+import 'widgets/order_status_ui.dart';
 
-const _activeStatuses = {OrderStatus.newOrder, OrderStatus.accepted, OrderStatus.onTheWay};
+const double _kMaxContentWidth = 560;
 
 class OrdersHistoryScreen extends ConsumerStatefulWidget {
   const OrdersHistoryScreen({super.key});
@@ -37,66 +43,115 @@ class _OrdersHistoryScreenState extends ConsumerState<OrdersHistoryScreen> with 
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(myOrdersProvider);
+    final orders = ordersAsync.value;
+    final active = orders?.where((o) => isActiveOrderStatus(o.status)).toList();
+    final history = orders?.where((o) => !isActiveOrderStatus(o.status)).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(ref.t('orders.title')),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppTheme.seed,
-          tabs: [Tab(text: ref.t('orders.activeTab')), Tab(text: ref.t('orders.historyTab'))],
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xl, AppSpacing.page, AppSpacing.lg),
+                  child: Text(ref.t('orders.title'), style: AppText.h1),
+                ),
+                Padding(
+                  padding: AppSpacing.pagePadding,
+                  child: OrderSegmentedControl(
+                    controller: _tabController,
+                    segments: [
+                      OrderSegment(label: ref.t('orders.activeTab'), count: active?.length),
+                      OrderSegment(label: ref.t('orders.historyTab'), count: history?.length),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Expanded(
+                  child: ordersAsync.when(
+                    skipLoadingOnRefresh: true,
+                    data: (_) => TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _OrderList(orders: active!, isHistory: false),
+                        _OrderList(orders: history!, isHistory: true),
+                      ],
+                    ),
+                    loading: () => const OrderListSkeleton(),
+                    error: (err, _) => EmptyState(
+                      illustration: AppIllustration.offline,
+                      title: ref.t('common.error'),
+                      subtitle: '$err',
+                      actionLabel: ref.t('common.retry'),
+                      onAction: () => ref.invalidate(myOrdersProvider),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
-      body: ordersAsync.when(
-        data: (orders) {
-          final active = orders.where((o) => _activeStatuses.contains(o.status)).toList();
-          final history = orders.where((o) => !_activeStatuses.contains(o.status)).toList();
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _OrderList(orders: active, emptyText: ref.t('orders.emptyActive'), isHistory: false),
-              _OrderList(orders: history, emptyText: ref.t('orders.emptyHistory'), isHistory: true),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('$err')),
       ),
     );
   }
 }
 
-class _OrderList extends ConsumerWidget {
-  const _OrderList({required this.orders, required this.emptyText, required this.isHistory});
+class _OrderList extends ConsumerStatefulWidget {
+  const _OrderList({required this.orders, required this.isHistory});
+
   final List<Order> orders;
-  final String emptyText;
   final bool isHistory;
 
-  Future<void> _handleReorder(BuildContext context, WidgetRef ref, Order order) async {
+  @override
+  ConsumerState<_OrderList> createState() => _OrderListState();
+}
+
+class _OrderListState extends ConsumerState<_OrderList> {
+  /// Entrance stagger plays once, on first appearance; items rebuilt while
+  /// scrolling later must not re-animate.
+  bool _entranceDone = false;
+  Timer? _entranceTimer;
+  String? _reorderingId;
+
+  static const _staggerCount = 8;
+  static const _staggerStep = Duration(milliseconds: 45);
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceTimer = Timer(_staggerStep * _staggerCount + AppDurations.slow, () {
+      if (mounted) setState(() => _entranceDone = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _entranceTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _handleReorder(Order order) async {
+    if (_reorderingId != null) return;
     final cart = ref.read(cartControllerProvider);
     final targetShopId = order.shopId ?? 'shp_${order.shopName.hashCode}';
     final targetShopName = order.shopName ?? 'Do\'kon';
 
     if (cart.shopId != null && cart.shopId != targetShopId && !cart.isEmpty) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(ref.t('cart.title')),
-          content: Text(ref.t('cart.multipleShopsWarning')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(ref.t('common.cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(ref.t('common.confirm')),
-            ),
-          ],
-        ),
+      final confirmed = await showAppConfirm(
+        context,
+        title: ref.t('cart.title'),
+        message: ref.t('cart.multipleShopsWarning'),
+        confirmLabel: ref.t('common.confirm'),
+        cancelLabel: ref.t('common.cancel'),
       );
-      if (confirmed != true) return;
+      if (!confirmed || !mounted) return;
     }
+
+    setState(() => _reorderingId = order.id);
 
     final cartItems = order.items.map((item) {
       return CartItem(
@@ -119,90 +174,55 @@ class _OrderList extends ConsumerWidget {
       items: cartItems,
     );
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ref.t('orders.reorderSuccess')),
-          action: SnackBarAction(
-            label: ref.t('cart.goToCart'),
-            onPressed: () => context.push('/cart'),
-          ),
-        ),
-      );
-      context.push('/cart');
-    }
+    if (!mounted) return;
+    setState(() => _reorderingId = null);
+    showAppToast(context, ref.t('orders.reorderSuccess'), tone: ToastTone.success);
+    context.push('/cart');
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final orders = widget.orders;
     if (orders.isEmpty) {
-      return Center(child: Text(emptyText, style: const TextStyle(color: Color(0xFF94A3B8))));
+      return EmptyState(
+        illustration: AppIllustration.noOrders,
+        title: ref.t(widget.isHistory ? 'orders.emptyHistory' : 'orders.emptyActive'),
+        actionLabel: ref.t('cart.startShopping'),
+        onAction: () => context.go('/home'),
+      );
     }
-    final lang = ref.watch(localeProvider);
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(myOrdersProvider),
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+      color: AppColors.brand,
+      backgroundColor: AppColors.surface,
+      onRefresh: () async {
+        ref.invalidate(myOrdersProvider);
+        try {
+          await ref.read(myOrdersProvider.future);
+        } catch (_) {
+          // The provider surfaces the error state itself; nothing to do here.
+        }
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.sm, AppSpacing.page, AppSpacing.xxxl),
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         itemCount: orders.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, i) {
           final order = orders[i];
-          return InkWell(
-            borderRadius: BorderRadius.circular(14),
+          Widget card = OrderCard(
+            key: ValueKey(order.id),
+            order: order,
             onTap: () => context.push('/order/${order.id}'),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(order.shopName ?? '#${order.shortId}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 4),
-                            Text(ref.t('orderStatus.${order.status.value}'), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                          ],
-                        ),
-                      ),
-                      Text(formatPrice(order.totalAmount, lang), style: const TextStyle(fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  if (isHistory && order.items.isNotEmpty) ...[
-                    const Divider(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${order.items.length} ta mahsulot',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                        ),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            side: const BorderSide(color: AppTheme.seed),
-                            foregroundColor: AppTheme.seed,
-                          ),
-                          onPressed: () => _handleReorder(context, ref, order),
-                          icon: const Icon(Icons.replay, size: 16),
-                          label: Text(ref.t('orders.reorder'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            onReorder: widget.isHistory ? () => _handleReorder(order) : null,
+            reorderBusy: _reorderingId == order.id,
           );
+          if (!_entranceDone && i < _staggerCount) {
+            card = card
+                .animate(delay: _staggerStep * i)
+                .fadeIn(duration: AppDurations.slow, curve: AppCurves.standard)
+                .moveY(begin: 14, end: 0, duration: AppDurations.slow, curve: AppCurves.emphasized);
+          }
+          return Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: card);
         },
       ),
     );

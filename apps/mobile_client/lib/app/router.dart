@@ -11,6 +11,7 @@ import '../features/cart/presentation/cart_screen.dart';
 import '../features/orders/presentation/checkout_screen.dart';
 import '../features/orders/presentation/order_tracking_screen.dart';
 import '../features/shops/presentation/shop_detail_screen.dart';
+import '../ui/transitions.dart';
 import 'main_shell_screen.dart';
 
 class _RouterRefreshNotifier extends ChangeNotifier {
@@ -47,19 +48,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
-      GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
-      GoRoute(path: '/auth/phone', builder: (context, state) => const PhoneScreen()),
+      // Top-level destinations cross-fade; drill-downs slide in from the right.
+      GoRoute(path: '/splash', pageBuilder: (context, state) => fadeSlidePage(key: state.pageKey, child: const SplashScreen())),
+      GoRoute(path: '/welcome', pageBuilder: (context, state) => fadeSlidePage(key: state.pageKey, child: const WelcomeScreen())),
+      GoRoute(path: '/auth/phone', pageBuilder: (context, state) => slidePage(key: state.pageKey, child: const PhoneScreen())),
       GoRoute(
         path: '/auth/otp',
-        builder: (context, state) => OtpScreen(phone: state.uri.queryParameters['phone'] ?? ''),
+        pageBuilder: (context, state) =>
+            slidePage(key: state.pageKey, child: OtpScreen(phone: state.uri.queryParameters['phone'] ?? '')),
       ),
-      GoRoute(path: '/auth/name', builder: (context, state) => const NameScreen()),
-      GoRoute(path: '/home', builder: (context, state) => const MainShellScreen()),
-      GoRoute(path: '/shop/:id', builder: (context, state) => ShopDetailScreen(shopId: state.pathParameters['id']!)),
-      GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
-      GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),
-      GoRoute(path: '/order/:id', builder: (context, state) => OrderTrackingScreen(orderId: state.pathParameters['id']!)),
+      GoRoute(path: '/auth/name', pageBuilder: (context, state) => slidePage(key: state.pageKey, child: const NameScreen())),
+      GoRoute(path: '/home', pageBuilder: (context, state) => fadeSlidePage(key: state.pageKey, child: const MainShellScreen())),
+      GoRoute(
+        path: '/shop/:id',
+        pageBuilder: (context, state) =>
+            slidePage(key: state.pageKey, child: ShopDetailScreen(shopId: state.pathParameters['id']!)),
+      ),
+      GoRoute(path: '/cart', pageBuilder: (context, state) => slidePage(key: state.pageKey, child: const CartScreen())),
+      GoRoute(path: '/checkout', pageBuilder: (context, state) => slidePage(key: state.pageKey, child: const CheckoutScreen())),
+      GoRoute(
+        path: '/order/:id',
+        pageBuilder: (context, state) =>
+            slidePage(key: state.pageKey, child: OrderTrackingScreen(orderId: state.pathParameters['id']!)),
+      ),
     ],
   );
 });

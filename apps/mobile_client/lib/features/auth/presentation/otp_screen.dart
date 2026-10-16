@@ -1,11 +1,16 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
+import '../../../ui/ui.dart';
 import 'auth_controller.dart';
+import 'widgets/auth_page.dart';
+import 'widgets/otp_code_field.dart';
+import 'widgets/uz_phone.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   const OtpScreen({super.key, required this.phone});
@@ -17,9 +22,12 @@ class OtpScreen extends ConsumerStatefulWidget {
 }
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
+  static const _codeLength = 6;
+
   final _controller = TextEditingController();
   bool _loading = false;
   String? _error;
+  int _shakeTick = 0;
   int _secondsLeft = 60;
   Timer? _timer;
 
@@ -53,14 +61,20 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     if (_secondsLeft > 0) return;
     try {
       await ref.read(authControllerProvider.notifier).sendCode(widget.phone);
-      _startTimer();
+      if (!mounted) return;
+      _controller.clear();
+      setState(() {
+        _error = null;
+        _startTimer();
+      });
     } on AppException catch (e) {
-      setState(() => _error = e.message);
+      if (!mounted) return;
+      showAppToast(context, e.message.isNotEmpty ? e.message : ref.t('auth.sendCodeFailed'), tone: ToastTone.error);
     }
   }
 
   Future<void> _submit() async {
-    if (_controller.text.length != 6) return;
+    if (_controller.text.length != _codeLength || _loading) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -72,7 +86,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       if (isNewUser) context.go('/auth/name');
       // Otherwise the router's redirect takes over once auth state updates.
     } on AppException catch (e) {
-      setState(() => _error = e.message.isNotEmpty ? e.message : ref.t('auth.verifyFailed'));
+      if (!mounted) return;
+      _controller.clear();
+      setState(() {
+        _error = e.message.isNotEmpty ? e.message : ref.t('auth.verifyFailed');
+        _shakeTick++;
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -80,57 +99,82 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(ref.t('auth.smsTitle'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 8),
-              Text(
-                ref.t('auth.smsSubtitle', {'phone': widget.phone}),
-                style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _controller,
-                keyboardType: TextInputType.number,
-                autofocus: true,
-                maxLength: 6,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 8),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(counterText: '', errorText: _error),
-                onChanged: (v) {
-                  if (v.length == 6) _submit();
-                },
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(ref.t('auth.verify')),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: TextButton(
-                  onPressed: _secondsLeft > 0 ? null : _resend,
-                  child: Text(
-                    _secondsLeft > 0 ? ref.t('auth.resendIn', {'seconds': '$_secondsLeft'}) : ref.t('auth.resendCode'),
-                  ),
-                ),
-              ),
-            ],
+    final complete = _controller.text.length == _codeLength;
+
+    return AuthPage(
+      title: ref.t('auth.smsTitle'),
+      subtitle: ref.t('auth.smsSubtitle', {'phone': formatUzPhone(widget.phone)}),
+      onBack: () => context.go('/auth/phone'),
+      bottom: AppButton(
+        label: ref.t('auth.verify'),
+        loading: _loading,
+        onPressed: complete ? _submit : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OtpCodeField(
+            controller: _controller,
+            length: _codeLength,
+            enabled: !_loading,
+            hasError: _error != null,
+            shakeTick: _shakeTick,
+            onChanged: (_) => setState(() => _error = null),
+            onCompleted: (_) => _submit(),
           ),
-        ),
+          AnimatedSize(
+            duration: AppDurations.normal,
+            curve: AppCurves.standard,
+            alignment: Alignment.topLeft,
+            child: _error == null
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md, left: AppSpacing.xs),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.alertCircle, size: 14, color: AppColors.danger),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text(_error!, style: AppText.caption.danger)),
+                      ],
+                    ),
+                  ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          Center(child: _ResendRow(secondsLeft: _secondsLeft, onResend: _resend)),
+        ],
       ),
     );
+  }
+}
+
+class _ResendRow extends ConsumerWidget {
+  const _ResendRow({required this.secondsLeft, required this.onResend});
+
+  final int secondsLeft;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (secondsLeft > 0) {
+      return Text(
+        ref.t('auth.resendIn', {'seconds': '$secondsLeft'}),
+        style: AppText.bodyMedium.secondary.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+      );
+    }
+    return Pressable(
+      onTap: onResend,
+      haptic: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.refreshCw, size: 16, color: AppColors.brand),
+            const SizedBox(width: AppSpacing.sm),
+            Text(ref.t('auth.resendCode'), style: AppText.bodyStrong.brand),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: AppDurations.normal);
   }
 }

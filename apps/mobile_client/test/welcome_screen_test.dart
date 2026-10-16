@@ -31,14 +31,16 @@ void main() {
 
   testWidgets('shows the Uzbek welcome copy by default', (tester) async {
     await pumpWelcome(tester);
-    expect(find.text("Mahallangizdagi yaqin do'konlar"), findsOneWidget);
+    expect(find.text('Tilni tanlang'), findsOneWidget);
+    expect(find.text('Davom etish'), findsOneWidget);
   });
 
-  testWidgets('switching the language chip updates the displayed copy', (tester) async {
+  testWidgets('switching the language control updates the displayed copy', (tester) async {
     await pumpWelcome(tester);
     await tester.tap(find.text('Русский'));
     await tester.pump();
-    expect(find.text('Магазины вашего района'), findsOneWidget);
+    expect(find.text('Выберите язык'), findsOneWidget);
+    expect(find.text('Продолжить'), findsOneWidget);
   });
 
   testWidgets('tapping continue navigates to the phone screen', (tester) async {

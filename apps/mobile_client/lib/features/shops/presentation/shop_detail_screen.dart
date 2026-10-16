@@ -1,16 +1,25 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:localshop_shared/localshop_shared.dart';
-import '../../../app/theme.dart';
-import '../../../core/config/env.dart';
+
 import '../../../core/providers.dart';
-import '../../../core/utils/launch_url.dart';
+import '../../../ui/ui.dart';
 import '../../cart/presentation/cart_controller.dart';
-import '../domain/product.dart';
 import '../domain/shop.dart';
 import 'shop_detail_controller.dart';
+import 'widgets/shop_cart_bar.dart';
+import 'widgets/shop_cover_app_bar.dart';
+import 'widgets/shop_header_card.dart';
+import 'widgets/shop_product_tile.dart';
+import 'widgets/shop_toolbar.dart';
+
+/// Header card, toolbar and grid share this width on tablets / desktop web.
+const double _kMaxContentWidth = 840;
+
+/// Floating cart bar is narrower so it reads as a button, not a footer.
+const double _kMaxBarWidth = 560;
+
+const double _kGridGap = AppSpacing.md;
 
 class ShopDetailScreen extends ConsumerWidget {
   const ShopDetailScreen({super.key, required this.shopId});
@@ -20,114 +29,107 @@ class ShopDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final shopAsync = ref.watch(shopDetailProvider(shopId));
-    final cart = ref.watch(cartControllerProvider);
-    final cartHereCount = cart.shopId == shopId ? cart.itemCount : 0;
 
     return Scaffold(
-      body: SafeArea(
-        child: shopAsync.when(
-          data: (shop) => Stack(
-            children: [
-              Column(
-                children: [
-                  _ShopHeader(shop: shop),
-                  if (!shop.isCurrentlyOpen)
-                    Container(
-                      width: double.infinity,
-                      color: const Color(0xFFFEF3C7),
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      child: Text(ref.t('shop.closedBanner'), style: const TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: TextField(
-                      decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: ref.t('shop.searchPlaceholder')),
-                      onChanged: (v) => ref.read(productSearchQueryProvider.notifier).state = v,
-                    ),
-                  ),
-                  Expanded(child: _ProductList(shopId: shopId, shopName: shop.name, shopIsOpen: shop.isCurrentlyOpen)),
-                ],
-              ),
-              Positioned(
-                top: 4,
-                left: 4,
-                child: SafeArea(
-                  child: IconButton.filled(
-                    style: IconButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black87),
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text('$err')),
-        ),
+      backgroundColor: AppColors.background,
+      body: shopAsync.when(
+        skipLoadingOnRefresh: false,
+        data: (shop) => _ShopDetailBody(shop: shop),
+        loading: () => const _ShopDetailSkeleton(),
+        error: (_, _) => _ShopDetailError(shopId: shopId),
       ),
-      bottomNavigationBar: cartHereCount > 0
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: ElevatedButton(
-                  onPressed: () => context.push('/cart'),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('${ref.t('cart.goToCart')} ($cartHereCount)'),
-                      Text(formatPrice(cart.totalAmount, ref.watch(localeProvider))),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          : null,
     );
   }
 }
 
-class _ShopHeader extends StatelessWidget {
-  const _ShopHeader({required this.shop});
+class _ShopDetailBody extends ConsumerWidget {
+  const _ShopDetailBody({required this.shop});
+
   final Shop shop;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 56, 16, 8),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: shop.logoUrl != null
-                  ? CachedNetworkImage(imageUrl: Env.resolveMediaUrl(shop.logoUrl!), fit: BoxFit.cover)
-                  : Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.storefront, color: Color(0xFF94A3B8))),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasCategories = ref.watch(
+      shopProductsProvider(shop.id).select((value) => value.value?.any((p) => p.category != null) ?? false),
+    );
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return Stack(
+      children: [
+        CustomScrollView(
+          slivers: [
+            ShopCoverAppBar(shop: shop, onBack: () => context.pop()),
+            SliverToBoxAdapter(
+              child: ShopOverlapShift(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.page, 0, AppSpacing.page, AppSpacing.xs),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ShopHeaderCard(shop: shop),
+                          if (!shop.isCurrentlyOpen) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            const ShopClosedStrip(),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(shop.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-                Text('${shop.openTime} – ${shop.closeTime}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              ],
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: ShopToolbarDelegate(shopId: shop.id, hasCategories: hasCategories, maxContentWidth: _kMaxContentWidth),
             ),
-          ),
-          IconButton(
-            onPressed: () => launchCallerUrl(shop.phone),
-            icon: const Icon(Icons.call, color: AppTheme.seed),
-          ),
-        ],
-      ),
+            _ShopProductGrid(shopId: shop.id, shopName: shop.name, shopIsOpen: shop.isCurrentlyOpen),
+          ],
+        ),
+        Positioned(
+          left: AppSpacing.page,
+          right: AppSpacing.page,
+          bottom: AppSpacing.page + bottomInset,
+          child: ShopCartBar(shopId: shop.id, maxWidth: _kMaxBarWidth),
+        ),
+      ],
     );
   }
 }
 
-class _ProductList extends ConsumerWidget {
-  const _ProductList({required this.shopId, required this.shopName, required this.shopIsOpen});
+/// Page gutter that also centres the grid inside [_kMaxContentWidth] on wide screens.
+double _sidePadding(double crossAxisExtent) {
+  final centred = (crossAxisExtent - _kMaxContentWidth) / 2;
+  return centred > AppSpacing.page ? centred : AppSpacing.page;
+}
+
+/// Builds the delegate used by both the live grid and its skeleton so tile
+/// sizes match exactly: 2 columns on phones, ~200px tiles above 700px.
+SliverGridDelegate _gridDelegate(double width, TextScaler scaler) {
+  if (width > 700) {
+    const maxExtent = 200.0;
+    final columns = (width / (maxExtent + _kGridGap)).ceil();
+    final tileWidth = (width - _kGridGap * (columns - 1)) / columns;
+    return SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: maxExtent,
+      mainAxisSpacing: _kGridGap,
+      crossAxisSpacing: _kGridGap,
+      mainAxisExtent: shopProductTileExtent(tileWidth, scaler),
+    );
+  }
+  final tileWidth = (width - _kGridGap) / 2;
+  return SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: 2,
+    mainAxisSpacing: _kGridGap,
+    crossAxisSpacing: _kGridGap,
+    mainAxisExtent: shopProductTileExtent(tileWidth, scaler),
+  );
+}
+
+class _ShopProductGrid extends ConsumerWidget {
+  const _ShopProductGrid({required this.shopId, required this.shopName, required this.shopIsOpen});
 
   final String shopId;
   final String shopName;
@@ -136,171 +138,222 @@ class _ProductList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(filteredProductsProvider(shopId));
-    final allProducts = ref.watch(shopProductsProvider(shopId)).value ?? [];
-    final categories = {for (final p in allProducts) if (p.category != null) p.categoryId: p.category!}.values.toList();
-    final selectedCategory = ref.watch(selectedCategoryIdProvider);
+    final barVisible = ref.watch(cartControllerProvider.select((c) => c.shopId == shopId && c.itemCount > 0));
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final bottomPad = AppSpacing.xxl + bottomInset + (barVisible ? kShopCartBarHeight + AppSpacing.lg : 0);
+    final scaler = MediaQuery.textScalerOf(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (categories.isNotEmpty)
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                _CategoryChip(label: ref.t('shop.allCategories'), selected: selectedCategory == null, onTap: () => ref.read(selectedCategoryIdProvider.notifier).state = null),
-                for (final c in categories)
-                  _CategoryChip(label: c.nameUz, selected: selectedCategory == c.id, onTap: () => ref.read(selectedCategoryIdProvider.notifier).state = c.id),
-              ],
+    return productsAsync.when(
+      skipLoadingOnRefresh: false,
+      data: (products) {
+        if (products.isEmpty) {
+          return SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomPad),
+              child: EmptyState(title: ref.t('shop.noProducts'), illustration: AppIllustration.empty, compact: true),
             ),
-          ),
-        Expanded(
-          child: productsAsync.when(
-            data: (products) => products.isEmpty
-                ? Center(child: Text(ref.t('shop.noProducts'), style: const TextStyle(color: Color(0xFF94A3B8))))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: products.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) => _ProductRow(product: products[i], shopName: shopName, shopIsOpen: shopIsOpen),
+          );
+        }
+        return SliverLayoutBuilder(
+          builder: (context, constraints) {
+            final side = _sidePadding(constraints.crossAxisExtent);
+            final gridWidth = constraints.crossAxisExtent - 2 * side;
+            return SliverPadding(
+              padding: EdgeInsets.fromLTRB(side, AppSpacing.md, side, bottomPad),
+              sliver: SliverGrid(
+                gridDelegate: _gridDelegate(gridWidth, scaler),
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => ShopProductTile(
+                    key: ValueKey<String>(products[i].id),
+                    product: products[i],
+                    shopName: shopName,
+                    shopIsOpen: shopIsOpen,
                   ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('$err')),
-          ),
+                  childCount: products.length,
+                  findChildIndexCallback: (key) {
+                    final id = (key as ValueKey<String>).value;
+                    final index = products.indexWhere((p) => p.id == id);
+                    return index == -1 ? null : index;
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => SliverLayoutBuilder(
+        builder: (context, constraints) {
+          final side = _sidePadding(constraints.crossAxisExtent);
+          return SliverPadding(
+            padding: EdgeInsets.fromLTRB(side, AppSpacing.md, side, bottomPad),
+            sliver: SliverToBoxAdapter(child: _ProductGridSkeleton(scaler: scaler)),
+          );
+        },
+      ),
+      error: (_, _) => SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyState(
+          title: ref.t('common.error'),
+          illustration: AppIllustration.offline,
+          compact: true,
+          actionLabel: ref.t('common.retry'),
+          onAction: () => ref.invalidate(shopProductsProvider(shopId)),
         ),
-      ],
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        selectedColor: AppTheme.seed.withValues(alpha: 0.15),
-        labelStyle: TextStyle(color: selected ? AppTheme.seed : const Color(0xFF334155), fontWeight: FontWeight.w700, fontSize: 12),
-        onSelected: (_) => onTap(),
       ),
     );
   }
 }
 
-class _ProductRow extends ConsumerWidget {
-  const _ProductRow({required this.product, required this.shopName, required this.shopIsOpen});
+class _ProductGridSkeleton extends StatelessWidget {
+  const _ProductGridSkeleton({required this.scaler});
 
-  final Product product;
-  final String shopName;
-  final bool shopIsOpen;
+  static const count = 6;
+
+  final TextScaler scaler;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lang = ref.watch(localeProvider);
-    final qty = ref.watch(cartControllerProvider.select((c) => c.quantityOf(product.id)));
-    final canAdd = product.isAvailable && product.stock > 0 && shopIsOpen;
+  Widget build(BuildContext context) {
+    return Skeleton(
+      child: LayoutBuilder(
+        builder: (context, constraints) => GridView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: _gridDelegate(constraints.maxWidth, scaler),
+          itemCount: count,
+          itemBuilder: (_, _) => const ShopProductTileSkeleton(),
+        ),
+      ),
+    );
+  }
+}
 
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: product.imageUrl != null
-                  ? CachedNetworkImage(imageUrl: Env.resolveMediaUrl(product.imageUrl!), fit: BoxFit.cover)
-                  : Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF94A3B8))),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
+/// Full-screen placeholder while the shop itself loads: cover, header card,
+/// toolbar and six tiles, all shimmering in sync. Back stays available.
+class _ShopDetailSkeleton extends StatelessWidget {
+  const _ShopDetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    final scaler = MediaQuery.textScalerOf(context);
+
+    return Stack(
+      children: [
+        Skeleton(
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(product.nameUz, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  canAdd ? formatPrice(product.price, lang) : ref.t('shop.outOfStock'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: canAdd ? AppTheme.seed : const Color(0xFFEF4444)),
+                SkeletonBox(height: top + kShopCoverHeight, radius: 0),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.lg, AppSpacing.page, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const SkeletonBox(height: 62, circle: true),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    SkeletonLine(width: 180, height: 20),
+                                    SizedBox(height: AppSpacing.sm),
+                                    SkeletonLine(width: 120, height: 12),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          const Row(
+                            children: [
+                              SkeletonBox(width: 64, height: 24, radius: AppRadius.pill),
+                              SizedBox(width: 6),
+                              SkeletonBox(width: 96, height: 24, radius: AppRadius.pill),
+                              SizedBox(width: 6),
+                              SkeletonBox(width: 72, height: 24, radius: AppRadius.pill),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          const SkeletonBox(height: 48, radius: AppRadius.md),
+                          const SizedBox(height: AppSpacing.sm + 2),
+                          const Row(
+                            children: [
+                              SkeletonBox(width: 80, height: 38, radius: AppRadius.pill),
+                              SizedBox(width: AppSpacing.sm),
+                              SkeletonBox(width: 110, height: 38, radius: AppRadius.pill),
+                              SizedBox(width: AppSpacing.sm),
+                              SkeletonBox(width: 90, height: 38, radius: AppRadius.pill),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.md + AppSpacing.sm + 2),
+                          LayoutBuilder(
+                            builder: (context, constraints) => GridView.builder(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: _gridDelegate(constraints.maxWidth, scaler),
+                              itemCount: 6,
+                              itemBuilder: (_, _) => const ShopProductTileSkeleton(),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xxl),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          if (canAdd) _QuantityStepper(product: product, shopName: shopName, quantity: qty),
-        ],
-      ),
+        ),
+        _FloatingBack(top: top),
+      ],
     );
   }
 }
 
-class _QuantityStepper extends ConsumerWidget {
-  const _QuantityStepper({required this.product, required this.shopName, required this.quantity});
+class _ShopDetailError extends ConsumerWidget {
+  const _ShopDetailError({required this.shopId});
 
-  final Product product;
-  final String shopName;
-  final int quantity;
+  final String shopId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (quantity == 0) {
-      return FilledButton(
-        style: FilledButton.styleFrom(backgroundColor: AppTheme.seed, minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 14)),
-        onPressed: () => _add(context, ref),
-        child: Text(ref.t('shop.addToCart'), style: const TextStyle(fontSize: 12)),
-      );
-    }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    final top = MediaQuery.paddingOf(context).top;
+    return Stack(
       children: [
-        IconButton(
-          onPressed: () => ref.read(cartControllerProvider.notifier).decrement(product.id),
-          icon: const Icon(Icons.remove_circle, color: AppTheme.seed),
+        EmptyState(
+          title: ref.t('common.error'),
+          illustration: AppIllustration.offline,
+          actionLabel: ref.t('common.retry'),
+          onAction: () => ref.invalidate(shopDetailProvider(shopId)),
         ),
-        Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w800)),
-        IconButton(
-          onPressed: quantity < product.stock ? () => _add(context, ref) : null,
-          icon: const Icon(Icons.add_circle, color: AppTheme.seed),
-        ),
+        _FloatingBack(top: top),
       ],
     );
   }
+}
 
-  void _add(BuildContext context, WidgetRef ref) {
-    final result = ref.read(cartControllerProvider.notifier).addOrIncrement(product, shopName);
-    if (result == AddToCartResult.differentShop) {
-      _confirmClearCart(context, ref);
-    }
-  }
+class _FloatingBack extends StatelessWidget {
+  const _FloatingBack({required this.top});
 
-  void _confirmClearCart(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        content: Text(ref.t('cart.multipleShopsWarning')),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text(ref.t('common.cancel'))),
-          FilledButton(
-            onPressed: () {
-              ref.read(cartControllerProvider.notifier).clearAndAdd(product, shopName);
-              Navigator.of(dialogContext).pop();
-            },
-            child: Text(ref.t('cart.clearCart')),
-          ),
-        ],
-      ),
+  final double top;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top + AppSpacing.sm,
+      left: AppSpacing.page,
+      child: AppIconButton(icon: LucideIcons.arrowLeft, bordered: false, shadow: true, onPressed: () => context.pop()),
     );
   }
 }

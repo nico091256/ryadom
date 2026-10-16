@@ -1,59 +1,74 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:localshop_shared/localshop_shared.dart';
-import '../../../app/theme.dart';
-import '../../../core/config/env.dart';
+
 import '../../../core/providers.dart';
-import '../../location/domain/selected_address.dart';
+import '../../../ui/ui.dart';
 import '../../location/presentation/address_controller.dart';
+import '../../location/presentation/address_picker_sheet.dart';
 import '../domain/shop.dart';
 import 'home_controller.dart';
+import 'widgets/home_header.dart';
+import 'widgets/shop_card.dart';
+import 'widgets/shops_map_view.dart';
 
-class HomeScreen extends ConsumerWidget {
+/// Content is capped at this width on tablets/desktop web.
+const double _maxContentWidth = 560;
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final address = ref.watch(addressControllerProvider);
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _mapMode = false;
+  late final TextEditingController _search = TextEditingController(text: ref.read(shopSearchQueryProvider));
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _toggleMap() => setState(() => _mapMode = !_mapMode);
+
+  void _openAddressSheet() {
+    showAddressPickerSheet(context, ref, onApplied: () => ref.invalidate(nearbyShopsProvider));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final shopsAsync = ref.watch(filteredShopsProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(nearbyShopsProvider),
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _Header(address: address)),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: ref.t('home.searchPlaceholder'),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: AnimatedSwitcher(
+              duration: AppDurations.normal,
+              switchInCurve: AppCurves.standard,
+              switchOutCurve: Curves.easeIn,
+              child: _mapMode
+                  ? ShopsMapView(
+                      key: const ValueKey('map'),
+                      shops: shopsAsync.valueOrNull ?? const [],
+                      address: ref.watch(addressControllerProvider),
+                      onShowList: _toggleMap,
+                      onAddressTap: _openAddressSheet,
+                    )
+                  : _ShopList(
+                      key: const ValueKey('list'),
+                      shopsAsync: shopsAsync,
+                      searchController: _search,
+                      onToggleMap: _toggleMap,
+                      onAddressTap: _openAddressSheet,
                     ),
-                    onChanged: (v) => ref.read(shopSearchQueryProvider.notifier).state = v,
-                  ),
-                ),
-              ),
-              shopsAsync.when(
-                data: (shops) => shops.isEmpty
-                    ? SliverFillRemaining(hasScrollBody: false, child: _EmptyState(text: ref.t('home.noShopsNearby')))
-                    : SliverList.separated(
-                        itemCount: shops.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) => Padding(
-                          padding: EdgeInsets.fromLTRB(16, i == 0 ? 4 : 0, 16, 0),
-                          child: _ShopCard(shop: shops[i]),
-                        ),
-                      ),
-                loading: () => const SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator())),
-                error: (err, _) => SliverFillRemaining(hasScrollBody: false, child: _EmptyState(text: '$err', isError: true)),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            ],
+            ),
           ),
         ),
       ),
@@ -61,206 +76,121 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _Header extends ConsumerWidget {
-  const _Header({required this.address});
-  final SelectedAddress address;
+class _ShopList extends ConsumerStatefulWidget {
+  const _ShopList({
+    super.key,
+    required this.shopsAsync,
+    required this.searchController,
+    required this.onToggleMap,
+    required this.onAddressTap,
+  });
+
+  final AsyncValue<List<Shop>> shopsAsync;
+  final TextEditingController searchController;
+  final VoidCallback onToggleMap;
+  final VoidCallback onAddressTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Row(
-        children: [
-          const Icon(Icons.location_on, color: AppTheme.seed, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(ref.t('home.deliverTo'), style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                Text(
-                  address.addressText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => _showAddressOptions(context, ref),
-            child: Text(ref.t('home.changeAddress')),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<_ShopList> createState() => _ShopListState();
+}
 
-  void _showAddressOptions(BuildContext context, WidgetRef ref) {
-    final textController = TextEditingController(text: address.addressText);
+class _ShopListState extends ConsumerState<_ShopList> {
+  static const _staggerStep = 40;
+  static const _maxStaggered = 8;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(ref.t('home.deliverTo'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFE0F2FE),
-                child: Icon(Icons.my_location, color: AppTheme.seed),
-              ),
-              title: Text(ref.t('home.useCurrentLocation'), style: const TextStyle(fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _detectLocation(context, ref);
-              },
-            ),
-            const Divider(height: 24),
-            Text(ref.t('home.enterAddressManually'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: textController,
-              decoration: InputDecoration(
-                hintText: ref.t('home.addressPlaceholder'),
-                prefixIcon: const Icon(Icons.edit_location_outlined),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: AppTheme.seed),
-                onPressed: () {
-                  final text = textController.text.trim();
-                  if (text.isNotEmpty) {
-                    ref.read(addressControllerProvider.notifier).setManual(address.copyWith(addressText: text));
-                    ref.invalidate(nearbyShopsProvider);
-                  }
-                  Navigator.of(ctx).pop();
-                },
-                child: Text(ref.t('common.save')),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  /// Shops that took part in the entrance stagger (id → delay index). Only
+  /// the first data frame is animated; later rebuilds and lazily built rows
+  /// render instantly.
+  final Map<String, int> _staggered = {};
+  bool _entranceDone = false;
 
-  Future<void> _detectLocation(BuildContext context, WidgetRef ref) async {
-    final lang = ref.read(localeProvider).value;
-    try {
-      await ref.read(addressControllerProvider.notifier).detectCurrentLocation(lang: lang);
-    } on LocationException catch (e) {
-      if (!context.mounted) return;
-      final key = switch (e.reason) {
-        LocationFailureReason.permissionDenied || LocationFailureReason.permissionDeniedForever => 'home.locationPermissionDenied',
-        LocationFailureReason.serviceDisabled => 'home.locationServiceDisabled',
-        LocationFailureReason.unknown => 'home.locationUnknownError',
-      };
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.t(key))));
+  Widget _buildCard(BuildContext context, Shop shop, int index) {
+    final card = ShopCard(shop: shop, onTap: () => context.push('/shop/${shop.id}'));
+    var slot = _staggered[shop.id];
+    if (slot == null && !_entranceDone) {
+      slot = _staggered[shop.id] = math.min(index, _maxStaggered);
     }
+    if (slot == null) return KeyedSubtree(key: ValueKey(shop.id), child: card);
+    return card
+        .animate(key: ValueKey(shop.id), delay: (slot * _staggerStep).ms)
+        .fadeIn(duration: AppDurations.slow, curve: AppCurves.standard)
+        .moveY(begin: 12, end: 0, duration: AppDurations.slow, curve: AppCurves.standard);
   }
-}
-
-class _ShopCard extends ConsumerWidget {
-  const _ShopCard({required this.shop});
-  final Shop shop;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lang = ref.watch(localeProvider);
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => context.push('/shop/${shop.id}'),
-      child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: shop.logoUrl != null
-                  ? CachedNetworkImage(imageUrl: Env.resolveMediaUrl(shop.logoUrl!), fit: BoxFit.cover)
-                  : Container(color: const Color(0xFFF1F5F9), child: const Icon(Icons.storefront, color: Color(0xFF94A3B8))),
+  Widget build(BuildContext context) {
+    final shopsAsync = widget.shopsAsync;
+    final shops = shopsAsync.valueOrNull;
+    if (shops != null && shops.isNotEmpty && !_entranceDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _entranceDone = true);
+    }
+
+    return RefreshIndicator(
+      color: AppColors.brand,
+      onRefresh: () async => ref.invalidate(nearbyShopsProvider),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        slivers: [
+          SliverToBoxAdapter(
+            child: HomeHeader(mapMode: false, onToggleMap: widget.onToggleMap, onAddressTap: widget.onAddressTap),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, 0),
+              child: AppSearchBar(
+                controller: widget.searchController,
+                hint: ref.t('home.searchPlaceholder'),
+                onChanged: (v) => ref.read(shopSearchQueryProvider.notifier).state = v,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(shop.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text(shop.addressText, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _StatusBadge(isOpen: shop.isCurrentlyOpen, label: ref.t(shop.isCurrentlyOpen ? 'home.open' : 'home.closed')),
-                    const SizedBox(width: 8),
-                    Text(formatDistance(shop.distanceMeters, lang), style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-                  ],
-                ),
-              ],
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, 0),
+              child: ValuePropsRow(),
             ),
           ),
+          SliverToBoxAdapter(
+            child: SectionHeader(title: ref.t('home.nearbyShops'), count: shops?.length),
+          ),
+          shopsAsync.when(
+            data: (shops) => shops.isEmpty
+                ? SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      illustration: AppIllustration.noShops,
+                      title: ref.t('home.noShopsNearby'),
+                      subtitle: ref.t('home.noShopsHint'),
+                      actionLabel: ref.t('home.changeAddress'),
+                      onAction: widget.onAddressTap,
+                    ),
+                  )
+                : SliverList.separated(
+                    itemCount: shops.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+                    itemBuilder: (context, i) => Padding(
+                      padding: AppSpacing.pagePadding,
+                      child: _buildCard(context, shops[i], i),
+                    ),
+                  ),
+            loading: () => SliverList.separated(
+              itemCount: 3,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+              itemBuilder: (_, _) => const Padding(padding: AppSpacing.pagePadding, child: ShopCardSkeleton()),
+            ),
+            error: (_, _) => SliverFillRemaining(
+              hasScrollBody: false,
+              child: EmptyState(
+                illustration: AppIllustration.offline,
+                title: ref.t('common.error'),
+                subtitle: ref.t('home.loadFailed'),
+                actionLabel: ref.t('common.retry'),
+                onAction: () => ref.invalidate(nearbyShopsProvider),
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
         ],
-      ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.isOpen, required this.label});
-  final bool isOpen;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isOpen ? AppTheme.seed : const Color(0xFFD97706);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.text, this.isError = false});
-  final String text;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(isError ? Icons.error_outline : Icons.storefront_outlined, size: 40, color: const Color(0xFFCBD5E1)),
-            const SizedBox(height: 12),
-            Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF94A3B8))),
-          ],
-        ),
       ),
     );
   }
