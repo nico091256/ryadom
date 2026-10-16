@@ -47,5 +47,24 @@
     "locationServiceDisabled": "Проверьте, включён ли GPS",
     "locationUnknownError": "Не удалось определить местоположение",
     "useCurrentLocation": "Определить моё местоположение"
+  },
+  "shop": {
+    "allCategories": "Все",
+    "outOfStock": "Закончился",
+    "addToCart": "Добавить",
+    "workingHours": "Время работы",
+    "closedBanner": "Магазин сейчас закрыт, заказы не принимаются",
+    "searchPlaceholder": "Поиск по магазину...",
+    "noProducts": "Товары не найдены"
+  },
+  "cart": {
+    "title": "Корзина",
+    "empty": "Ваша корзина пуста",
+    "startShopping": "Начать покупки",
+    "clearCart": "Очистить корзину",
+    "total": "Итого",
+    "checkout": "Оформить заказ",
+    "multipleShopsWarning": "В корзине есть товары из другого магазина. Очистить и продолжить?",
+    "goToCart": "Перейти в корзину"
   }
 }

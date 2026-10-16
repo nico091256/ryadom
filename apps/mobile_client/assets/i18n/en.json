@@ -47,5 +47,24 @@
     "locationServiceDisabled": "Check that GPS is turned on",
     "locationUnknownError": "Could not determine your location",
     "useCurrentLocation": "Use my current location"
+  },
+  "shop": {
+    "allCategories": "All",
+    "outOfStock": "Out of stock",
+    "addToCart": "Add",
+    "workingHours": "Working hours",
+    "closedBanner": "This shop is currently closed and cannot accept orders",
+    "searchPlaceholder": "Search this shop...",
+    "noProducts": "No products found"
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Your cart is empty",
+    "startShopping": "Start shopping",
+    "clearCart": "Clear cart",
+    "total": "Total",
+    "checkout": "Place order",
+    "multipleShopsWarning": "Your cart has items from another shop. Clear it and continue?",
+    "goToCart": "Go to cart"
   }
 }

@@ -47,5 +47,24 @@
     "locationServiceDisabled": "Telefonda GPS yoqilganini tekshiring",
     "locationUnknownError": "Joylashuvni aniqlab bo'lmadi",
     "useCurrentLocation": "Joriy joylashuvimni aniqlash"
+  },
+  "shop": {
+    "allCategories": "Barchasi",
+    "outOfStock": "Tugagan",
+    "addToCart": "Qo'shish",
+    "workingHours": "Ish vaqti",
+    "closedBanner": "Do'kon hozirda yopiq, buyurtma qabul qilinmaydi",
+    "searchPlaceholder": "Do'kon ichidan qidirish...",
+    "noProducts": "Mahsulotlar topilmadi"
+  },
+  "cart": {
+    "title": "Savatcha",
+    "empty": "Savatchangiz bo'sh",
+    "startShopping": "Xaridni boshlash",
+    "clearCart": "Savatchani tozalash",
+    "total": "Jami summa",
+    "checkout": "Buyurtma berish",
+    "multipleShopsWarning": "Savatchangizda boshqa do'kon mahsulotlari bor. Uni tozalab davom etasizmi?",
+    "goToCart": "Savatchaga o'tish"
   }
 }

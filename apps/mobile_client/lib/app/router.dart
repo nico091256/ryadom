@@ -7,7 +7,9 @@ import '../features/auth/presentation/otp_screen.dart';
 import '../features/auth/presentation/phone_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/welcome_screen.dart';
+import '../features/cart/presentation/cart_screen.dart';
 import '../features/shops/presentation/home_screen.dart';
+import '../features/shops/presentation/shop_detail_screen.dart';
 
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
@@ -52,6 +54,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/auth/name', builder: (context, state) => const NameScreen()),
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      GoRoute(path: '/shop/:id', builder: (context, state) => ShopDetailScreen(shopId: state.pathParameters['id']!)),
+      GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
     ],
   );
 });
