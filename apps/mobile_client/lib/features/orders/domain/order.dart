@@ -50,6 +50,10 @@ class Order {
   final OrderStatus status;
   final PaymentMethod paymentMethod;
   final int totalAmount;
+
+  /// Short display id, safe even if [id] is shorter than 8 characters (real
+  /// ids are UUIDs, so this never happens in production).
+  String get shortId => id.length <= 8 ? id : id.substring(0, 8);
   final String addressText;
   final String customerPhone;
   final String? comment;

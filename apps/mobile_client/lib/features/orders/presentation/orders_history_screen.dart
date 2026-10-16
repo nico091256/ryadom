@@ -95,7 +95,7 @@ class _OrderList extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(order.shopName ?? '#${order.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        Text(order.shopName ?? '#${order.shortId}', style: const TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
                         Text(ref.t('orderStatus.${order.status.value}'), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                       ],

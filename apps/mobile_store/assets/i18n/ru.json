@@ -27,5 +27,38 @@
     "tooShort": "Новый пароль должен содержать не менее 6 символов",
     "mismatch": "Новые пароли не совпадают",
     "failed": "Ошибка при смене пароля"
+  },
+  "orders": {
+    "title": "Заказы",
+    "newTab": "Новые",
+    "inProgressTab": "В процессе",
+    "completedTab": "Завершённые",
+    "empty": "В этом разделе нет заказов",
+    "minutesAgo": "{{count}} мин назад",
+    "acceptanceWindow": "Приём: {{count}} мин",
+    "accept": "Принять",
+    "reject": "Отклонить",
+    "markOnTheWay": "Выехал на доставку",
+    "markDelivered": "Доставлено",
+    "cashConfirmTitle": "Подтверждение наличных",
+    "cashConfirmMessage": "Подтверждаете получение {{amount}} наличными от клиента?",
+    "cashConfirmButton": "Подтверждаю",
+    "callCustomer": "Позвонить клиенту",
+    "openMap": "Открыть на карте",
+    "newOrderAlert": "Новый заказ! #{{id}}",
+    "cancelledAlert": "Заказ #{{id}} отменён клиентом",
+    "rejectReasonTitle": "Причина отказа",
+    "rejectReasonPlaceholder": "Укажите причину",
+    "rejectReasonRequired": "Укажите причину отказа",
+    "comment": "Комментарий: {{text}}",
+    "total": "Итого",
+    "payCash": "Наличные",
+    "payOnline": "Онлайн"
+  },
+  "orderStatusLabel": {
+    "accepted": "Принят",
+    "on_the_way": "В пути",
+    "delivered": "Доставлен",
+    "cancelled": "Отменён"
   }
 }

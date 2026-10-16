@@ -27,5 +27,38 @@
     "tooShort": "The new password must be at least 6 characters",
     "mismatch": "The new passwords don't match",
     "failed": "Failed to change password"
+  },
+  "orders": {
+    "title": "Orders",
+    "newTab": "New",
+    "inProgressTab": "In progress",
+    "completedTab": "Completed",
+    "empty": "No orders in this tab",
+    "minutesAgo": "{{count}} min ago",
+    "acceptanceWindow": "Accept within: {{count}} min",
+    "accept": "Accept",
+    "reject": "Reject",
+    "markOnTheWay": "Mark on the way",
+    "markDelivered": "Mark delivered",
+    "cashConfirmTitle": "Confirm cash received",
+    "cashConfirmMessage": "Confirm you received {{amount}} in cash from the customer?",
+    "cashConfirmButton": "I confirm",
+    "callCustomer": "Call customer",
+    "openMap": "Open in maps",
+    "newOrderAlert": "New order! #{{id}}",
+    "cancelledAlert": "Order #{{id}} was cancelled by the customer",
+    "rejectReasonTitle": "Rejection reason",
+    "rejectReasonPlaceholder": "Enter a reason",
+    "rejectReasonRequired": "A reason is required",
+    "comment": "Note: {{text}}",
+    "total": "Total",
+    "payCash": "Cash",
+    "payOnline": "Online"
+  },
+  "orderStatusLabel": {
+    "accepted": "Accepted",
+    "on_the_way": "On the way",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
   }
 }

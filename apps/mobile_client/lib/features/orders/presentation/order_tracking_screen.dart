@@ -70,7 +70,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${ref.t('order.title')} #${widget.orderId.substring(0, 8)}'),
+        title: Text('${ref.t('order.title')} #${widget.orderId.length <= 8 ? widget.orderId : widget.orderId.substring(0, 8)}'),
         leading: IconButton(icon: const Icon(Icons.home), onPressed: () => context.go('/home')),
       ),
       body: orderAsync.when(

@@ -27,5 +27,38 @@
     "tooShort": "Yangi parol kamida 6 belgidan iborat bo'lishi shart",
     "mismatch": "Yangi parollar bir-biriga mos kelmadi",
     "failed": "Parolni o'zgartirishda xatolik"
+  },
+  "orders": {
+    "title": "Buyurtmalar",
+    "newTab": "Yangi",
+    "inProgressTab": "Jarayonda",
+    "completedTab": "Tugallangan",
+    "empty": "Ushbu bo'limda buyurtmalar yo'q",
+    "minutesAgo": "{{count}} daqiqa oldin",
+    "acceptanceWindow": "Qabul qilish: {{count}} daq",
+    "accept": "Qabul qilish",
+    "reject": "Rad etish",
+    "markOnTheWay": "Yetkazishga chiqdim",
+    "markDelivered": "Yetkazib berildi",
+    "cashConfirmTitle": "Naqd pulni tasdiqlash",
+    "cashConfirmMessage": "Mijozdan {{amount}} naqd pul qabul qilinganligini tasdiqlaysizmi?",
+    "cashConfirmButton": "Tasdiqlayman",
+    "callCustomer": "Mijozga qo'ng'iroq",
+    "openMap": "Xaritada ochish",
+    "newOrderAlert": "Yangi buyurtma keldi! #{{id}}",
+    "cancelledAlert": "Buyurtma #{{id}} mijoz tomonidan bekor qilindi",
+    "rejectReasonTitle": "Rad etish sababi",
+    "rejectReasonPlaceholder": "Sababni kiriting",
+    "rejectReasonRequired": "Sababni kiritish majburiy",
+    "comment": "Izoh: {{text}}",
+    "total": "Jami",
+    "payCash": "Naqd",
+    "payOnline": "Onlayn"
+  },
+  "orderStatusLabel": {
+    "accepted": "Qabul qilindi",
+    "on_the_way": "Yo'lda",
+    "delivered": "Yetkazildi",
+    "cancelled": "Bekor qilindi"
   }
 }
