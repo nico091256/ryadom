@@ -21,7 +21,12 @@ class HomeHeader extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: AddressPill(label: ref.t('home.deliverTo'), address: address, onTap: onAddressTap),
+            child: AddressPill(
+              label: ref.t('home.deliverTo'),
+              address: address,
+              emptyLabel: ref.t('home.addressEmpty'),
+              onTap: onAddressTap,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm + AppSpacing.xxs),
           MapToggleButton(mapMode: mapMode, onPressed: onToggleMap, tooltip: ref.t(mapMode ? 'home.listView' : 'home.mapView')),
@@ -31,13 +36,23 @@ class HomeHeader extends ConsumerWidget {
   }
 }
 
+/// "Yetkazish manzili / <address> ✎" card. Also floats over the map.
 class AddressPill extends StatelessWidget {
-  const AddressPill({super.key, required this.label, required this.address, required this.onTap, this.elevated = false});
+  const AddressPill({
+    super.key,
+    required this.label,
+    required this.address,
+    required this.onTap,
+    this.elevated = false,
+    this.emptyLabel = '—',
+  });
 
   final String label;
   final String address;
   final VoidCallback onTap;
   final bool elevated;
+  /// Shown when no address has been chosen yet.
+  final String emptyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -61,9 +76,9 @@ class AddressPill extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Yetkazish manzili', style: AppText.izoh.copyWith(color: AppColors.textSecondary)),
+                Text(label, style: AppText.izoh, maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
-                Text(address.isEmpty ? '[Uy manzilingiz]' : address, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(address.isEmpty ? emptyLabel : address, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -100,56 +115,3 @@ class MapToggleButton extends StatelessWidget {
   }
 }
 
-/// Three compact value-prop tiles (free delivery / 3 km / 10–30 min).
-class ValuePropsRow extends ConsumerWidget {
-  const ValuePropsRow({super.key});
-
-  static const _items = [
-    (LucideIcons.truck, 'home.valueFreeDelivery'),
-    (LucideIcons.compass, 'home.valueRadius'),
-    (LucideIcons.timer, 'home.valueEta'),
-  ];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      children: [
-        for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(width: AppSpacing.sm),
-          Expanded(child: _ValueTile(icon: _items[i].$1, label: ref.t(_items[i].$2))),
-        ],
-      ],
-    );
-  }
-}
-
-class _ValueTile extends StatelessWidget {
-  const _ValueTile({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.md),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: const BoxDecoration(color: AppColors.brandSoft, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 15, color: AppColors.brand),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(label, style: AppText.captionStrong, maxLines: 1, textAlign: TextAlign.center),
-          ),
-        ],
-      ),
-    );
-  }
-}

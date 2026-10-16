@@ -6,11 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers.dart';
 import '../../../ui/ui.dart';
-import '../../cart/domain/cart_state.dart';
-import '../../cart/presentation/cart_controller.dart';
-import '../../shops/domain/product.dart';
 import '../domain/order.dart';
 import 'orders_history_controller.dart';
+import 'reorder.dart';
 import 'widgets/order_card.dart';
 import 'widgets/order_segmented_control.dart';
 import 'widgets/order_skeletons.dart';
@@ -136,48 +134,12 @@ class _OrderListState extends ConsumerState<_OrderList> {
 
   Future<void> _handleReorder(Order order) async {
     if (_reorderingId != null) return;
-    final cart = ref.read(cartControllerProvider);
-    final targetShopId = order.shopId ?? 'shp_${order.shopName.hashCode}';
-    final targetShopName = order.shopName ?? 'Do\'kon';
-
-    if (cart.shopId != null && cart.shopId != targetShopId && !cart.isEmpty) {
-      final confirmed = await showAppConfirm(
-        context,
-        title: ref.t('cart.title'),
-        message: ref.t('cart.multipleShopsWarning'),
-        confirmLabel: ref.t('common.confirm'),
-        cancelLabel: ref.t('common.cancel'),
-      );
-      if (!confirmed || !mounted) return;
-    }
-
     setState(() => _reorderingId = order.id);
-
-    final cartItems = order.items.map((item) {
-      return CartItem(
-        product: Product(
-          id: item.productId ?? 'prd_${item.productName.hashCode}',
-          shopId: targetShopId,
-          categoryId: '',
-          nameUz: item.productName,
-          price: item.unitPrice,
-          stock: 99,
-          isAvailable: true,
-        ),
-        quantity: item.quantity,
-      );
-    }).toList();
-
-    ref.read(cartControllerProvider.notifier).reorder(
-      shopId: targetShopId,
-      shopName: targetShopName,
-      items: cartItems,
-    );
-
-    if (!mounted) return;
-    setState(() => _reorderingId = null);
-    showAppToast(context, ref.t('orders.reorderSuccess'), tone: ToastTone.success);
-    context.push('/cart');
+    try {
+      await reorderOrder(context, ref, order);
+    } finally {
+      if (mounted) setState(() => _reorderingId = null);
+    }
   }
 
   @override

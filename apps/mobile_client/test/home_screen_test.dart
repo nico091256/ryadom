@@ -45,6 +45,8 @@ void main() {
         overrides: [
           i18nServiceProvider.overrideWithValue(i18n),
           nearbyShopsProvider.overrideWith((ref) async => shops),
+          homeCategoriesProvider.overrideWith((ref) async => const []),
+          locationPromptEnabledProvider.overrideWithValue(false),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),

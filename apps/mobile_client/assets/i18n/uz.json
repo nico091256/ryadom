@@ -12,6 +12,10 @@
     "error": "Xatolik yuz berdi",
     "logout": "Chiqish"
   },
+  "time": {
+    "today": "Bugun",
+    "yesterday": "Kecha"
+  },
   "welcome": {
     "title": "Mahallangizdagi yaqin do'konlar",
     "subtitle": "3 km masofadagi do'konlardan tez va bepul yetkazib berish",
@@ -34,7 +38,7 @@
     "smsSubtitle": "{{phone}} raqamiga yuborilgan 6 xonali kodni kiriting",
     "verify": "Tasdiqlash",
     "resendCode": "Kodni qayta yuborish",
-    "resendIn": "Qayta yuborish ({{seconds}}s)",
+    "resendIn": "Qayta yuborish: {{time}}",
     "namePrompt": "Ismingizni kiriting",
     "nameSubtitle": "Buyurtmalarda sizga shunday murojaat qilamiz",
     "namePlaceholder": "Ismingiz",
@@ -43,8 +47,15 @@
     "sendCodeFailed": "SMS kod yuborilmadi",
     "verifyFailed": "Kod noto'g'ri yoki muddati o'tgan"
   },
+  "location": {
+    "title": "Uyingiz qayerda?",
+    "subtitle": "Joylashuvingiz bo'yicha eng yaqin do'konlarni ko'rsatamiz. Joylashuv faqat buyurtma uchun ishlatiladi.",
+    "allow": "Joylashuvga ruxsat berish",
+    "manual": "Manzilni qo'lda kiritish"
+  },
   "home": {
     "deliverTo": "Yetkazish manzili",
+    "addressEmpty": "Manzilni tanlang",
     "changeAddress": "O'zgartirish",
     "nearbyShops": "Yaqin do'konlar",
     "noShopsNearby": "3 km radiusda do'konlar topilmadi",
@@ -58,9 +69,7 @@
     "useCurrentLocation": "Joriy joylashuvimni aniqlash",
     "enterAddressManually": "Manzilni qo'lda kiritish",
     "addressPlaceholder": "Masalan: Chilonzor 9-mavze, 12-uy",
-    "valueFreeDelivery": "Bepul yetkazish",
-    "valueRadius": "3 km radius",
-    "valueEta": "10–30 daqiqa",
+    "recentOrder": "Oxirgi buyurtma",
     "productCount": "{{count}} mahsulot",
     "goToShop": "Do'konga o'tish",
     "deliverHere": "Shu manzilga yetkazish",
@@ -91,6 +100,7 @@
     "clearConfirm": "Savatchadagi barcha mahsulotlar o'chiriladi.",
     "differentShopTitle": "Boshqa do'kon savatchasi",
     "deliveryInfo": "Yetkazish bepul · 10–30 daqiqa",
+    "itemsCount": "{{count}} ta mahsulot",
     "total": "Jami summa",
     "checkout": "Buyurtma berish",
     "multipleShopsWarning": "Savatchangizda boshqa do'kon mahsulotlari bor. Uni tozalab davom etasizmi?",
@@ -139,6 +149,11 @@
     "cancelQuestion": "Haqiqatan ham buyurtmani bekor qilmoqchimisiz?",
     "callShop": "Do'konga qo'ng'iroq",
     "backToHome": "Bosh sahifaga qaytish",
+    "courier": "{{shop}} kuryeri",
+    "courierFallback": "Kuryer",
+    "yourCourier": "Buyurtmangizni yetkazib beradi",
+    "rateService": "Xizmatni baholash",
+    "rated": "Sizning bahoyingiz: {{stars}}/5",
     "hint": {
       "new": "Do'kon buyurtmani ko'rib chiqmoqda",
       "accepted": "Do'kon buyurtmani tayyorlamoqda",
@@ -146,6 +161,15 @@
       "delivered": "Buyurtma yetkazildi. Yoqimli ishtaha!",
       "cancelled": "Buyurtma bekor qilindi"
     }
+  },
+  "rating": {
+    "title": "Buyurtma yetkazildi",
+    "subtitle": "Yoqimli ishtaha!",
+    "prompt": "Xizmatni baholang",
+    "commentHint": "Fikringiz (ixtiyoriy)",
+    "submit": "Yuborish",
+    "skip": "O'tkazib yuborish",
+    "thanks": "Bahoyingiz uchun rahmat!"
   },
   "orderStatus": {
     "new": "Yangi",
@@ -162,7 +186,8 @@
     "emptyHistory": "Buyurtmalar tarixi bo'sh",
     "track": "Kuzatish",
     "reorder": "Qayta buyurtma",
-    "reorderSuccess": "Mahsulotlar savatchaga qo'shildi"
+    "reorderSuccess": "Mahsulotlar savatchaga qo'shildi",
+    "reorderUnavailable": "Bu buyurtmani qayta buyurtma qilib bo'lmaydi"
   },
   "profile": {
     "title": "Profil",

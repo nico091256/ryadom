@@ -60,16 +60,29 @@ abstract final class AppColors {
   static const orange500 = accent;
   static const orange600 = Color(0xFFE0621B);
 
-  static const ink50 = background;
-  static const ink100 = background;
+  // Neutral fills must stay distinguishable from the page background and the
+  // border: search bars / unselected chips / skeletons sit on `background`,
+  // so ink50/ink100 are one step lighter and darker than it respectively.
+  static const ink50 = Color(0xFFF8FAF9);
+  static const ink100 = Color(0xFFE9EFEB);
   static const ink200 = border;
-  static const ink300 = border;
+  static const ink300 = Color(0xFFC9D3CD);
   static const ink400 = textTertiary;
   static const ink500 = textSecondary;
   static const ink600 = textSecondary;
   static const ink700 = Color(0xFF2C3E34);
   static const ink800 = Color(0xFF1F3027);
   static const ink900 = textPrimary;
+
+  /// Pastel tints for the Home category tiles (cycled by index).
+  static const categoryTints = [
+    Color(0xFFF6D8A8),
+    Color(0xFFCCE4F7),
+    Color(0xFFD6E8D0),
+    Color(0xFFF7D5CD),
+    Color(0xFFE9D8F5),
+    Color(0xFFFBE7B5),
+  ];
 
   static const brandGradient = LinearGradient(
     begin: Alignment.topLeft,

@@ -206,24 +206,38 @@ ${promoLine}` : promoLine;
    * request: BullMQ queues commands offline indefinitely, hence the explicit timeout.
    */
   private async scheduleAutoCancel(orderId: string): Promise<void> {
+    await this.withQueueTimeout(
+      this.autoCancelQueue.add(
+        ORDER_AUTO_CANCEL_JOB,
+        { orderId },
+        { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
+      ),
+      `Auto-cancel job for order ${orderId} was NOT scheduled; the order will not expire automatically until Redis is reachable.`,
+    );
+  }
+
+  /** Drops the pending auto-cancel job once the order has left 'new'. */
+  private async dropAutoCancel(orderId: string): Promise<void> {
+    await this.withQueueTimeout(
+      this.autoCancelQueue.remove(orderId),
+      `Auto-cancel job for order ${orderId} could not be removed; the processor re-checks the status before acting, so this is harmless.`,
+    );
+  }
+
+  /**
+   * BullMQ queues commands offline indefinitely, so without Redis every queue
+   * call would hang the HTTP request. Race it against a short timeout and log
+   * instead — the DB write that matters has already happened by then.
+   */
+  private async withQueueTimeout(operation: Promise<unknown>, failureMessage: string, ms = 1500): Promise<void> {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Redis did not respond within 1.5s')), 1500);
+      timer = setTimeout(() => reject(new Error(`Redis did not respond within ${ms}ms`)), ms);
     });
     try {
-      await Promise.race([
-        this.autoCancelQueue.add(
-          ORDER_AUTO_CANCEL_JOB,
-          { orderId },
-          { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
-        ),
-        timeout,
-      ]);
+      await Promise.race([operation, timeout]);
     } catch (err: any) {
-      this.logger.error(
-        `Auto-cancel job for order ${orderId} was NOT scheduled (${err?.message ?? err}). ` +
-          'The order will not expire automatically until Redis is reachable.',
-      );
+      this.logger.error(`${failureMessage} (${err?.message ?? err})`);
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -384,6 +398,7 @@ ${promoLine}` : promoLine;
           shop: { select: { id: true, name: true, phone: true, logo_url: true } },
           customer: { select: { id: true, name: true, phone: true } },
           status_history: { orderBy: { created_at: 'asc' } },
+          review: { select: { stars: true, comment: true, created_at: true } },
         },
         orderBy: [
           ...(actorRole === UserRole.ADMIN ? [{ needs_attention: 'desc' as const }] : []),
@@ -418,6 +433,7 @@ ${promoLine}` : promoLine;
           include: { actor: { select: { id: true, name: true, role: true } } },
           orderBy: { created_at: 'asc' },
         },
+        review: { select: { stars: true, comment: true, created_at: true } },
       },
     });
 
@@ -589,7 +605,7 @@ ${promoLine}` : promoLine;
 
     // The order left 'new' (accepted or cancelled) before the auto-cancel job fired; drop it.
     if (currentStatus === OrderStatus.NEW) {
-      await this.autoCancelQueue.remove(orderId).catch(() => undefined);
+      await this.dropAutoCancel(orderId);
     }
 
     const timestamp = new Date().toISOString();
@@ -615,42 +631,40 @@ ${promoLine}` : promoLine;
     return updatedOrder;
   }
 
+  /**
+   * Customer rates a delivered order once (1–5 stars, optional comment).
+   * Stored in its own table so it never pollutes the status timeline.
+   */
   async reviewOrder(orderId: string, customerId: string, dto: ReviewOrderDto) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { shop: true },
+      include: { review: true },
     });
 
     if (!order) {
-      throw new NotFoundException({
-        code: 'ORDER_NOT_FOUND',
-        message: 'Order not found',
-      });
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
     }
-
     if (order.customer_id !== customerId) {
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: 'You are not allowed to review this order',
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'You are not allowed to review this order' });
+    }
+    if (order.status !== (OrderStatus.DELIVERED as any)) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_DELIVERED',
+        message: 'Only delivered orders can be reviewed.',
       });
     }
+    if (order.review) {
+      throw new ConflictException({ code: 'ALREADY_REVIEWED', message: 'This order has already been reviewed.' });
+    }
 
-    // Record review event in order history
-    await this.prisma.orderStatusHistory.create({
+    const comment = dto.comment?.trim();
+    return this.prisma.orderReview.create({
       data: {
         order_id: orderId,
-        status: order.status as any,
-        changed_by: customerId,
-        reason: `Baholandi: ${dto.stars} yulduz${dto.comment ? ` | ${dto.comment}` : ''}`,
+        customer_id: customerId,
+        stars: dto.stars,
+        comment: comment ? comment : null,
       },
     });
-
-    return {
-      success: true,
-      message: 'Review recorded successfully',
-      orderId,
-      stars: dto.stars,
-      comment: dto.comment ?? null,
-    };
   }
 }

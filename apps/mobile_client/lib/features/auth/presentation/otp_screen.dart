@@ -159,11 +159,8 @@ class _ResendRow extends ConsumerWidget {
       final m = (secondsLeft ~/ 60).toString().padLeft(2, '0');
       final s = (secondsLeft % 60).toString().padLeft(2, '0');
       return Text(
-        'Qayta yuborish: $m:$s',
-        style: AppText.izoh.copyWith(
-          color: AppColors.textSecondary,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
+        ref.t('auth.resendIn', {'time': '$m:$s'}),
+        style: AppText.izoh.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
       );
     }
     return Pressable(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../cart/presentation/cart_controller.dart';
 
@@ -53,7 +54,12 @@ class ShopCartBar extends ConsumerWidget {
                       const Icon(LucideIcons.shoppingBag, size: 20, color: AppColors.white),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
-                        child: Text('Savat · $count ta mahsulot', style: AppText.button.onBrand, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          '${ref.t('cart.title')} · ${ref.t('cart.itemsCount', {'count': '$count'})}',
+                          style: AppText.button.onBrand,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       AnimatedPriceText(total, style: AppText.priceLg.onBrand),

@@ -37,10 +37,24 @@ class OrderStatusEvent {
       );
 }
 
+/// Customer rating of a delivered order (one per order).
+class OrderReview {
+  const OrderReview({required this.stars, this.comment});
+
+  final int stars;
+  final String? comment;
+
+  factory OrderReview.fromJson(Map<String, dynamic> json) => OrderReview(
+        stars: (json['stars'] as num).toInt(),
+        comment: json['comment'] as String?,
+      );
+}
+
 class Order {
   const Order({
     required this.id,
     this.shopId,
+    this.review,
     required this.status,
     required this.paymentMethod,
     required this.totalAmount,
@@ -56,6 +70,7 @@ class Order {
 
   final String id;
   final String? shopId;
+  final OrderReview? review;
   final OrderStatus status;
   final PaymentMethod paymentMethod;
   final int totalAmount;
@@ -78,6 +93,7 @@ class Order {
     return Order(
       id: json['id'] as String,
       shopId: json['shop_id'] as String? ?? (shop?['id'] as String?),
+      review: json['review'] is Map<String, dynamic> ? OrderReview.fromJson(json['review'] as Map<String, dynamic>) : null,
       status: OrderStatus.fromValue(json['status'] as String),
       paymentMethod: PaymentMethod.fromValue(json['payment_method'] as String),
       totalAmount: (json['total_amount'] as num).toInt(),

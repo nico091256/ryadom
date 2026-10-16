@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { ORDER_ACCEPTANCE_TIMEOUT_MS, OrderStatus, UserRole } from '@localshop/shared';
 
@@ -19,6 +19,7 @@ describe('OrdersService', () => {
       order: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
       product: { findUnique: jest.fn(), update: jest.fn() },
       orderStatusHistory: { create: jest.fn() },
+      orderReview: { create: jest.fn() },
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
     gateway = { broadcastNewOrder: jest.fn(), broadcastOrderStatus: jest.fn(), broadcastOrderCancelled: jest.fn() };
@@ -72,6 +73,38 @@ describe('OrdersService', () => {
           payment_method: 'cash' as any,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('reviewOrder', () => {
+    const delivered = { id: 'order-1', customer_id: 'customer-1', status: OrderStatus.DELIVERED, review: null };
+
+    it('stores a review for the customer own delivered order', async () => {
+      prisma.order.findUnique.mockResolvedValue(delivered);
+      prisma.orderReview.create.mockImplementation(async ({ data }: any) => ({ id: 'rev-1', ...data }));
+
+      const result = await service.reviewOrder('order-1', 'customer-1', { stars: 5, comment: '  Zo\'r!  ' });
+
+      expect(prisma.orderReview.create).toHaveBeenCalledWith({
+        data: { order_id: 'order-1', customer_id: 'customer-1', stars: 5, comment: 'Zo\'r!' },
+      });
+      expect(result.stars).toBe(5);
+    });
+
+    it('rejects orders that are not delivered yet', async () => {
+      prisma.order.findUnique.mockResolvedValue({ ...delivered, status: OrderStatus.ON_THE_WAY });
+      await expect(service.reviewOrder('order-1', 'customer-1', { stars: 4 })).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.orderReview.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a second review of the same order', async () => {
+      prisma.order.findUnique.mockResolvedValue({ ...delivered, review: { stars: 3 } });
+      await expect(service.reviewOrder('order-1', 'customer-1', { stars: 4 })).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("refuses another customer's order", async () => {
+      prisma.order.findUnique.mockResolvedValue({ ...delivered, customer_id: 'someone-else' });
+      await expect(service.reviewOrder('order-1', 'customer-1', { stars: 4 })).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

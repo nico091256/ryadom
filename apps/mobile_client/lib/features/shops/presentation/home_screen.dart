@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers.dart';
 import '../../../ui/ui.dart';
+import '../../location/domain/selected_address.dart';
 import '../../location/presentation/address_controller.dart';
 import '../../location/presentation/address_picker_sheet.dart';
+import '../../location/presentation/location_permission_modal.dart';
 import '../domain/shop.dart';
 import 'home_controller.dart';
 import 'widgets/category_row.dart';
@@ -27,13 +30,41 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  static const _locationPromptedKey = 'ryadom_location_prompted';
+
   bool _mapMode = false;
   late final TextEditingController _search = TextEditingController(text: ref.read(shopSearchQueryProvider));
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptForLocation());
+  }
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  /// First launch only: while the address is still the city-centre default,
+  /// ask once whether to use GPS or type the address (design PDF p.10).
+  Future<void> _maybePromptForLocation() async {
+    if (!mounted || !ref.read(locationPromptEnabledProvider)) return;
+    if (ref.read(addressControllerProvider) != SelectedAddress.tashkentDefault) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_locationPromptedKey) ?? false) return;
+      await prefs.setBool(_locationPromptedKey, true);
+    } catch (_) {
+      return; // No persistent storage (tests, private mode) → never nag.
+    }
+    if (!mounted) return;
+    await showLocationPermissionSheet(
+      context,
+      onManualSelected: _openAddressSheet,
+      onLocationGranted: () => ref.invalidate(nearbyShopsProvider),
+    );
   }
 
   void _toggleMap() => setState(() => _mapMode = !_mapMode);
@@ -141,24 +172,17 @@ class _ShopListState extends ConsumerState<_ShopList> {
               padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, AppSpacing.lg),
               child: AppSearchBar(
                 controller: widget.searchController,
-                hint: 'Mahsulot qidirish',
+                hint: ref.t('home.searchPlaceholder'),
                 onChanged: (v) => ref.read(shopSearchQueryProvider.notifier).state = v,
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: CategoryRow(
-              onCategorySelected: (cat) {
-                widget.searchController.text = cat;
-                ref.read(shopSearchQueryProvider.notifier).state = cat;
-              },
-            ),
-          ),
+          const SliverToBoxAdapter(child: CategoryRow()),
           SliverToBoxAdapter(
             child: SectionHeader(
               title: ref.t('home.nearbyShops'),
               count: shops?.length,
-              actionLabel: 'Xaritada',
+              actionLabel: ref.t('home.mapView'),
               onAction: widget.onToggleMap,
             ),
           ),

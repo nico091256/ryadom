@@ -12,6 +12,10 @@
     "error": "An error occurred",
     "logout": "Log out"
   },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
   "welcome": {
     "title": "Your Neighbourhood Shops",
     "subtitle": "Fast and free delivery from local shops within 3 km",
@@ -34,7 +38,7 @@
     "smsSubtitle": "Enter the 6-digit code sent to {{phone}}",
     "verify": "Verify",
     "resendCode": "Resend code",
-    "resendIn": "Resend in ({{seconds}}s)",
+    "resendIn": "Resend in {{time}}",
     "namePrompt": "What is your name?",
     "nameSubtitle": "This is how we'll address you in your orders",
     "namePlaceholder": "Your name",
@@ -43,8 +47,15 @@
     "sendCodeFailed": "Failed to send the SMS code",
     "verifyFailed": "The code is wrong or has expired"
   },
+  "location": {
+    "title": "Where is your home?",
+    "subtitle": "We'll show the shops closest to you. Your location is used only for delivery.",
+    "allow": "Allow location access",
+    "manual": "Enter address manually"
+  },
   "home": {
     "deliverTo": "Delivery address",
+    "addressEmpty": "Choose an address",
     "changeAddress": "Change",
     "nearbyShops": "Nearby shops",
     "noShopsNearby": "No shops found within 3 km",
@@ -58,9 +69,7 @@
     "useCurrentLocation": "Use my current location",
     "enterAddressManually": "Enter address manually",
     "addressPlaceholder": "e.g. Chilonzor 9th block, apt 12",
-    "valueFreeDelivery": "Free delivery",
-    "valueRadius": "3 km radius",
-    "valueEta": "10–30 min",
+    "recentOrder": "Last order",
     "productCount": "{{count}} products",
     "goToShop": "Open shop",
     "deliverHere": "Deliver here",
@@ -91,6 +100,7 @@
     "clearConfirm": "All items will be removed from your cart.",
     "differentShopTitle": "Cart from another shop",
     "deliveryInfo": "Free delivery · 10–30 min",
+    "itemsCount": "{{count}} items",
     "total": "Total",
     "checkout": "Place order",
     "multipleShopsWarning": "Your cart has items from another shop. Clear it and continue?",
@@ -139,6 +149,11 @@
     "cancelQuestion": "Are you sure you want to cancel this order?",
     "callShop": "Call shop",
     "backToHome": "Back to home",
+    "courier": "{{shop}} courier",
+    "courierFallback": "Courier",
+    "yourCourier": "Delivering your order",
+    "rateService": "Rate the service",
+    "rated": "Your rating: {{stars}}/5",
     "hint": {
       "new": "The shop is reviewing your order",
       "accepted": "The shop is preparing your order",
@@ -146,6 +161,15 @@
       "delivered": "Order delivered. Enjoy!",
       "cancelled": "The order was cancelled"
     }
+  },
+  "rating": {
+    "title": "Order delivered",
+    "subtitle": "Enjoy!",
+    "prompt": "Rate the service",
+    "commentHint": "Your feedback (optional)",
+    "submit": "Send",
+    "skip": "Skip",
+    "thanks": "Thanks for your rating!"
   },
   "orderStatus": {
     "new": "New",
@@ -162,7 +186,8 @@
     "emptyHistory": "Your order history is empty",
     "track": "Track",
     "reorder": "Reorder",
-    "reorderSuccess": "Items added to cart"
+    "reorderSuccess": "Items added to cart",
+    "reorderUnavailable": "This order can't be reordered"
   },
   "profile": {
     "title": "Profile",

@@ -8,10 +8,21 @@ class ShopsApi {
 
   /// The backend has no text-search param on this endpoint (only
   /// /shops/:id/products does) — filtering by name is done client-side in
-  /// the controller below, over the already-fetched nearby list.
-  Future<List<Shop>> nearby({required double lat, required double lng}) async {
-    final data = await _client.get('/shops/nearby', query: {'lat': lat, 'lng': lng}) as List<dynamic>;
+  /// the controller, over the already-fetched nearby list. `categoryId`
+  /// restricts the result to shops that stock that category.
+  Future<List<Shop>> nearby({required double lat, required double lng, String? categoryId}) async {
+    final data = await _client.get('/shops/nearby', query: {
+      'lat': lat,
+      'lng': lng,
+      'category': ?categoryId,
+    }) as List<dynamic>;
     return data.map((json) => Shop.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
+  /// Public category tree (flat list; `parent_id` is ignored on the client).
+  Future<List<ProductCategory>> categories() async {
+    final data = await _client.get('/categories') as List<dynamic>;
+    return data.map((json) => ProductCategory.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   Future<Shop> findOne(String shopId) async {

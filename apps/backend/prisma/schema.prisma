@@ -71,6 +71,7 @@ model User {
   shops                Shop[]
   cart                 Cart?
   orders               Order[]   @relation("CustomerOrders")
+  reviews              OrderReview[] @relation("CustomerReviews")
   status_changes       OrderStatusHistory[]
   notifications        Notification[]
   refresh_tokens       RefreshToken[]
@@ -255,10 +256,27 @@ model Order {
   items                   OrderItem[]
   status_history          OrderStatusHistory[]
   payments                Payment[]
+  review                  OrderReview?
 
   @@index([shop_id, status, created_at])
   @@index([customer_id, created_at])
   @@map("orders")
+}
+
+/// Customer rating of a delivered order (1–5 stars, optional comment). One per order.
+model OrderReview {
+  id          String   @id @default(uuid())
+  order_id    String   @unique
+  customer_id String
+  stars       Int
+  comment     String?
+  created_at  DateTime @default(now())
+
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  customer    User     @relation("CustomerReviews", fields: [customer_id], references: [id])
+
+  @@index([customer_id])
+  @@map("order_reviews")
 }
 
 model OrderItem {

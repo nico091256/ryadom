@@ -257,6 +257,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       notifications: [],
       refreshTokens: [],
       deviceTokens: [],
+      orderReviews: [],
       promoCodes: [
         {
           id: 'promo-1',
@@ -295,6 +296,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       { key: 'refreshToken', storeKey: 'refreshTokens' },
       { key: 'deviceToken', storeKey: 'deviceTokens' },
       { key: 'promoCode', storeKey: 'promoCodes' },
+      { key: 'orderReview', storeKey: 'orderReviews' },
     ];
 
     for (const { key, storeKey } of models) {
@@ -628,6 +630,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           shops: many('shops', (u) => byField('shops', 'owner_id', u.id)),
           addresses: many('addresses', (u) => byField('addresses', 'user_id', u.id)),
           orders: many('orders', (u) => byField('orders', 'customer_id', u.id)),
+          reviews: many('orderReviews', (u) => byField('orderReviews', 'customer_id', u.id)),
           device_tokens: many('deviceTokens', (u) => byField('deviceTokens', 'user_id', u.id)),
           refresh_tokens: many('refreshTokens', (u) => byField('refreshTokens', 'user_id', u.id)),
         };
@@ -678,6 +681,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           items: many('orderItems', (o) => byField('orderItems', 'order_id', o.id)),
           status_history: many('orderStatusHistories', (o) => byField('orderStatusHistories', 'order_id', o.id)),
           payments: many('payments', (o) => byField('payments', 'order_id', o.id)),
+          review: one('orderReviews', (o) => byField('orderReviews', 'order_id', o.id)),
+        };
+      case 'orderReviews':
+        return {
+          order: one('orders', (r) => byId('orders', r.order_id)),
+          customer: one('users', (r) => byId('users', r.customer_id)),
         };
       case 'orderItems':
         return {

@@ -61,4 +61,13 @@ class OrdersApi {
 
   Future<void> cancelOrder(String id, {String? reason}) =>
       _client.post('/orders/$id/cancel', data: {'reason': ?reason});
+
+  /// POST /orders/:id/review — one 1..5 star rating per delivered order.
+  Future<void> reviewOrder(String id, {required int stars, String? comment}) {
+    final trimmed = comment?.trim();
+    return _client.post('/orders/$id/review', data: {
+      'stars': stars,
+      if (trimmed != null && trimmed.isNotEmpty) 'comment': trimmed,
+    });
+  }
 }

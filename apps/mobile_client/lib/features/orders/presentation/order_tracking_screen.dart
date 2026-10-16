@@ -86,6 +86,26 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     }
   }
 
+  bool _ratingOpen = false;
+
+  /// Opens the rating sheet; the submit handler posts the review and refreshes
+  /// the order so the summary row replaces the button.
+  Future<void> _rate() async {
+    if (_ratingOpen) return;
+    _ratingOpen = true;
+    try {
+      await showOrderRatingSheet(
+        context,
+        onSubmit: (stars, comment) async {
+          await ref.read(ordersApiProvider).reviewOrder(widget.orderId, stars: stars, comment: comment);
+          ref.invalidate(orderProvider(widget.orderId));
+        },
+      );
+    } finally {
+      _ratingOpen = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Order>>(orderProvider(widget.orderId), (previous, next) {
@@ -93,6 +113,12 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       final now = next.value?.status;
       if (!_celebrate && now == OrderStatus.delivered && was != null && was != OrderStatus.delivered) {
         setState(() => _celebrate = true);
+        // Delivered while watching: offer the rating right away (PDF p.13).
+        if (next.value?.review == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _rate();
+          });
+        }
       }
     });
     final orderAsync = ref.watch(orderProvider(widget.orderId));
@@ -125,6 +151,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
               celebrate: _celebrate,
               cancelling: _cancelling,
               onCancel: _cancel,
+              onRate: _rate,
             ),
             loading: () => const OrderTrackingSkeleton(),
             error: (err, _) => EmptyState(
@@ -142,12 +169,19 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 }
 
 class _OrderBody extends ConsumerWidget {
-  const _OrderBody({required this.order, required this.celebrate, required this.cancelling, required this.onCancel});
+  const _OrderBody({
+    required this.order,
+    required this.celebrate,
+    required this.cancelling,
+    required this.onCancel,
+    required this.onRate,
+  });
 
   final Order order;
   final bool celebrate;
   final bool cancelling;
   final VoidCallback onCancel;
+  final VoidCallback onRate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -155,6 +189,7 @@ class _OrderBody extends ConsumerWidget {
     final terminal = isTerminalOrderStatus(status);
     final phone = order.shopPhone;
     final comment = order.comment?.trim();
+    final courierVisible = status == OrderStatus.accepted || status == OrderStatus.onTheWay;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.lg, AppSpacing.page, AppSpacing.xxxl),
@@ -189,69 +224,23 @@ class _OrderBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.xl),
         AppSection(title: ref.t('order.itemsTitle'), child: _ItemsList(order: order)),
         const SizedBox(height: AppSpacing.xl),
-        if (status == OrderStatus.onTheWay || status == OrderStatus.accepted) ...[
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: AppColors.accentLight,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(LucideIcons.user, size: 24, color: AppColors.accent),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(order.shopName != null ? '${order.shopName} kuryeri' : 'Kuryer', style: AppText.bodyStrong.copyWith(fontSize: 16)),
-                      const SizedBox(height: 2),
-                      Text('Sizning kuryeringiz', style: AppText.izoh),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    if (phone != null && phone.isNotEmpty) launchCallerUrl(phone);
-                  },
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(LucideIcons.phone, size: 20, color: AppColors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        // The shopkeeper delivers personally, so the "courier" is the shop.
+        if (courierVisible) ...[
+          _CourierCard(shopName: order.shopName, phone: phone),
           const SizedBox(height: AppSpacing.xl),
         ],
         if (status == OrderStatus.delivered) ...[
-          AppButton(
-            label: 'Xizmatni baholash',
-            icon: LucideIcons.star,
-            variant: AppButtonVariant.primary,
-            onPressed: () => showOrderRatingSheet(
-              context,
-              orderId: order.id,
-              onSubmit: (stars, comment) async {
-                // Submitted locally & gracefully
-              },
+          if (order.review != null)
+            OrderRatingSummary(stars: order.review!.stars, comment: order.review!.comment)
+          else
+            AppButton(
+              label: ref.t('order.rateService'),
+              icon: LucideIcons.star,
+              onPressed: onRate,
             ),
-          ),
           const SizedBox(height: AppSpacing.md),
         ],
-        if (phone != null && phone.isNotEmpty && status != OrderStatus.onTheWay) ...[
+        if (phone != null && phone.isNotEmpty && !courierVisible) ...[
           AppButton(
             label: ref.t('order.callShop'),
             icon: LucideIcons.phone,
@@ -357,6 +346,58 @@ class _StatusHero extends ConsumerWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Who is bringing the order + one-tap call. Ryadom shopkeepers deliver
+/// themselves, so the contact is the shop's phone.
+class _CourierCard extends ConsumerWidget {
+  const _CourierCard({required this.shopName, required this.phone});
+
+  final String? shopName;
+  final String? phone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canCall = phone != null && phone!.isNotEmpty;
+    final title = shopName == null || shopName!.isEmpty
+        ? ref.t('order.courierFallback')
+        : ref.t('order.courier', {'shop': shopName!});
+    return AppCard(
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(color: AppColors.accentLight, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: const Icon(LucideIcons.bike, size: 24, color: AppColors.accent),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(ref.t('order.yourCourier'), style: AppText.caption),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          AppIconButton(
+            icon: LucideIcons.phone,
+            size: 44,
+            background: canCall ? AppColors.accent : AppColors.ink100,
+            foreground: AppColors.white,
+            bordered: false,
+            onPressed: canCall ? () => launchCallerUrl(phone!) : null,
+            tooltip: ref.t('order.callShop'),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderStatus, PaymentMethod } from '@localshop/shared';
 
@@ -66,13 +66,15 @@ export class UpdateOrderStatusDto {
 }
 
 export class ReviewOrderDto {
-  @ApiProperty({ example: 5, minimum: 1, maximum: 5 })
-  @IsNotEmpty()
-  @IsNumber()
+  @ApiProperty({ example: 5, minimum: 1, maximum: 5, description: 'Whole stars, 1..5' })
+  @IsInt()
+  @Min(1)
+  @Max(5)
   stars: number;
 
-  @ApiProperty({ example: 'Juda tez yetkazildi, rahmat!', required: false })
+  @ApiProperty({ example: 'Juda tez yetkazildi, rahmat!', required: false, maxLength: 500 })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   comment?: string;
 }

@@ -6,46 +6,36 @@ import '../../../ui/ui.dart';
 import 'address_controller.dart';
 import 'location_feedback.dart';
 
-/// Modal dialog matching PDF Page 10:
-/// "Uyingiz qayerda?" + "Joylashuvga ruxsat berish" + "Manzilni qo'lda kiritish".
-Future<void> showLocationPermissionModal(
-  BuildContext context,
-  WidgetRef ref, {
+/// First-launch "Uyingiz qayerda?" sheet (design PDF p.10): ask for location
+/// access or fall back to entering the address by hand.
+Future<void> showLocationPermissionSheet(
+  BuildContext context, {
   required VoidCallback onManualSelected,
   VoidCallback? onLocationGranted,
 }) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => _LocationPermissionContent(
-      onManualSelected: onManualSelected,
-      onLocationGranted: onLocationGranted,
-    ),
+  return showAppSheet<void>(
+    context,
+    builder: (_) => _LocationPermissionSheet(onManualSelected: onManualSelected, onLocationGranted: onLocationGranted),
   );
 }
 
-class _LocationPermissionContent extends ConsumerStatefulWidget {
-  const _LocationPermissionContent({
-    required this.onManualSelected,
-    this.onLocationGranted,
-  });
+class _LocationPermissionSheet extends ConsumerStatefulWidget {
+  const _LocationPermissionSheet({required this.onManualSelected, this.onLocationGranted});
 
   final VoidCallback onManualSelected;
   final VoidCallback? onLocationGranted;
 
   @override
-  ConsumerState<_LocationPermissionContent> createState() => _LocationPermissionContentState();
+  ConsumerState<_LocationPermissionSheet> createState() => _LocationPermissionSheetState();
 }
 
-class _LocationPermissionContentState extends ConsumerState<_LocationPermissionContent> {
+class _LocationPermissionSheetState extends ConsumerState<_LocationPermissionSheet> {
   bool _locating = false;
 
   Future<void> _requestLocation() async {
     if (_locating) return;
     setState(() => _locating = true);
     final lang = ref.read(localeProvider).value;
-
     try {
       await ref.read(addressControllerProvider.notifier).detectCurrentLocation(lang: lang);
       if (!mounted) return;
@@ -60,57 +50,37 @@ class _LocationPermissionContentState extends ConsumerState<_LocationPermissionC
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xxl, AppSpacing.page, AppSpacing.xxl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
-                color: AppColors.accentLight,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: const Icon(LucideIcons.mapPin, size: 32, color: AppColors.accent),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Uyingiz qayerda?',
-            style: AppText.sarlavhaL.copyWith(fontSize: 24),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Joylashuvingiz bo\'yicha eng yaqin do\'konlarni ko\'rsatamiz. Joylashuv faqat buyurtma uchun ishlatiladi.',
-            style: AppText.bodyMedium.copyWith(color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          AppButton(
-            label: 'Joylashuvga ruxsat berish',
-            loading: _locating,
-            onPressed: _requestLocation,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: 'Manzilni qo\'lda kiritish',
-            variant: AppButtonVariant.outline,
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onManualSelected();
-            },
-          ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: Illustration(AppIllustration.location, size: 120))
+            .animate()
+            .fadeIn(duration: AppDurations.slow)
+            .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1), curve: AppCurves.emphasized),
+        const SizedBox(height: AppSpacing.lg),
+        Text(ref.t('location.title'), style: AppText.h2, textAlign: TextAlign.center),
+        const SizedBox(height: AppSpacing.sm),
+        Text(ref.t('location.subtitle'), style: AppText.body.secondary, textAlign: TextAlign.center),
+        const SizedBox(height: AppSpacing.xxl),
+        AppButton(
+          label: ref.t('location.allow'),
+          icon: LucideIcons.locateFixed,
+          loading: _locating,
+          onPressed: _requestLocation,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          label: ref.t('location.manual'),
+          variant: AppButtonVariant.outline,
+          onPressed: _locating
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                  widget.onManualSelected();
+                },
+        ),
+      ],
     );
   }
 }
