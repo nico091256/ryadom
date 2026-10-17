@@ -6,8 +6,10 @@ import '../tokens.dart';
 import '../typography.dart';
 import 'pressable.dart';
 
-/// "+" that morphs into a [−  n  +] control once something is in the cart.
-/// `max` greys out "+" at the stock limit. Width animates so grids don't jump.
+/// "+" that morphs into a white capsule [−  n  +] (green outline, round green
+/// "+") once something is in the cart. `max` greys out "+" at the stock limit,
+/// "−" turns into a bin at quantity 1. Every dimension derives from [size] so
+/// the same control works at 34px on photo tiles and 44px in lists.
 class QuantityStepper extends StatelessWidget {
   const QuantityStepper({
     super.key,
@@ -16,7 +18,7 @@ class QuantityStepper extends StatelessWidget {
     required this.onDecrement,
     this.max,
     this.enabled = true,
-    this.size = 36,
+    this.size = 44,
     this.addLabel,
     this.compact = false,
   });
@@ -26,6 +28,7 @@ class QuantityStepper extends StatelessWidget {
   final VoidCallback onDecrement;
   final int? max;
   final bool enabled;
+  /// Control height; buttons and type scale from it.
   final double size;
   /// Label for the collapsed "+" state, e.g. "Qo'shish". Null → icon only.
   final String? addLabel;
@@ -33,6 +36,8 @@ class QuantityStepper extends StatelessWidget {
   final bool compact;
 
   bool get _canAdd => enabled && (max == null || quantity < max!);
+  double get _iconSize => (size * 0.42).clamp(14, 20);
+  double get _button => size - 4;
 
   @override
   Widget build(BuildContext context) {
@@ -45,22 +50,23 @@ class QuantityStepper extends StatelessWidget {
   }
 
   Widget _addButton() {
+    final iconOnly = compact || addLabel == null;
     final child = Container(
-      height: 44,
-      width: compact || addLabel == null ? 44 : null,
-      padding: EdgeInsets.symmetric(horizontal: compact || addLabel == null ? 0 : 16),
+      height: size,
+      width: iconOnly ? size : null,
+      padding: EdgeInsets.symmetric(horizontal: iconOnly ? 0 : 16),
       decoration: BoxDecoration(
         color: _canAdd ? AppColors.brand : AppColors.border,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(size / 2),
         boxShadow: _canAdd && !compact ? AppShadows.brand : null,
       ),
       alignment: Alignment.center,
-      child: addLabel == null || compact
-          ? const Icon(LucideIcons.plus, size: 20, color: AppColors.white)
+      child: iconOnly
+          ? Icon(LucideIcons.plus, size: _iconSize, color: AppColors.white)
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.plus, size: 18, color: AppColors.white),
+                Icon(LucideIcons.plus, size: _iconSize, color: AppColors.white),
                 const SizedBox(width: 6),
                 Text(addLabel!, style: AppText.buttonSm.copyWith(color: AppColors.white)),
               ],
@@ -78,41 +84,49 @@ class QuantityStepper extends StatelessWidget {
   Widget _stepper() {
     return Container(
       key: const ValueKey('stepper'),
-      height: 44,
+      height: size,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(size / 2),
         border: Border.all(color: AppColors.brand, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _StepButton(
-            icon: quantity == 1 ? LucideIcons.minus : LucideIcons.minus,
+            icon: quantity == 1 ? LucideIcons.trash2 : LucideIcons.minus,
             onTap: _tapDecrement,
-            size: 40,
+            size: _button,
+            iconSize: _iconSize,
             color: AppColors.brand,
           ),
-          SizedBox(
-            width: 28,
-            child: Text(
-              '$quantity',
-              textAlign: TextAlign.center,
-              style: AppText.numeric.copyWith(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+          AnimatedSwitcher(
+            duration: AppDurations.fast,
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(scale: Tween(begin: 0.7, end: 1.0).animate(anim), child: child),
+            ),
+            child: SizedBox(
+              key: ValueKey(quantity),
+              width: compact ? 22 : 28,
+              child: Text(
+                '$quantity',
+                textAlign: TextAlign.center,
+                style: AppText.numeric.copyWith(fontSize: (size * 0.36).clamp(13, 16)).weight(800),
+              ),
             ),
           ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: AppColors.brand,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _canAdd ? AppColors.brand : AppColors.ink200,
               shape: BoxShape.circle,
             ),
             child: _StepButton(
               icon: LucideIcons.plus,
               onTap: _canAdd ? _tapIncrement : null,
-              size: 40,
+              size: _button,
+              iconSize: _iconSize,
               color: AppColors.white,
             ),
           ),
@@ -133,11 +147,18 @@ class QuantityStepper extends StatelessWidget {
 }
 
 class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onTap, required this.size, this.color = AppColors.white});
+  const _StepButton({
+    required this.icon,
+    required this.onTap,
+    required this.size,
+    required this.iconSize,
+    required this.color,
+  });
 
   final IconData icon;
   final VoidCallback? onTap;
   final double size;
+  final double iconSize;
   final Color color;
 
   @override
@@ -149,7 +170,7 @@ class _StepButton extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: Icon(icon, size: 18, color: onTap == null ? color.withValues(alpha: 0.4) : color),
+        child: Icon(icon, size: iconSize, color: onTap == null ? color.withValues(alpha: 0.6) : color),
       ),
     );
   }

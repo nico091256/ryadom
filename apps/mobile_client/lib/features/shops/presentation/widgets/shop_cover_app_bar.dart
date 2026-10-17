@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import '../../../../core/utils/launch_url.dart';
 import '../../../../ui/ui.dart';
 import '../../domain/shop.dart';
+import 'shop_card.dart' show ShopCover;
 
 /// How far the header card below the cover overlaps the cover image.
 const double kShopCoverOverlap = 28;
@@ -171,31 +172,13 @@ class _Cover extends StatelessWidget {
   final double width;
   final double height;
 
-  static const List<String> _curatedCovers = [
-    'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1200&q=80',
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final coverUrl = (shop.logoUrl != null && shop.logoUrl!.startsWith('http'))
-        ? shop.logoUrl!
-        : _curatedCovers[shop.name.hashCode.abs() % _curatedCovers.length];
-
+    // Same widget as the Home card so the Hero flight is seamless; the shop's
+    // real photo (server-relative paths resolved + cached) or the brand fallback.
     return Hero(
       tag: 'shop_cover_${shop.id}',
-      child: Image.network(
-        coverUrl,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => DecoratedBox(
-          decoration: const BoxDecoration(gradient: AppColors.brandGradient),
-          child: Center(child: Icon(LucideIcons.store, size: 56, color: AppColors.white.withValues(alpha: 0.4))),
-        ),
-      ),
+      child: ShopCover(url: shop.logoUrl, width: width, height: height),
     );
   }
 }

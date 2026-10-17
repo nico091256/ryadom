@@ -170,9 +170,8 @@ class _ShopProductGrid extends ConsumerWidget {
                   itemBuilder: (context, i) => ShopProductListRow(
                     key: ValueKey<String>(products[i].id),
                     product: products[i],
-                    shopId: shopId,
                     shopName: shopName,
-                    index: i,
+                    shopIsOpen: shopIsOpen,
                   ),
                 ),
               );

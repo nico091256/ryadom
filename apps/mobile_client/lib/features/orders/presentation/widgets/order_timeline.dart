@@ -45,13 +45,6 @@ class OrderTimeline extends ConsumerWidget {
     }
 
     final rows = <Widget>[];
-    final stageSubtitles = [
-      'Do\'kon tasdiqladi',
-      'Mahsulotlar tayyorlanmoqda',
-      'Uyingizga yaqinlashmoqda',
-      'Yoqimli ishtaha!',
-    ];
-
     for (var i = 0; i < kOrderStages.length; i++) {
       final stage = kOrderStages[i];
       final state = cancelled
@@ -63,7 +56,7 @@ class OrderTimeline extends ConsumerWidget {
           state: state,
           muted: cancelled,
           label: ref.t('orderStatus.${stage.value}'),
-          subtitle: i < stageSubtitles.length ? stageSubtitles[i] : null,
+          subtitle: ref.t('order.stage.${stage.value}'),
           time: state == _StepState.upcoming ? null : _reachedAt(stage),
           connector: isLast ? null : state == _StepState.done,
         ),

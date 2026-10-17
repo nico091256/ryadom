@@ -11,6 +11,7 @@ import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../location/domain/selected_address.dart';
 import '../../../location/presentation/app_map_tiles.dart';
+import '../../domain/eta.dart';
 import '../../domain/shop.dart';
 import 'home_header.dart';
 import 'shop_card.dart';
@@ -282,6 +283,7 @@ class _ShopsMapViewState extends ConsumerState<ShopsMapView> with SingleTickerPr
                             lang: lang,
                             openLabel: ref.t(preview.isCurrentlyOpen ? 'home.open' : 'home.closed'),
                             ctaLabel: ref.t('home.goToShop'),
+                            etaLabel: ref.t('home.eta', {'min': '${estimateEtaMinutes(preview.distanceMeters)}'}),
                             onOpen: () => context.push('/shop/${preview.id}'),
                           ),
                         ),
@@ -471,6 +473,7 @@ class ShopPreviewCard extends StatelessWidget {
     required this.lang,
     required this.openLabel,
     required this.ctaLabel,
+    required this.etaLabel,
     required this.onOpen,
   });
 
@@ -478,6 +481,8 @@ class ShopPreviewCard extends StatelessWidget {
   final SupportedLanguage lang;
   final String openLabel;
   final String ctaLabel;
+  /// e.g. "~12 daq" — computed from distance by the caller.
+  final String etaLabel;
   final VoidCallback onOpen;
 
   @override
@@ -492,27 +497,18 @@ class ShopPreviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.brand,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(LucideIcons.store, size: 24, color: AppColors.white),
-              ),
+              AppAvatar(url: shop.logoUrl, name: shop.name, size: 48),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(shop.name, style: AppText.title.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(shop.name, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 3),
                     Text(
-                      '${formatDistance(shop.distanceMeters, lang)} · taxminan 10 daqiqa',
-                      style: AppText.izoh.copyWith(color: AppColors.textSecondary),
+                      '${formatDistance(shop.distanceMeters, lang)} · $etaLabel · ${shop.openTime}–${shop.closeTime}',
+                      style: AppText.izoh,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -520,19 +516,15 @@ class ShopPreviewCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                shop.isCurrentlyOpen ? 'Ochiq' : 'Yopiq',
-                style: AppText.bodyStrong.copyWith(
-                  color: shop.isCurrentlyOpen ? AppColors.brand : AppColors.danger,
-                ),
-              ),
+              ShopOpenBadge(open: shop.isCurrentlyOpen, label: openLabel),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
-            label: 'Do\'konni tanlash',
-            size: AppButtonSize.lg,
+            label: ctaLabel,
+            size: AppButtonSize.md,
             onPressed: onOpen,
+            trailing: const Icon(LucideIcons.arrowRight, size: 18, color: AppColors.white),
           ),
         ],
       ),

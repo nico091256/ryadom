@@ -78,7 +78,13 @@
     "loadFailed": "Couldn't load shops. Check your connection",
     "mapView": "Map",
     "listView": "List",
-    "myLocation": "My location"
+    "myLocation": "My location",
+    "greeting": "What are we ordering, {{name}}?",
+    "greetingAnon": "What are we ordering?",
+    "heroChip": "Fast delivery",
+    "heroTitle": "Nearby shops — to your door",
+    "heroSubtitle": "Within 3 km in 10–30 minutes, delivery is free",
+    "eta": "~{{min}} min"
   },
   "shop": {
     "allCategories": "All",
@@ -154,6 +160,12 @@
     "yourCourier": "Delivering your order",
     "rateService": "Rate the service",
     "rated": "Your rating: {{stars}}/5",
+    "stage": {
+      "new": "Order sent",
+      "accepted": "Shop confirmed",
+      "on_the_way": "Almost at your door",
+      "delivered": "Enjoy your meal!"
+    },
     "hint": {
       "new": "The shop is reviewing your order",
       "accepted": "The shop is preparing your order",
@@ -204,6 +216,7 @@
   "tabs": {
     "home": "Home",
     "orders": "Orders",
+    "cart": "Cart",
     "profile": "Profile"
   }
 }

@@ -308,38 +308,57 @@ class _StatusHero extends ConsumerWidget {
     }
 
     final itemsSummary = order.items.map((i) => i.productName).take(3).join(', ');
-    final shopTitle = order.shopName ?? 'Do\'kon';
+    final shopName = order.shopName?.trim();
+    final subtitle = [if (itemsSummary.isNotEmpty) itemsSummary, if (shopName != null && shopName.isNotEmpty) shopName].join(' · ');
 
     if (active) {
+      // Deep-green hero while the order is live: status as the headline, the
+      // plain-language hint under it, live badge, and the 4-step strip. No
+      // minute countdown — we don't have a real ETA for an order yet, and a
+      // made-up one would be a promise we can't keep.
       return Container(
-        decoration: BoxDecoration(
-          color: AppColors.brand,
-          borderRadius: AppRadius.card,
-          boxShadow: AppShadows.brand,
-        ),
+        decoration: BoxDecoration(color: AppColors.brand, borderRadius: AppRadius.card, boxShadow: AppShadows.brand),
         padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              status == OrderStatus.onTheWay ? 'Buyurtmangiz yo\'lda' : ref.t('orderStatus.${status.value}'),
-              style: AppText.izoh.copyWith(color: AppColors.white.withValues(alpha: 0.85), fontSize: 14),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '10–15 daqiqa',
-              style: AppText.sarlavhaXL.copyWith(color: AppColors.white, fontSize: 32),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              itemsSummary.isNotEmpty ? '$itemsSummary · [$shopTitle]' : '[$shopTitle]',
-              style: AppText.bodyMedium.copyWith(color: AppColors.white.withValues(alpha: 0.9)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            OrderProgressStrip(status, height: 6),
-          ],
+        child: AnimatedSwitcher(
+          duration: AppDurations.slow,
+          switchInCurve: AppCurves.standard,
+          switchOutCurve: Curves.easeIn,
+          layoutBuilder: (current, previous) => Stack(alignment: Alignment.topLeft, children: [...previous, ?current]),
+          child: Column(
+            key: ValueKey(status),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      ref.t('orderStatus.${status.value}'),
+                      style: AppText.sarlavhaL.copyWith(color: AppColors.white),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const LiveTrackingBadge(),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                ref.t('order.hint.${status.value}'),
+                style: AppText.body.copyWith(color: AppColors.white.withValues(alpha: 0.88)),
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  subtitle,
+                  style: AppText.caption.copyWith(color: AppColors.white.withValues(alpha: 0.72)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              OrderProgressStrip(status, height: 6),
+            ],
+          ),
         ),
       );
     }

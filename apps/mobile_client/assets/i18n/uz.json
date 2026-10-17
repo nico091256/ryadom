@@ -78,7 +78,13 @@
     "loadFailed": "Do'konlarni yuklab bo'lmadi. Internetni tekshiring",
     "mapView": "Xarita",
     "listView": "Ro'yxat",
-    "myLocation": "Mening joylashuvim"
+    "myLocation": "Mening joylashuvim",
+    "greeting": "Nima buyurtma qilamiz, {{name}}?",
+    "greetingAnon": "Nima buyurtma qilamiz?",
+    "heroChip": "Tezkor yetkazish",
+    "heroTitle": "Yaqin do'konlar — eshigingizgacha",
+    "heroSubtitle": "3 km radiusdan 10–30 daqiqada, yetkazish bepul",
+    "eta": "~{{min}} daq"
   },
   "shop": {
     "allCategories": "Barchasi",
@@ -154,6 +160,12 @@
     "yourCourier": "Buyurtmangizni yetkazib beradi",
     "rateService": "Xizmatni baholash",
     "rated": "Sizning bahoyingiz: {{stars}}/5",
+    "stage": {
+      "new": "Buyurtma yuborildi",
+      "accepted": "Do'kon tasdiqladi",
+      "on_the_way": "Uyingizga yaqinlashmoqda",
+      "delivered": "Yoqimli ishtaha!"
+    },
     "hint": {
       "new": "Do'kon buyurtmani ko'rib chiqmoqda",
       "accepted": "Do'kon buyurtmani tayyorlamoqda",
@@ -204,6 +216,7 @@
   "tabs": {
     "home": "Asosiy",
     "orders": "Buyurtmalar",
+    "cart": "Savat",
     "profile": "Profil"
   }
 }

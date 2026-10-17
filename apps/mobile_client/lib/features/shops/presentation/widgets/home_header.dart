@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,9 +31,7 @@ class HomeHeader extends ConsumerWidget {
         ? user.name!.trim().split(' ').first
         : null;
 
-    final headline = userName != null
-        ? 'Nima buyurtma qilamiz, $userName?'
-        : 'Nima buyurtma qilamiz?';
+    final headline = userName != null ? ref.t('home.greeting', {'name': userName}) : ref.t('home.greetingAnon');
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, 0),
@@ -110,104 +106,82 @@ class HomeHeader extends ConsumerWidget {
   }
 }
 
-/// Rich Hero Banner: visual anchor of the Home screen
-class _HomeHeroBanner extends StatelessWidget {
+/// Hero banner — the visual anchor of Home. Brand gradient + the app's own
+/// illustration, so it ships with the build (no third-party photo fetched at
+/// runtime) and no BackdropFilter inside the scroll view.
+class _HomeHeroBanner extends ConsumerWidget {
   const _HomeHeroBanner();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       width: double.infinity,
       height: 156,
       decoration: BoxDecoration(
+        gradient: AppColors.brandGradient,
         borderRadius: BorderRadius.circular(AppRadius.rCard),
-        boxShadow: AppShadows.premium,
+        boxShadow: AppShadows.brand,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
-        fit: StackFit.expand,
         children: [
-          // Background photo (crisp warm bakery / fresh grocery)
-          Image.network(
-            'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1000&q=80',
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF0F5C45), Color(0xFF147558)],
-                ),
-              ),
+          // Soft light bloom top-right so the gradient doesn't look flat.
+          Positioned(
+            right: -40,
+            top: -60,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.white.withValues(alpha: 0.08)),
             ),
           ),
-
-          // Gradient for maximum contrast
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                stops: [0.0, 0.65, 1.0],
-                colors: [
-                  Color(0xF00F5C45),
-                  Color(0xB30F5C45),
-                  Color(0x330F5C45),
-                ],
-              ),
-            ),
+          Positioned(
+            right: AppSpacing.md,
+            bottom: -8,
+            child: Opacity(opacity: 0.95, child: const Illustration(AppIllustration.success, size: 132)),
           ),
-
-          // Content overlay
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.lg, 136, AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Frosted pill
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        border: Border.all(color: AppColors.white.withValues(alpha: 0.3), width: 0.8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppColors.white.withValues(alpha: 0.28), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.zap, size: 12, color: AppColors.accent),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          ref.t('home.heroChip'),
+                          style: AppText.micro.copyWith(color: AppColors.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(LucideIcons.zap, size: 12, color: AppColors.accent),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Tezkor yetkazish',
-                            style: AppText.micro.copyWith(color: AppColors.white, fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Issiq non — 10 daqiqada',
-                  style: AppText.sarlavhaM.copyWith(
-                    color: AppColors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
+                  ref.t('home.heroTitle'),
+                  style: AppText.sarlavhaM.copyWith(color: AppColors.white, letterSpacing: -0.3),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  'Yaqin atrofdagi do\'konlardan tez va oson',
-                  style: AppText.caption.copyWith(
-                    color: AppColors.white.withValues(alpha: 0.9),
-                    fontSize: 12,
-                  ),
+                  ref.t('home.heroSubtitle'),
+                  style: AppText.caption.copyWith(color: AppColors.white.withValues(alpha: 0.88)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

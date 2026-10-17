@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/providers.dart';
 import '../features/cart/presentation/cart_controller.dart';
 import '../features/cart/presentation/cart_screen.dart';
 import '../features/orders/presentation/orders_history_screen.dart';
@@ -38,14 +39,14 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
         index: _index,
         onChanged: (i) => setState(() => _index = i),
         items: [
-          const _TabItem(icon: LucideIcons.home, label: 'Bosh'),
-          const _TabItem(icon: LucideIcons.clipboardList, label: 'Buyurtmalar'),
+          _TabItem(icon: LucideIcons.home, label: ref.t('tabs.home')),
+          _TabItem(icon: LucideIcons.clipboardList, label: ref.t('tabs.orders')),
           _TabItem(
             icon: LucideIcons.shoppingBag,
-            label: 'Savat',
-            badge: cartCount > 0 ? '$cartCount' : null,
+            label: ref.t('tabs.cart'),
+            badge: cartCount > 0 ? (cartCount > 99 ? '99+' : '$cartCount') : null,
           ),
-          const _TabItem(icon: LucideIcons.user, label: 'Profil'),
+          _TabItem(icon: LucideIcons.user, label: ref.t('tabs.profile')),
         ],
       ),
     );
