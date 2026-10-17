@@ -46,21 +46,21 @@ class QuantityStepper extends StatelessWidget {
 
   Widget _addButton() {
     final child = Container(
-      height: size,
-      padding: EdgeInsets.symmetric(horizontal: compact || addLabel == null ? 0 : 14),
-      width: compact || addLabel == null ? size : null,
+      height: 44,
+      width: compact || addLabel == null ? 44 : null,
+      padding: EdgeInsets.symmetric(horizontal: compact || addLabel == null ? 0 : 16),
       decoration: BoxDecoration(
-        color: _canAdd ? AppColors.brand : AppColors.ink200,
-        borderRadius: BorderRadius.circular(compact ? size / 2 : AppRadius.sm),
+        color: _canAdd ? AppColors.brand : AppColors.border,
+        borderRadius: BorderRadius.circular(22),
         boxShadow: _canAdd && !compact ? AppShadows.brand : null,
       ),
       alignment: Alignment.center,
       child: addLabel == null || compact
-          ? const Icon(LucideIcons.plus, size: 18, color: AppColors.white)
+          ? const Icon(LucideIcons.plus, size: 20, color: AppColors.white)
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.plus, size: 16, color: AppColors.white),
+                const Icon(LucideIcons.plus, size: 18, color: AppColors.white),
                 const SizedBox(width: 6),
                 Text(addLabel!, style: AppText.buttonSm.copyWith(color: AppColors.white)),
               ],
@@ -78,33 +78,44 @@ class QuantityStepper extends StatelessWidget {
   Widget _stepper() {
     return Container(
       key: const ValueKey('stepper'),
-      height: size,
+      height: 44,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: AppColors.brand,
-        borderRadius: BorderRadius.circular(compact ? size / 2 : AppRadius.sm),
-        boxShadow: compact ? null : AppShadows.brand,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.brand, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _StepButton(icon: quantity == 1 ? LucideIcons.trash2 : LucideIcons.minus, onTap: _tapDecrement, size: size),
-          AnimatedSwitcher(
-            duration: AppDurations.fast,
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(scale: Tween(begin: 0.7, end: 1.0).animate(anim), child: child),
-            ),
-            child: SizedBox(
-              key: ValueKey(quantity),
-              width: 28,
-              child: Text(
-                '$quantity',
-                textAlign: TextAlign.center,
-                style: AppText.numeric.copyWith(color: AppColors.white, fontSize: 15).weight(700),
-              ),
+          _StepButton(
+            icon: quantity == 1 ? LucideIcons.minus : LucideIcons.minus,
+            onTap: _tapDecrement,
+            size: 40,
+            color: AppColors.brand,
+          ),
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$quantity',
+              textAlign: TextAlign.center,
+              style: AppText.numeric.copyWith(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
-          _StepButton(icon: LucideIcons.plus, onTap: _canAdd ? _tapIncrement : null, size: size),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: AppColors.brand,
+              shape: BoxShape.circle,
+            ),
+            child: _StepButton(
+              icon: LucideIcons.plus,
+              onTap: _canAdd ? _tapIncrement : null,
+              size: 40,
+              color: AppColors.white,
+            ),
+          ),
         ],
       ),
     );
@@ -122,11 +133,12 @@ class QuantityStepper extends StatelessWidget {
 }
 
 class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onTap, required this.size});
+  const _StepButton({required this.icon, required this.onTap, required this.size, this.color = AppColors.white});
 
   final IconData icon;
   final VoidCallback? onTap;
   final double size;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +149,7 @@ class _StepButton extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: Icon(icon, size: 17, color: onTap == null ? AppColors.white.withValues(alpha: 0.4) : AppColors.white),
+        child: Icon(icon, size: 18, color: onTap == null ? color.withValues(alpha: 0.4) : color),
       ),
     );
   }

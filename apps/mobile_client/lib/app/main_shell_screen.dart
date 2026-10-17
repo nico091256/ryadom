@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../core/providers.dart';
 import '../features/cart/presentation/cart_controller.dart';
+import '../features/cart/presentation/cart_screen.dart';
 import '../features/orders/presentation/orders_history_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/shops/presentation/home_screen.dart';
 import '../ui/ui.dart';
 
-/// Bottom-nav shell for the three top-level customer destinations. Screens
-/// pushed on top (shop detail, cart, checkout, order tracking) go through
-/// go_router as ordinary routes, above this shell.
+/// Bottom-nav shell for the 4 top-level customer destinations per PDF Page 4:
+/// Bosh | Buyurtmalar | Savat | Profil
 class MainShellScreen extends ConsumerStatefulWidget {
   const MainShellScreen({super.key});
 
@@ -23,30 +21,31 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
   int _index = 0;
 
   // IndexedStack keeps every tab's scroll position and state alive.
-  static const _screens = [HomeScreen(), OrdersHistoryScreen(), ProfileScreen()];
+  static const _screens = [
+    HomeScreen(),
+    OrdersHistoryScreen(),
+    CartScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final cartCount = ref.watch(cartControllerProvider.select((c) => c.itemCount));
 
     return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(index: _index, children: _screens),
-          Positioned(
-            right: AppSpacing.page,
-            bottom: AppSpacing.lg,
-            child: _CartFab(count: cartCount, onTap: () => context.push('/cart')),
-          ),
-        ],
-      ),
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: _BottomBar(
         index: _index,
         onChanged: (i) => setState(() => _index = i),
         items: [
-          _TabItem(icon: LucideIcons.home, label: ref.t('tabs.home')),
-          _TabItem(icon: LucideIcons.receipt, label: ref.t('tabs.orders')),
-          _TabItem(icon: LucideIcons.user, label: ref.t('tabs.profile')),
+          const _TabItem(icon: LucideIcons.home, label: 'Bosh'),
+          const _TabItem(icon: LucideIcons.clipboardList, label: 'Buyurtmalar'),
+          _TabItem(
+            icon: LucideIcons.shoppingBag,
+            label: 'Savat',
+            badge: cartCount > 0 ? '$cartCount' : null,
+          ),
+          const _TabItem(icon: LucideIcons.user, label: 'Profil'),
         ],
       ),
     );
@@ -54,9 +53,10 @@ class _MainShellScreenState extends ConsumerState<MainShellScreen> {
 }
 
 class _TabItem {
-  const _TabItem({required this.icon, required this.label});
+  const _TabItem({required this.icon, required this.label, this.badge});
   final IconData icon;
   final String label;
+  final String? badge;
 }
 
 /// White bar with a top hairline; the selected icon sits on a soft green pill.
@@ -120,17 +120,42 @@ class _BottomBarItem extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: AppDurations.normal,
-                curve: AppCurves.standard,
-                width: selected ? 56 : 40,
-                height: 30,
+              Stack(
+                clipBehavior: Clip.none,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.green100 : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Icon(item.icon, size: 22, color: color),
+                children: [
+                  AnimatedContainer(
+                    duration: AppDurations.normal,
+                    curve: AppCurves.standard,
+                    width: selected ? 56 : 40,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.green100 : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Icon(item.icon, size: 22, color: color),
+                  ),
+                  if (item.badge != null)
+                    Positioned(
+                      right: selected ? 4 : -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(color: AppColors.surface, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          item.badge!,
+                          style: AppText.micro.copyWith(color: AppColors.white).weight(700),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: AppSpacing.xs),
               AnimatedDefaultTextStyle(
@@ -147,86 +172,3 @@ class _BottomBarItem extends StatelessWidget {
   }
 }
 
-/// Floating cart shortcut above the bar. Slides in when the cart has items.
-class _CartFab extends StatelessWidget {
-  const _CartFab({required this.count, required this.onTap});
-
-  final int count;
-  final VoidCallback onTap;
-
-  static const double size = 52;
-
-  @override
-  Widget build(BuildContext context) {
-    final visible = count > 0;
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedSlide(
-        duration: AppDurations.slow,
-        curve: AppCurves.emphasized,
-        offset: visible ? Offset.zero : const Offset(0, 2),
-        child: AnimatedOpacity(
-          duration: AppDurations.normal,
-          opacity: visible ? 1 : 0,
-          child: Semantics(
-            button: true,
-            label: '$count',
-            child: Pressable(
-              onTap: onTap,
-              haptic: true,
-              scale: 0.92,
-              child: SizedBox(
-                width: size + AppSpacing.sm,
-                height: size + AppSpacing.sm,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: size,
-                        height: size,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(color: AppColors.brand, shape: BoxShape.circle, boxShadow: AppShadows.brand),
-                        child: const Icon(LucideIcons.shoppingBag, size: 22, color: AppColors.white),
-                      ),
-                    ),
-                    Positioned(right: 0, top: 0, child: _CountBadge(count: count)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CountBadge extends StatelessWidget {
-  const _CountBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = count > 99 ? '99+' : '$count';
-    return AnimatedSwitcher(
-      duration: AppDurations.fast,
-      transitionBuilder: (child, anim) => ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(anim), child: child),
-      child: Container(
-        key: ValueKey(label),
-        constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: AppColors.green100, width: 1.5),
-          boxShadow: AppShadows.xs,
-        ),
-        child: Text(label, style: AppText.micro.copyWith(color: AppColors.green700).weight(700)),
-      ),
-    );
-  }
-}

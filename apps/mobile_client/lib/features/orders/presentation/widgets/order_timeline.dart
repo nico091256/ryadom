@@ -45,6 +45,13 @@ class OrderTimeline extends ConsumerWidget {
     }
 
     final rows = <Widget>[];
+    final stageSubtitles = [
+      'Do\'kon tasdiqladi',
+      'Mahsulotlar tayyorlanmoqda',
+      'Uyingizga yaqinlashmoqda',
+      'Yoqimli ishtaha!',
+    ];
+
     for (var i = 0; i < kOrderStages.length; i++) {
       final stage = kOrderStages[i];
       final state = cancelled
@@ -56,6 +63,7 @@ class OrderTimeline extends ConsumerWidget {
           state: state,
           muted: cancelled,
           label: ref.t('orderStatus.${stage.value}'),
+          subtitle: i < stageSubtitles.length ? stageSubtitles[i] : null,
           time: state == _StepState.upcoming ? null : _reachedAt(stage),
           connector: isLast ? null : state == _StepState.done,
         ),
@@ -82,6 +90,7 @@ class _TimelineRow extends StatelessWidget {
     required this.state,
     required this.label,
     required this.connector,
+    this.subtitle,
     this.time,
     this.reason,
     this.muted = false,
@@ -90,6 +99,7 @@ class _TimelineRow extends StatelessWidget {
 
   final _StepState state;
   final String label;
+  final String? subtitle;
   final DateTime? time;
   final String? reason;
 
@@ -105,7 +115,7 @@ class _TimelineRow extends StatelessWidget {
       (true, _, _) => AppText.bodyStrong.danger,
       (_, true, _) => AppText.bodyMedium.tertiary,
       (_, _, _StepState.current) => AppText.bodyStrong,
-      (_, _, _StepState.done) => AppText.bodyMedium,
+      (_, _, _StepState.done) => AppText.bodyStrong,
       (_, _, _StepState.upcoming) => AppText.bodyMedium.tertiary,
     };
 
@@ -120,10 +130,10 @@ class _TimelineRow extends StatelessWidget {
               if (connector != null)
                 Container(
                   width: 2,
-                  height: AppSpacing.xxl,
+                  height: subtitle != null ? AppSpacing.huge : AppSpacing.xxl,
                   margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color: connector! && !muted ? AppColors.brand : AppColors.ink200,
+                    color: connector! && !muted ? AppColors.brand : AppColors.border,
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ),
@@ -146,6 +156,10 @@ class _TimelineRow extends StatelessWidget {
                     ],
                   ],
                 ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!, style: AppText.izoh.copyWith(color: AppColors.textSecondary)),
+                ],
                 if (reason != null && reason!.trim().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xxs),

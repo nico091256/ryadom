@@ -10,6 +10,7 @@ import 'shop_detail_controller.dart';
 import 'widgets/shop_cart_bar.dart';
 import 'widgets/shop_cover_app_bar.dart';
 import 'widgets/shop_header_card.dart';
+import 'widgets/shop_product_list_row.dart';
 import 'widgets/shop_product_tile.dart';
 import 'widgets/shop_toolbar.dart';
 
@@ -159,6 +160,24 @@ class _ShopProductGrid extends ConsumerWidget {
           builder: (context, constraints) {
             final side = _sidePadding(constraints.crossAxisExtent);
             final gridWidth = constraints.crossAxisExtent - 2 * side;
+
+            if (constraints.crossAxisExtent <= 600) {
+              return SliverPadding(
+                padding: EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.sm, AppSpacing.page, bottomPad),
+                sliver: SliverList.separated(
+                  itemCount: products.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) => ShopProductListRow(
+                    key: ValueKey<String>(products[i].id),
+                    product: products[i],
+                    shopId: shopId,
+                    shopName: shopName,
+                    index: i,
+                  ),
+                ),
+              );
+            }
+
             return SliverPadding(
               padding: EdgeInsets.fromLTRB(side, AppSpacing.md, side, bottomPad),
               sliver: SliverGrid(

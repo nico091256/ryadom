@@ -484,39 +484,55 @@ class ShopPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       elevated: true,
+      borderColor: AppColors.brand,
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              AppAvatar(url: shop.logoUrl, name: shop.name, size: 48),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.brand,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(LucideIcons.store, size: 24, color: AppColors.white),
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(child: Text(shop.name, style: AppText.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        const SizedBox(width: AppSpacing.sm),
-                        ShopOpenBadge(open: shop.isCurrentlyOpen, label: openLabel),
-                      ],
+                    Text(shop.name, style: AppText.title.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${formatDistance(shop.distanceMeters, lang)} · taxminan 10 daqiqa',
+                      style: AppText.izoh.copyWith(color: AppColors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    ShopMetaRow(distance: formatDistance(shop.distanceMeters, lang), hours: '${shop.openTime}–${shop.closeTime}'),
                   ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                shop.isCurrentlyOpen ? 'Ochiq' : 'Yopiq',
+                style: AppText.bodyStrong.copyWith(
+                  color: shop.isCurrentlyOpen ? AppColors.brand : AppColors.danger,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           AppButton(
-            label: ctaLabel,
-            size: AppButtonSize.md,
+            label: 'Do\'konni tanlash',
+            size: AppButtonSize.lg,
             onPressed: onOpen,
-            trailing: const Icon(LucideIcons.arrowRight, size: 18, color: AppColors.white),
           ),
         ],
       ),
