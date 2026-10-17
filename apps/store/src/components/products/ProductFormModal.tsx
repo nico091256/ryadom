@@ -5,6 +5,7 @@ import { ImagePlus, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { api, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Category, Product, ProductPayload } from '@/lib/types';
 import { somToTiyin, tiyinToSom } from '@/lib/format';
+import { cropToSquare } from '@/lib/crop-image';
 import { Button, Field, Input, Modal, Select, Switch, Textarea, useToast } from '@/components/ui';
 import { ProductImage } from './ProductImage';
 
@@ -156,19 +157,23 @@ export function ProductFormModal({
       return;
     }
     setErrors((p) => ({ ...p, image_url: undefined }));
-
-    const preview = URL.createObjectURL(file);
-    setLocalPreview(preview);
     setUploading(true);
+
+    let preview: string | null = null;
     try {
-      const url = await api.uploadImage(file);
+      // Auto center-crop to clean 1:1 square
+      const croppedFile = await cropToSquare(file);
+      preview = URL.createObjectURL(croppedFile);
+      setLocalPreview(preview);
+
+      const url = await api.uploadImage(croppedFile);
       setF((p) => ({ ...p, image_url: url }));
     } catch (err) {
       toast.error('Rasm yuklanmadi', errorMessage(err));
     } finally {
       setUploading(false);
       setLocalPreview(null);
-      URL.revokeObjectURL(preview);
+      if (preview) URL.revokeObjectURL(preview);
     }
   };
 

@@ -63,6 +63,8 @@ class ShopCartBar extends ConsumerWidget {
                       ),
                       const SizedBox(width: AppSpacing.md),
                       AnimatedPriceText(total, style: AppText.priceLg.onBrand),
+                      const SizedBox(width: AppSpacing.xs),
+                      const Icon(LucideIcons.arrowRight, size: 18, color: AppColors.white),
                     ],
                   ),
                 ),
