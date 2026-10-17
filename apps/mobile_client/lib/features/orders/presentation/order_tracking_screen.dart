@@ -533,23 +533,62 @@ class _ItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final icon = _fallbackIcon(item.productName);
+
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // 44x44 neutral thumbnail with contextual icon
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 20, color: AppColors.textPrimary.withValues(alpha: 0.6)),
+        ),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
-          child: Text.rich(
-            TextSpan(
-              text: item.productName,
-              children: [TextSpan(text: '  × ${item.quantity}', style: AppText.caption)],
-            ),
-            style: AppText.body,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                item.productName,
+                style: AppText.bodyStrong.copyWith(fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    '${item.quantity} dona · ',
+                    style: AppText.caption,
+                  ),
+                  PriceText(item.unitPrice, style: AppText.micro.copyWith(color: AppColors.textSecondary)),
+                ],
+              ),
+            ],
           ),
         ),
         const SizedBox(width: AppSpacing.md),
-        PriceText(item.subtotal, style: AppText.priceSm),
+        PriceText(item.subtotal, style: AppText.priceSm.copyWith(fontWeight: FontWeight.w700)),
       ],
     );
   }
+
+  IconData _fallbackIcon(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('non')) return LucideIcons.croissant;
+    if (lower.contains('sut')) return LucideIcons.milk;
+    if (lower.contains('tuxum')) return LucideIcons.egg;
+    if (lower.contains('choy') || lower.contains('kofe')) return LucideIcons.coffee;
+    if (lower.contains('pishloq')) return LucideIcons.cookie;
+    if (lower.contains('meva') || lower.contains('olma')) return LucideIcons.apple;
+    return LucideIcons.package;
+  }
 }
+
