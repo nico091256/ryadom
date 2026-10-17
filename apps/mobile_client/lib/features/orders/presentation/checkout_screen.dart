@@ -7,6 +7,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
 import '../../../ui/ui.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../cart/data/cart_api.dart';
 import '../../cart/presentation/cart_controller.dart';
 import '../../cart/presentation/widgets/cart_action_bar.dart';
 import '../../cart/presentation/widgets/cart_summary_card.dart';
@@ -86,6 +87,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final changeNote = _changeFrom == 'exact' ? "Qaytim kerak emas" : "Qaytim: $_changeFrom so'mdan";
         comment = comment.isEmpty ? changeNote : '$comment | $changeNote';
       }
+
+      // The backend builds the order from its own cart — push the local one
+      // first (it also re-checks stock/shop state and fails early if needed).
+      await ref.read(cartApiProvider).replace(ref.read(cartControllerProvider));
 
       final promo = _promoCodeController.text.trim();
       final order = await ref.read(ordersApiProvider).createOrder(CreateOrderPayload(

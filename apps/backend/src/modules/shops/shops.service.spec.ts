@@ -10,6 +10,8 @@ describe('ShopsService', () => {
       user: { findUnique: jest.fn() },
       city: { findFirst: jest.fn() },
       shop: { findUnique: jest.fn(), findMany: jest.fn() },
+      product: { count: jest.fn().mockResolvedValue(5) },
+      calculateDistanceMeters: jest.fn().mockReturnValue(1234),
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
     service = new ShopsService(prisma);
@@ -70,6 +72,24 @@ describe('ShopsService', () => {
       const result = await service.findOne('s1');
       expect(result.id).toBe('s1');
       expect(result.isCurrentlyOpen).toBe(true);
+      expect(result.productCount).toBe(5);
+      expect(result.distanceMeters).toBeNull();
+    });
+
+    it('adds the distance from the customer point when lat/lng are given', async () => {
+      prisma.shop.findUnique.mockResolvedValue({
+        id: 's1',
+        is_active: true,
+        status: 'active',
+        open_time: '00:00',
+        close_time: '23:59',
+        is_open: true,
+        lat: 41.28,
+        lng: 69.21,
+      });
+      const result = await service.findOne('s1', { lat: 41.3, lng: 69.24 });
+      expect(prisma.calculateDistanceMeters).toHaveBeenCalledWith(41.3, 69.24, 41.28, 69.21);
+      expect(result.distanceMeters).toBe(1234);
     });
   });
 });

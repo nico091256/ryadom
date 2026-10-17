@@ -177,7 +177,13 @@ export class ShopsService {
     }
   }
 
-  async findOne(id: string) {
+  /**
+   * Shop details. With the customer's point, also returns `distanceMeters`
+   * (same Haversine as the nearby fallback) so the shop page can show it
+   * without relying on the Home list being loaded first; `productCount` is
+   * the number of available products.
+   */
+  async findOne(id: string, from?: { lat: number; lng: number }) {
     const shop = await this.prisma.shop.findUnique({
       where: { id },
       include: {
@@ -189,8 +195,14 @@ export class ShopsService {
       throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found or inactive' });
     }
 
+    const productCount = await this.prisma.product.count({
+      where: { shop_id: shop.id, deleted_at: null, is_available: true },
+    });
+
     return {
       ...shop,
+      productCount,
+      distanceMeters: from ? this.prisma.calculateDistanceMeters(from.lat, from.lng, shop.lat, shop.lng) : null,
       isCurrentlyOpen: this.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
     };
   }

@@ -7,6 +7,7 @@ describe('IdempotencyService', () => {
   beforeEach(() => {
     const store = new Map<string, string>();
     redis = {
+      status: 'ready',
       set: jest.fn((key: string, value: string, _ex: string, _ttl: number, nx?: string) => {
         if (nx === 'NX' && store.has(key)) return Promise.resolve(null);
         store.set(key, value);
@@ -53,5 +54,20 @@ describe('IdempotencyService', () => {
     const b = await service.claim('orders:create:u2', 'same-key');
     expect(a.claimed).toBe(true);
     expect(b.claimed).toBe(true);
+  });
+
+  it('degrades to "no dedupe" instead of failing or hanging when Redis is not connected', async () => {
+    redis.status = 'reconnecting';
+    const result = await service.claim('orders:create:u1', 'key-1');
+    expect(result).toEqual({ claimed: true, cached: null });
+    expect(redis.set).not.toHaveBeenCalled();
+    await expect(service.store('orders:create:u1', 'key-1', { id: 'o' })).resolves.toBeUndefined();
+    await expect(service.release('orders:create:u1', 'key-1')).resolves.toBeUndefined();
+  });
+
+  it('degrades to "no dedupe" when a Redis command throws', async () => {
+    redis.set.mockRejectedValueOnce(new Error("Stream isn't writeable"));
+    const result = await service.claim('orders:create:u1', 'key-1');
+    expect(result).toEqual({ claimed: true, cached: null });
   });
 });

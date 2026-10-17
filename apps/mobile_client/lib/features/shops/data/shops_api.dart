@@ -25,8 +25,12 @@ class ShopsApi {
     return data.map((json) => ProductCategory.fromJson(json as Map<String, dynamic>)).toList();
   }
 
-  Future<Shop> findOne(String shopId) async {
-    final data = await _client.get('/shops/$shopId') as Map<String, dynamic>;
+  /// With the customer's point the backend also returns `distanceMeters`.
+  Future<Shop> findOne(String shopId, {double? lat, double? lng}) async {
+    final data = await _client.get('/shops/$shopId', query: {
+      'lat': ?lat,
+      'lng': ?lng,
+    }) as Map<String, dynamic>;
     return Shop.fromJson(data);
   }
 

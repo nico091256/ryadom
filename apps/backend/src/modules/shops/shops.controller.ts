@@ -37,9 +37,14 @@ export class ShopsController {
 
   @Public()
   @Get(':id')
-  @ApiOperation({ summary: 'Get shop details by ID' })
-  async getShop(@Param('id') id: string) {
-    return this.shopsService.findOne(id);
+  @ApiOperation({ summary: 'Get shop details by ID (pass lat/lng to get distanceMeters from the customer)' })
+  @ApiQuery({ name: 'lat', required: false, type: Number })
+  @ApiQuery({ name: 'lng', required: false, type: Number })
+  async getShop(@Param('id') id: string, @Query('lat') lat?: string, @Query('lng') lng?: string) {
+    const latNum = lat ? parseFloat(lat) : NaN;
+    const lngNum = lng ? parseFloat(lng) : NaN;
+    const hasPoint = Number.isFinite(latNum) && Number.isFinite(lngNum);
+    return this.shopsService.findOne(id, hasPoint ? { lat: latNum, lng: lngNum } : undefined);
   }
 
   @Public()
