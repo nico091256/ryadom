@@ -81,6 +81,7 @@ abstract final class AppText {
   static final micro = _style(10, 700, height: 1.2);
 
   // Money — always tabular so digits align in lists.
+  static final priceHero = _style(28, 800, height: 1.15, letterSpacing: -0.5, tabular: true);
   static final priceLg = _style(22, 800, height: 1.2, letterSpacing: -0.4, tabular: true);
   static final price = _style(16, 800, height: 1.2, letterSpacing: -0.2, tabular: true);
   static final priceSm = _style(14, 700, height: 1.2, tabular: true);

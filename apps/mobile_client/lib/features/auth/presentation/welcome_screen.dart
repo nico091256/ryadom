@@ -28,9 +28,17 @@ class WelcomeScreen extends ConsumerWidget {
           Expanded(
             child: SafeArea(
               bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xxl, bottom: AppSpacing.xxl),
-                child: OnboardingSlides(slides: slides),
+              child: Column(
+                children: [
+                  const SizedBox(height: AppSpacing.lg),
+                  const AppLogo(size: 38),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                      child: OnboardingSlides(slides: slides),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -39,14 +39,14 @@ class AppCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: r,
-        border: elevated ? null : Border.all(color: borderColor ?? AppColors.border),
-        boxShadow: elevated ? AppShadows.sm : null,
+        border: borderColor != null ? Border.all(color: borderColor!) : null,
+        boxShadow: elevated || borderColor == null ? AppShadows.premium : null,
       ),
       clipBehavior: clip,
       child: Padding(padding: padding, child: child),
     );
     if (onTap == null) return card;
-    return Pressable(onTap: onTap, haptic: haptic, scale: 0.985, borderRadius: r, child: card);
+    return Pressable(onTap: onTap, haptic: haptic, scale: 0.98, borderRadius: r, child: card);
   }
 }
 

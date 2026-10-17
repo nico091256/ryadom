@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:localshop_shared/localshop_shared.dart';
 
 import '../../../../ui/ui.dart';
 import '../../../cart/presentation/cart_controller.dart';
 import '../../domain/product.dart';
 
-/// Single product row exactly matching PDF Page 2:
-/// Left: pastel rounded square illustration / image.
-/// Middle: Product Name (title) + "1 dona · [narx]" (caption).
+/// Single product row per user spec:
+/// Left: Large square photo (64x64) with clean consistent neutral background (#F3F6F4), centered product.
+/// Middle: Product Name (title, 16px Manrope 700) + "1 dona · PriceText".
 /// Right: QuantityStepper ([+] or [- 1 +]).
 class ShopProductListRow extends ConsumerWidget {
   const ShopProductListRow({
@@ -24,33 +23,22 @@ class ShopProductListRow extends ConsumerWidget {
   final String shopName;
   final int index;
 
-  static const List<Color> _pastelColors = [
-    Color(0xFFF6D8A8), // Non / nonushta - warm beige
-    Color(0xFFCCE4F7), // Sut - soft blue
-    Color(0xFFFFF0B8), // Tuxum - soft yellow
-    Color(0xFFFAD4CE), // Pishloq - soft pink/peach
-    Color(0xFFD6E8D0), // Choy / meva - soft sage green
-    Color(0xFFE2D4F0), // Others - soft lavender
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartControllerProvider);
     final inCart = cart.shopId == shopId ? cart.quantityOf(product.id) : 0;
-    final color = _pastelColors[index % _pastelColors.length];
-
-    const unitLabel = '1 dona';
 
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      elevated: true,
       child: Row(
         children: [
-          // Pastel thumbnail matching PDF Page 2
+          // Large clean square thumbnail (64x64), neutral background, centered product
           Container(
-            width: 56,
-            height: 56,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: color,
+              color: AppColors.background,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             alignment: Alignment.center,
@@ -59,8 +47,8 @@ class ShopProductListRow extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Image.network(
                       product.imageUrl!,
-                      width: 56,
-                      height: 56,
+                      width: 64,
+                      height: 64,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => _fallbackIcon(product.nameUz),
                     ),
@@ -76,16 +64,23 @@ class ShopProductListRow extends ConsumerWidget {
               children: [
                 Text(
                   product.nameUz,
-                  style: AppText.asosiyMatn.copyWith(fontSize: 16),
+                  style: AppText.title.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '$unitLabel · ${formatPrice(product.price)}',
-                  style: AppText.izoh.copyWith(color: AppColors.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '1 dona · ',
+                      style: AppText.izoh.copyWith(color: AppColors.textSecondary),
+                    ),
+                    PriceText(
+                      product.price,
+                      style: AppText.priceSm.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -123,6 +118,6 @@ class ShopProductListRow extends ConsumerWidget {
       icon = LucideIcons.apple;
     }
 
-    return Icon(icon, size: 26, color: AppColors.textPrimary.withValues(alpha: 0.6));
+    return Icon(icon, size: 28, color: AppColors.textPrimary.withValues(alpha: 0.5));
   }
 }

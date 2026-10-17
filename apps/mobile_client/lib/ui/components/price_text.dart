@@ -29,13 +29,38 @@ class PriceText extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(localeProvider);
     final base = style ?? AppText.price;
-    final text = '${prefix ?? ''}${formatPrice(tiyin, lang)}';
-    return Text(
-      text,
+    final formatted = formatPrice(tiyin, lang);
+    final primaryColor = color ?? (strike ? AppColors.textTertiary : base.color ?? AppColors.textPrimary);
+    final secondaryColor = strike ? AppColors.textTertiary : primaryColor.withValues(alpha: 0.72);
+
+    // Split amount digits and unit ("45 000" and "so'm")
+    final lastSpace = formatted.lastIndexOf(' ');
+    final amount = lastSpace != -1 ? formatted.substring(0, lastSpace) : formatted;
+    final unit = lastSpace != -1 ? formatted.substring(lastSpace + 1) : '';
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (prefix != null && prefix!.isNotEmpty)
+            TextSpan(text: prefix, style: TextStyle(color: primaryColor)),
+          TextSpan(text: amount),
+          if (unit.isNotEmpty) ...[
+            const TextSpan(text: ' '),
+            TextSpan(
+              text: unit,
+              style: TextStyle(
+                fontSize: (base.fontSize ?? 16) * 0.82,
+                fontWeight: FontWeight.w600,
+                color: secondaryColor,
+              ),
+            ),
+          ],
+        ],
+      ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: base.copyWith(
-        color: color ?? (strike ? AppColors.textTertiary : base.color),
+        color: primaryColor,
         decoration: strike ? TextDecoration.lineThrough : TextDecoration.none,
         decorationColor: AppColors.textTertiary,
         fontFeatures: const [FontFeature.tabularFigures()],

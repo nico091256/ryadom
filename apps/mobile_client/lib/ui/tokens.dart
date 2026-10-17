@@ -150,13 +150,17 @@ abstract final class AppShadows {
     BoxShadow(color: Color(0x1414231C), blurRadius: 8, offset: Offset(0, 2)),
   ];
 
-  /// Standard card / element shadow per PDF design system: rgba(20, 35, 28, 0.12)
-  static const List<BoxShadow> md = [
-    BoxShadow(color: Color(0x1F14231C), blurRadius: 16, offset: Offset(0, 4)),
+  /// Two-tier soft shadow (0 1 2 + 0 8 24, 6-8% opacity) per premium design spec.
+  static const List<BoxShadow> premium = [
+    BoxShadow(color: Color(0x0F14231C), blurRadius: 4, offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x1414231C), blurRadius: 24, offset: Offset(0, 8)),
   ];
 
+  /// Standard card / element shadow per PDF design system: rgba(20, 35, 28, 0.12)
+  static const List<BoxShadow> md = premium;
+
   static const List<BoxShadow> lg = [
-    BoxShadow(color: Color(0x2414231C), blurRadius: 24, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x1A14231C), blurRadius: 32, offset: Offset(0, 12)),
   ];
 
   /// Coloured glow under primary brand CTAs.

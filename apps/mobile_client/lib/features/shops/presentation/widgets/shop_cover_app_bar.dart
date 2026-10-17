@@ -98,7 +98,7 @@ class _CoverFlexibleSpace extends StatelessWidget {
               right: 0,
               top: 0,
               height: coverHeight,
-              child: _Cover(url: shop.logoUrl, width: constraints.maxWidth, height: coverHeight),
+              child: _Cover(shop: shop, width: constraints.maxWidth, height: coverHeight),
             ),
             // Gradients for toolbar icon / status bar legibility.
             Positioned(
@@ -165,29 +165,37 @@ class _CoverFlexibleSpace extends StatelessWidget {
 }
 
 class _Cover extends StatelessWidget {
-  const _Cover({required this.url, required this.width, required this.height});
+  const _Cover({required this.shop, required this.width, required this.height});
 
-  final String? url;
+  final Shop shop;
   final double width;
   final double height;
 
+  static const List<String> _curatedCovers = [
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1200&q=80',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    if (url == null || url!.isEmpty) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppColors.brandGradient),
-        child: Center(child: Icon(LucideIcons.store, size: 56, color: AppColors.white.withValues(alpha: 0.4))),
-      );
-    }
-    return AppImage(
-      url: url,
-      width: width,
-      height: height,
-      radius: BorderRadius.zero,
-      fit: BoxFit.cover,
-      fallbackIcon: LucideIcons.store,
-      fallbackColor: AppColors.green100,
-      memCacheWidth: 1200,
+    final coverUrl = (shop.logoUrl != null && shop.logoUrl!.startsWith('http'))
+        ? shop.logoUrl!
+        : _curatedCovers[shop.name.hashCode.abs() % _curatedCovers.length];
+
+    return Hero(
+      tag: 'shop_cover_${shop.id}',
+      child: Image.network(
+        coverUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => DecoratedBox(
+          decoration: const BoxDecoration(gradient: AppColors.brandGradient),
+          child: Center(child: Icon(LucideIcons.store, size: 56, color: AppColors.white.withValues(alpha: 0.4))),
+        ),
+      ),
     );
   }
 }

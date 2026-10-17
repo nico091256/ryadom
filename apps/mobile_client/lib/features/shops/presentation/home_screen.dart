@@ -169,7 +169,7 @@ class _ShopListState extends ConsumerState<_ShopList> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.md, AppSpacing.page, AppSpacing.lg),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.lg, AppSpacing.page, AppSpacing.xl),
               child: AppSearchBar(
                 controller: widget.searchController,
                 hint: ref.t('home.searchPlaceholder'),
@@ -178,6 +178,7 @@ class _ShopListState extends ConsumerState<_ShopList> {
             ),
           ),
           const SliverToBoxAdapter(child: CategoryRow()),
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
           SliverToBoxAdapter(
             child: SectionHeader(
               title: ref.t('home.nearbyShops'),
@@ -200,7 +201,7 @@ class _ShopListState extends ConsumerState<_ShopList> {
                   )
                 : SliverList.separated(
                     itemCount: shops.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
                     itemBuilder: (context, i) => Padding(
                       padding: AppSpacing.pagePadding,
                       child: _buildCard(context, shops[i], i),

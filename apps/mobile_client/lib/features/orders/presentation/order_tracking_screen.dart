@@ -141,28 +141,33 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           ],
         ),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
-          child: orderAsync.when(
-            skipLoadingOnRefresh: true,
-            data: (order) => _OrderBody(
-              order: order,
-              celebrate: _celebrate,
-              cancelling: _cancelling,
-              onCancel: _cancel,
-              onRate: _rate,
-            ),
-            loading: () => const OrderTrackingSkeleton(),
-            error: (err, _) => EmptyState(
-              illustration: AppIllustration.offline,
-              title: ref.t('common.error'),
-              subtitle: '$err',
-              actionLabel: ref.t('common.retry'),
-              onAction: () => ref.invalidate(orderProvider(widget.orderId)),
+      body: Stack(
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+              child: orderAsync.when(
+                skipLoadingOnRefresh: true,
+                data: (order) => _OrderBody(
+                  order: order,
+                  celebrate: _celebrate,
+                  cancelling: _cancelling,
+                  onCancel: _cancel,
+                  onRate: _rate,
+                ),
+                loading: () => const OrderTrackingSkeleton(),
+                error: (err, _) => EmptyState(
+                  illustration: AppIllustration.offline,
+                  title: ref.t('common.error'),
+                  subtitle: '$err',
+                  actionLabel: ref.t('common.retry'),
+                  onAction: () => ref.invalidate(orderProvider(widget.orderId)),
+                ),
+              ),
             ),
           ),
-        ),
+          if (_celebrate) const Positioned.fill(child: ConfettiOverlay()),
+        ],
       ),
     );
   }
