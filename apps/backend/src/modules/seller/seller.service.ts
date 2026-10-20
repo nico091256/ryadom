@@ -1,11 +1,23 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CacheService } from '../../common/redis/cache.service';
 import { CreateProductDto, UpdateProductDto, UpdateShopProfileDto } from './seller.dto';
 import { OrderStatus } from '@localshop/shared';
 
 @Injectable()
 export class SellerService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private cache?: CacheService,
+  ) {}
+
+  private async invalidateShopCache(shopId: string) {
+    if (!this.cache) return;
+    await Promise.all([
+      this.cache.del(`shop:${shopId}:profile`),
+      this.cache.delPattern('nearby:*'),
+    ]);
+  }
 
   /**
    * Helper to retrieve seller's shop with ownership verification
@@ -29,7 +41,7 @@ export class SellerService {
   async updateShopProfile(ownerId: string, dto: UpdateShopProfileDto) {
     const shop = await this.getSellerShop(ownerId);
 
-    return this.prisma.shop.update({
+    const updated = await this.prisma.shop.update({
       where: { id: shop.id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -42,6 +54,9 @@ export class SellerService {
       },
       include: { city: true },
     });
+
+    await this.invalidateShopCache(shop.id);
+    return updated;
   }
 
   async getProducts(ownerId: string) {
@@ -66,7 +81,7 @@ export class SellerService {
     const nameRu = dto.name_ru || primaryName;
     const nameEn = dto.name_en || primaryName;
 
-    return this.prisma.product.create({
+    const created = await this.prisma.product.create({
       data: {
         shop_id: shop.id,
         category_id: dto.category_id,
@@ -83,6 +98,9 @@ export class SellerService {
       },
       include: { category: true },
     });
+
+    await this.invalidateShopCache(shop.id);
+    return created;
   }
 
   async updateProduct(ownerId: string, productId: string, dto: UpdateProductDto) {
@@ -97,7 +115,7 @@ export class SellerService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Cannot edit product belonging to another shop' });
     }
 
-    return this.prisma.product.update({
+    const updated = await this.prisma.product.update({
       where: { id: productId },
       data: {
         ...(dto.name_uz !== undefined ? { name_uz: dto.name_uz } : {}),
@@ -114,6 +132,9 @@ export class SellerService {
       },
       include: { category: true },
     });
+
+    await this.invalidateShopCache(shop.id);
+    return updated;
   }
 
   async deleteProduct(ownerId: string, productId: string) {
@@ -134,6 +155,7 @@ export class SellerService {
       data: { deleted_at: new Date() },
     });
 
+    await this.invalidateShopCache(shop.id);
     return { success: true, message: 'Product soft deleted successfully' };
   }
 

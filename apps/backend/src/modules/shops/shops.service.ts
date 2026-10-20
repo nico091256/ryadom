@@ -1,12 +1,16 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DEFAULT_SEARCH_RADIUS_METERS, UserRole } from '@localshop/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CacheService } from '../../common/redis/cache.service';
 import { RegisterShopDto } from './shops.dto';
 
 @Injectable()
 export class ShopsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private cache?: CacheService,
+  ) {}
 
   /**
    * Self-service shop registration (spec: POST /store/register). Creates the
@@ -99,7 +103,7 @@ export class ShopsService {
   }
 
   /**
-   * Search nearby shops within radius (default 3000m)
+   * Search nearby shops within radius (default 3000m) with ~100m geohash grid caching (30s)
    */
   async findNearby(
     lat: number,
@@ -111,6 +115,28 @@ export class ShopsService {
       return [];
     }
 
+    if (!this.cache) {
+      return this.computeNearby(lat, lng, radiusMeters, categoryId);
+    }
+
+    // ~100m grid cell caching: 3 decimal places is ~111m precision
+    const gridLat = Number(lat).toFixed(3);
+    const gridLng = Number(lng).toFixed(3);
+    const cacheKey = `nearby:${gridLat}:${gridLng}:${radiusMeters}:${categoryId || 'all'}`;
+
+    return this.cache.wrap(
+      cacheKey,
+      () => this.computeNearby(lat, lng, radiusMeters, categoryId),
+      30, // 30 seconds TTL
+    );
+  }
+
+  private async computeNearby(
+    lat: number,
+    lng: number,
+    radiusMeters: number = DEFAULT_SEARCH_RADIUS_METERS,
+    categoryId?: string,
+  ) {
     // Count available products per shop (optionally restricted to a category).
     // Shops with zero matching products are excluded when a category filter is set.
     const productCounts = await this.prisma.product.groupBy({
@@ -184,20 +210,28 @@ export class ShopsService {
    * the number of available products.
    */
   async findOne(id: string, from?: { lat: number; lng: number }) {
-    const shop = await this.prisma.shop.findUnique({
-      where: { id },
-      include: {
-        city: true,
-      },
-    });
+    const fetchShop = async () => {
+      const s = await this.prisma.shop.findUnique({
+        where: { id },
+        include: {
+          city: true,
+        },
+      });
 
-    if (!shop || !shop.is_active || shop.status !== ('active' as any)) {
-      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found or inactive' });
-    }
+      if (!s || !s.is_active || s.status !== ('active' as any)) {
+        throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found or inactive' });
+      }
 
-    const productCount = await this.prisma.product.count({
-      where: { shop_id: shop.id, deleted_at: null, is_available: true },
-    });
+      const count = await this.prisma.product.count({
+        where: { shop_id: s.id, deleted_at: null, is_available: true },
+      });
+
+      return { shop: s, productCount: count };
+    };
+
+    const { shop, productCount } = this.cache
+      ? await this.cache.wrap(`shop:${id}:profile`, fetchShop, 60)
+      : await fetchShop();
 
     return {
       ...shop,
