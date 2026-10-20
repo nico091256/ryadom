@@ -81,36 +81,29 @@ export class OrdersService {
 
     // Perform atomic transaction: check & decrement stock, create order, clear cart
     const order = await this.prisma.$transaction(async (tx) => {
-      // 1. Validate and decrement stock
+      // 1. Atomically validate and decrement stock in a single conditional update
       let totalAmount = 0;
       for (const item of cart.items) {
-        const product = await tx.product.findUnique({
-          where: { id: item.product_id },
-        });
-
-        if (!product || product.deleted_at || !product.is_available) {
-          throw new ConflictException({
-            code: ERROR_CODES.OUT_OF_STOCK,
-            message: `Product '${item.product.name_uz}' is no longer available.`,
-          });
-        }
-
-        if (product.stock < item.quantity) {
-          throw new ConflictException({
-            code: ERROR_CODES.OUT_OF_STOCK,
-            message: `Insufficient stock for product '${product.name_uz}'. Requested: ${item.quantity}, Available: ${product.stock}`,
-          });
-        }
-
-        totalAmount += product.price * item.quantity;
-
-        // Decrement stock
-        await tx.product.update({
-          where: { id: product.id },
+        const res = await tx.product.updateMany({
+          where: {
+            id: item.product_id,
+            is_available: true,
+            deleted_at: null,
+            stock: { gte: item.quantity },
+          },
           data: {
-            stock: product.stock - item.quantity,
+            stock: { decrement: item.quantity },
           },
         });
+
+        if (res.count === 0) {
+          throw new ConflictException({
+            code: ERROR_CODES.OUT_OF_STOCK,
+            message: `Insufficient stock for product '${item.product.name_uz}'.`,
+          });
+        }
+
+        totalAmount += item.product.price * item.quantity;
       }
 
       // 2. Snapshot address
@@ -394,7 +387,7 @@ ${promoLine}` : promoLine;
       this.prisma.order.findMany({
         where,
         include: {
-          items: { include: { product: { select: { id: true, name_uz: true, name_ru: true, name_en: true, image_url: true } } } },
+          items: true,
           shop: { select: { id: true, name: true, phone: true, logo_url: true } },
           customer: { select: { id: true, name: true, phone: true } },
           status_history: { orderBy: { created_at: 'asc' } },

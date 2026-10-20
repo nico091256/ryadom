@@ -17,7 +17,7 @@ describe('OrdersService', () => {
       cart: { findUnique: jest.fn(), delete: jest.fn() },
       cartItem: { deleteMany: jest.fn() },
       order: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
-      product: { findUnique: jest.fn(), update: jest.fn() },
+      product: { findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       orderStatusHistory: { create: jest.fn() },
       orderReview: { create: jest.fn() },
       $transaction: jest.fn((cb: any) => cb(prisma)),

@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { buildSwaggerDocument } from './swagger.config';
 
@@ -18,6 +19,14 @@ async function bootstrap() {
       credentials: true,
     },
   });
+
+  // Security HTTP headers
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
+    }),
+  );
 
   // Global prefix as specified in Technical Spec v2 Section 13: All paths start with /api/v1
   app.setGlobalPrefix('api/v1');

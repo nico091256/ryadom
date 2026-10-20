@@ -315,7 +315,7 @@ model OrderStatusHistory {
   order      Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
   actor      User        @relation(fields: [changed_by], references: [id])
 
-  @@index([order_id])
+  @@index([order_id, created_at])
   @@index([changed_by])
   @@map("order_status_history")
 }
@@ -360,7 +360,7 @@ model SmsCode {
   expires_at DateTime
   created_at DateTime @default(now())
 
-  @@index([phone])
+  @@index([phone, created_at])
   @@map("sms_codes")
 }
 
