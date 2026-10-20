@@ -51,3 +51,6 @@ apps/mobile_client/build/
 packages/*/pubspec.lock
 
 ECC/
+
+# Graphify knowledge-graph output (regenerate with: graphify update .)
+graphify-out/
