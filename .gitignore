@@ -32,7 +32,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Storage & Uploads (runtime upload storage only — not src/modules/uploads)
+# Storage & Uploads (runtime upload storage only вЂ” not src/modules/uploads)
 /uploads/
 apps/backend/uploads/
 storage/
