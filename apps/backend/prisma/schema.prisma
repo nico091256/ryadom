@@ -127,6 +127,8 @@ model Address {
   user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   city         City     @relation(fields: [city_id], references: [id])
 
+  @@index([user_id])
+  @@index([city_id])
   @@map("addresses")
 }
 
@@ -155,6 +157,9 @@ model Shop {
   carts                   Cart[]
   orders                  Order[]
 
+  @@index([status, is_active, is_open])
+  @@index([owner_id])
+  @@index([city_id])
   @@map("shops")
 }
 
@@ -172,6 +177,7 @@ model Category {
   children   Category[] @relation("CategoryHierarchy")
   products   Product[]
 
+  @@index([parent_id])
   @@map("categories")
 }
 
@@ -198,6 +204,8 @@ model Product {
   cart_items     CartItem[]
   order_items    OrderItem[]
 
+  @@index([shop_id, is_available, deleted_at])
+  @@index([category_id])
   @@map("products")
 }
 
@@ -291,6 +299,8 @@ model OrderItem {
   order        Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
   product      Product  @relation(fields: [product_id], references: [id])
 
+  @@index([order_id])
+  @@index([product_id])
   @@map("order_items")
 }
 
@@ -305,6 +315,8 @@ model OrderStatusHistory {
   order      Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
   actor      User        @relation(fields: [changed_by], references: [id])
 
+  @@index([order_id])
+  @@index([changed_by])
   @@map("order_status_history")
 }
 
@@ -321,6 +333,8 @@ model Payment {
 
   order          Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
 
+  @@index([order_id])
+  @@index([status])
   @@map("payments")
 }
 
@@ -334,6 +348,7 @@ model Notification {
 
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
+  @@index([user_id, is_read, created_at])
   @@map("notifications")
 }
 
