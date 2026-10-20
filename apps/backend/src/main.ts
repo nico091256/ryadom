@@ -8,8 +8,15 @@ import { buildSwaggerDocument } from './swagger.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : true;
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    cors: true,
+    cors: {
+      origin: corsOrigins,
+      credentials: true,
+    },
   });
 
   // Global prefix as specified in Technical Spec v2 Section 13: All paths start with /api/v1
@@ -30,10 +37,15 @@ async function bootstrap() {
   );
 
   // OpenAPI (Swagger) API documentation served at /docs (Section 11)
-  const document = buildSwaggerDocument(app);
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'LocalShop API Docs',
-  });
+  const isProduction = process.env.NODE_ENV === 'production';
+  const enableSwagger = process.env.ENABLE_SWAGGER === 'true' || !isProduction;
+
+  if (enableSwagger) {
+    const document = buildSwaggerDocument(app);
+    SwaggerModule.setup('docs', app, document, {
+      customSiteTitle: 'LocalShop API Docs',
+    });
+  }
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
