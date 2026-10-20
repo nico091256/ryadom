@@ -44,10 +44,11 @@ class ShopCard extends ConsumerWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Hero(
-                  tag: 'shop_cover_${shop.id}',
-                  child: ShopCover(url: shop.logoUrl, width: width, height: height),
-                ),
+                // No Hero here on purpose: a flight whose destination gets rebuilt
+                // (list refresh, "last order" card appearing after checkout) is
+                // aborted by Flutter and leaves this child hidden — the card then
+                // shows only its dark gradient. The slide page transition is enough.
+                ShopCover(url: shop.logoUrl, width: width, height: height),
                 const Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(

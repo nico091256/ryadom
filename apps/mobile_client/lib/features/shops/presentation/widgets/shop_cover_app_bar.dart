@@ -176,10 +176,7 @@ class _Cover extends StatelessWidget {
   Widget build(BuildContext context) {
     // Same widget as the Home card so the Hero flight is seamless; the shop's
     // real photo (server-relative paths resolved + cached) or the brand fallback.
-    return Hero(
-      tag: 'shop_cover_${shop.id}',
-      child: ShopCover(url: shop.logoUrl, width: width, height: height),
-    );
+    return ShopCover(url: shop.logoUrl, width: width, height: height);
   }
 }
 
