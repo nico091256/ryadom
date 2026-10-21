@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { IDEMPOTENCY_KEY_TTL_SECONDS } from '@localshop/shared';
-import { REDIS_CLIENT } from '../redis/redis.module';
+import { REDIS_CLIENT } from '../redis/redis.constants';
 
 const PROCESSING_SENTINEL = '__processing__';
 
