@@ -3,6 +3,7 @@ import 'package:localshop_shared/localshop_shared.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'i18n/i18n_service.dart';
 import 'network/api_client.dart';
+import 'realtime/order_socket.dart';
 import 'storage/token_storage.dart';
 
 /// Overridden in main.dart once the asset bundle has loaded — see bootstrap().
@@ -16,7 +17,17 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     tokenStorage: ref.read(tokenStorageProvider),
     onSessionExpired: () => ref.read(sessionExpiredNotifierProvider.notifier).state++,
+    // A refreshed access token must also reach the socket handshake.
+    onTokenRefreshed: () => ref.read(orderSocketProvider).reconnect(),
   );
+});
+
+/// Realtime order status pushes (Socket.IO). Connects lazily on first
+/// [OrderSocket.watchOrder] and disconnects when nobody is watching.
+final orderSocketProvider = Provider<OrderSocket>((ref) {
+  final socket = OrderSocket(tokenStorage: ref.read(tokenStorageProvider));
+  ref.onDispose(socket.dispose);
+  return socket;
 });
 
 /// Bumped every time the session expires (refresh failed); auth_controller

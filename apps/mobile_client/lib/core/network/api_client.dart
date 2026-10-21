@@ -7,8 +7,11 @@ import 'auth_interceptor.dart';
 /// Thin wrapper around Dio: callers get plain JSON-ish data back and a
 /// uniform [AppException] on failure, never a raw [DioException].
 class ApiClient {
-  ApiClient({required TokenStorage tokenStorage, required void Function() onSessionExpired})
-      : _dio = Dio(BaseOptions(
+  ApiClient({
+    required TokenStorage tokenStorage,
+    required void Function() onSessionExpired,
+    void Function()? onTokenRefreshed,
+  }) : _dio = Dio(BaseOptions(
           baseUrl: Env.apiBaseUrl,
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 15),
@@ -18,6 +21,7 @@ class ApiClient {
       tokenStorage: tokenStorage,
       baseUrl: Env.apiBaseUrl,
       onSessionExpired: onSessionExpired,
+      onTokenRefreshed: onTokenRefreshed,
     ));
   }
 

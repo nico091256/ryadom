@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod, PaymentStatus, ShopStatus, UserRole } from './types';
+import type { AuditAction, AuditTargetType, OrderStatus, PaymentMethod, PaymentStatus, ShopStatus, UserRole } from './types';
 
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'accepted', 'on_the_way', 'delivered', 'cancelled'];
 
@@ -33,3 +33,35 @@ export const ROLE_META: Record<UserRole, { label: string; tone: 'blue' | 'violet
   seller: { label: 'Sotuvchi', tone: 'violet' },
   admin: { label: 'Admin', tone: 'gray' },
 };
+
+export const AUDIT_TARGET_META: Record<AuditTargetType, { label: string; tone: 'gray' | 'green' | 'amber' | 'red' | 'blue' | 'violet' }> = {
+  shop: { label: "Do'kon", tone: 'green' },
+  order: { label: 'Buyurtma', tone: 'blue' },
+  user: { label: 'Foydalanuvchi', tone: 'violet' },
+  product: { label: 'Mahsulot', tone: 'amber' },
+  category: { label: 'Kategoriya', tone: 'gray' },
+  promo: { label: 'Promo-kod', tone: 'gray' },
+};
+
+/** Human labels for audit actions; destructive ones are flagged so the row can be tinted. */
+export const AUDIT_ACTION_META: Record<AuditAction, { label: string; destructive?: boolean }> = {
+  'shop.create': { label: "Do'kon yaratildi" },
+  'shop.approve': { label: "Do'kon tasdiqlandi" },
+  'shop.block': { label: "Do'kon bloklandi", destructive: true },
+  'shop.unblock': { label: "Do'kon blokdan chiqarildi" },
+  'shop.reset_password': { label: 'Sotuvchi paroli tiklandi', destructive: true },
+  'shop.update': { label: "Do'kon tahrirlandi" },
+  'order.cancel': { label: 'Buyurtma bekor qilindi', destructive: true },
+  'user.block': { label: 'Foydalanuvchi bloklandi', destructive: true },
+  'user.unblock': { label: 'Foydalanuvchi blokdan chiqarildi' },
+  'promo.create': { label: 'Promo-kod yaratildi' },
+  'promo.update': { label: 'Promo-kod tahrirlandi' },
+  'promo.delete': { label: "Promo-kod o'chirildi", destructive: true },
+  'category.create': { label: 'Kategoriya yaratildi' },
+  'category.update': { label: 'Kategoriya tahrirlandi' },
+  'category.delete': { label: "Kategoriya o'chirildi", destructive: true },
+  'product.update': { label: 'Mahsulot tahrirlandi' },
+  'product.delete': { label: "Mahsulot o'chirildi", destructive: true },
+};
+
+export const AUDIT_ACTIONS = Object.keys(AUDIT_ACTION_META) as AuditAction[];

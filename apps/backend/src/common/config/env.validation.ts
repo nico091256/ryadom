@@ -87,6 +87,15 @@ export function validateEnv(
     problems.push(`TRUST_PROXY must be "true" or "false" (got: ${trustProxy})`);
   }
 
+  const throttleDisabled = readString(out, 'THROTTLE_DISABLED');
+  if (throttleDisabled && throttleDisabled !== 'true' && throttleDisabled !== 'false') {
+    problems.push(`THROTTLE_DISABLED must be "true" or "false" (got: ${throttleDisabled})`);
+  }
+  if (throttleDisabled === 'true') {
+    if (isProduction) problems.push('THROTTLE_DISABLED=true is not allowed when NODE_ENV=production');
+    else logger.warn('!!! THROTTLE_DISABLED=true - rate limiting is OFF (load-test mode). Never deploy like this.');
+  }
+
   if (problems.length) throw new EnvValidationError(problems);
   return out;
 }

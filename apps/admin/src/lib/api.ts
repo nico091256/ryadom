@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  AuditLogEntry,
   Category,
   CategoryPayload,
   CreateShopPayload,
@@ -416,6 +417,12 @@ class ApiService {
       method: 'PATCH',
       body: JSON.stringify({ is_blocked: isBlocked }),
     });
+  }
+
+  // ---------- Audit log ----------
+  async getAuditLog(params: { actorId?: string; targetType?: string; action?: string; page?: number; limit?: number }) {
+    const res = await this.request(`/admin/audit-log${qs(params)}`);
+    return toPaginated<AuditLogEntry>(res, params.page, params.limit);
   }
 
   // ---------- Categories ----------

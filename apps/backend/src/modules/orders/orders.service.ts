@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,8 +10,10 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import type Redis from 'ioredis';
 import { MetricsService } from '../../common/observability/metrics.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.constants';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -40,7 +43,11 @@ export class OrdersService {
     @InjectQueue(ORDER_AUTO_CANCEL_QUEUE) private autoCancelQueue: Queue,
     // Optional so unit tests can construct the service without the metrics registry.
     @Optional() private metrics?: MetricsService,
+    // Shared ioredis client, used only to know whether Redis is reachable right now.
+    @Optional() @Inject(REDIS_CLIENT) private redis?: Redis,
   ) {}
+
+  private warnedQueueOffline = false;
 
   /**
    * Customer places an order from their active cart.
@@ -205,11 +212,12 @@ ${promoLine}` : promoLine;
    */
   private async scheduleAutoCancel(orderId: string): Promise<void> {
     await this.withQueueTimeout(
-      this.autoCancelQueue.add(
-        ORDER_AUTO_CANCEL_JOB,
-        { orderId },
-        { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
-      ),
+      () =>
+        this.autoCancelQueue.add(
+          ORDER_AUTO_CANCEL_JOB,
+          { orderId },
+          { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
+        ),
       `Auto-cancel job for order ${orderId} was NOT scheduled; the order will not expire automatically until Redis is reachable.`,
     );
   }
@@ -217,7 +225,7 @@ ${promoLine}` : promoLine;
   /** Drops the pending auto-cancel job once the order has left 'new'. */
   private async dropAutoCancel(orderId: string): Promise<void> {
     await this.withQueueTimeout(
-      this.autoCancelQueue.remove(orderId),
+      () => this.autoCancelQueue.remove(orderId),
       `Auto-cancel job for order ${orderId} could not be removed; the processor re-checks the status before acting, so this is harmless.`,
     );
   }
@@ -227,13 +235,24 @@ ${promoLine}` : promoLine;
    * call would hang the HTTP request. Race it against a short timeout and log
    * instead — the DB write that matters has already happened by then.
    */
-  private async withQueueTimeout(operation: Promise<unknown>, failureMessage: string, ms = 1500): Promise<void> {
+  private async withQueueTimeout(operation: () => Promise<unknown>, failureMessage: string, ms = 1500): Promise<void> {
+    // Known-offline Redis: don't even start the command (and don't make every
+    // order wait the full timeout - under load that was 1.5 s per request).
+    if (this.redis && this.redis.status !== 'ready') {
+      if (!this.warnedQueueOffline) {
+        this.warnedQueueOffline = true;
+        this.logger.warn(`Redis is ${this.redis.status}; auto-cancel queue operations are skipped until it reconnects.`);
+      }
+      return;
+    }
+    this.warnedQueueOffline = false;
+
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`Redis did not respond within ${ms}ms`)), ms);
     });
     try {
-      await Promise.race([operation, timeout]);
+      await Promise.race([operation(), timeout]);
     } catch (err: any) {
       this.logger.error(`${failureMessage} (${err?.message ?? err})`);
     } finally {

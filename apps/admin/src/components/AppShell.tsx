@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ScrollText,
   ShoppingBag,
   Store,
   TicketPercent,
@@ -38,6 +39,7 @@ const NAV = [
     ],
   },
   { section: 'Odamlar', items: [{ label: 'Foydalanuvchilar', href: '/users', icon: Users }] },
+  { section: 'Nazorat', items: [{ label: 'Audit jurnali', href: '/audit-log', icon: ScrollText }] },
 ];
 
 function pageTitle(pathname: string): string {
@@ -49,6 +51,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/users')) return 'Foydalanuvchilar';
   if (pathname.startsWith('/categories')) return 'Kategoriyalar';
   if (pathname.startsWith('/promo-codes')) return 'Promo-kodlar';
+  if (pathname.startsWith('/audit-log')) return 'Audit jurnali';
   return 'Ryadom Admin';
 }
 

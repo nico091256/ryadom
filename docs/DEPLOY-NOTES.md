@@ -59,20 +59,25 @@ Script: `tools/k6/order-flow.js` — 50 VUs for 1 minute, each VU logs in once
 Thresholds: `p(95) < 300 ms`, failed requests `< 1 %`.
 
 ```powershell
-winget install k6                      # one-time, Windows
-# start the backend first (in-memory store is fine):
-npx pnpm@12.11.2 --filter @localshop/backend start:dev
+winget install --id GrafanaLabs.k6 -e   # one-time, Windows (needs the UAC prompt); or unzip the
+                                        # portable k6-vX-windows-amd64.zip from github.com/grafana/k6/releases
+# start the backend first with rate limiting OFF (in-memory store is fine):
+$env:THROTTLE_DISABLED = 'true'; npx pnpm@12.11.2 --filter @localshop/backend start:dev
 k6 run tools/k6/order-flow.js
-k6 run -e BASE_URL=https://api.example.uz/api/v1 -e VUS=100 -e DURATION=3m tools/k6/order-flow.js
+k6 run -e BASE_URL=https://staging-api.example.uz/api/v1 -e VUS=100 -e DURATION=3m tools/k6/order-flow.js
 ```
 
 Caveats:
 
-* The global `ThrottlerGuard` allows 120 requests/min per IP. 50 VUs from one
-  machine exceed that immediately and the 429s count as failed requests. For a
-  realistic run either raise the limit for the test environment or run k6 from
-  several hosts (or lower `VUS`).
+* All limiters (global 120 req/min per IP and the per-route auth windows) key on
+  the client IP, so 50 VUs from one machine are indistinguishable from one abusive
+  client. `THROTTLE_DISABLED=true` switches them off for the test instance; the
+  API refuses to boot with it in production. Never point k6 at production.
 * The seeded in-memory shop has finite stock; once it is exhausted `POST /orders`
-  returns `409 OUT_OF_STOCK`, which the script tolerates in its checks but which
-  still counts toward `http_req_failed`. Reseed (restart the dev server) between runs.
+  returns `409 OUT_OF_STOCK`. The script treats 409 as an expected status so it
+  does not count toward `http_req_failed`. Reseed (restart the dev server) between runs.
 * Without Redis the `Idempotency-Key` is accepted but not enforced (logged once).
+
+Reference run (2026-10-21, dev laptop, in-memory store, `THROTTLE_DISABLED=true`,
+30 VUs / 30 s): 3140 requests, 0 % failed, p95 32 ms overall, `POST /orders`
+p95 41 ms. Details and what the first run uncovered: `tools/k6/README.md`.

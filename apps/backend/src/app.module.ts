@@ -35,12 +35,12 @@ import { AppController } from './app.controller';
       validate: (config) => validateEnv(config),
     }),
     // Global baseline; the auth endpoints add stricter per-route windows via @Throttle.
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 120,
-      },
-    ]),
+    // THROTTLE_DISABLED=true switches every limiter off for load tests (k6 from one
+    // IP) - refused by validateEnv in production.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 120 }],
+      skipIf: () => process.env.THROTTLE_DISABLED === 'true' && process.env.NODE_ENV !== 'production',
+    }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({

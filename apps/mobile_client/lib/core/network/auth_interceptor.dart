@@ -14,12 +14,17 @@ class AuthInterceptor extends Interceptor {
     required this.tokenStorage,
     required this.baseUrl,
     required this.onSessionExpired,
+    this.onTokenRefreshed,
   });
 
   final Dio dio;
   final TokenStorage tokenStorage;
   final String baseUrl;
   final void Function() onSessionExpired;
+
+  /// Called after a successful refresh (new tokens already persisted) so other
+  /// token consumers — the realtime socket — can re-authenticate.
+  final void Function()? onTokenRefreshed;
 
   Future<String?>? _refreshing;
 
@@ -79,6 +84,7 @@ class AuthInterceptor extends Interceptor {
       final accessToken = data['accessToken'] as String;
       final newRefreshToken = data['refreshToken'] as String;
       await tokenStorage.saveTokens(accessToken: accessToken, refreshToken: newRefreshToken);
+      onTokenRefreshed?.call();
       return accessToken;
     } catch (_) {
       return null;

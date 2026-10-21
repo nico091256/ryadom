@@ -7,6 +7,7 @@ import 'package:localshop_shared/localshop_shared.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
+import '../../../core/realtime/order_socket.dart';
 import '../../../core/utils/launch_url.dart';
 import '../../../ui/ui.dart';
 import '../domain/order.dart';
@@ -31,6 +32,8 @@ class OrderTrackingScreen extends ConsumerStatefulWidget {
 
 class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   Timer? _pollTimer;
+  StreamSubscription<OrderStatusPush>? _socketSub;
+  int _ticks = 0;
   bool _cancelling = false;
 
   /// Set once when the order flips to delivered while this screen is open —
@@ -40,10 +43,17 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   @override
   void initState() {
     super.initState();
-    // Polling fallback (same belt-and-suspenders approach as the RN app,
-    // which also paired a socket subscription with 5s polling). Socket.IO
-    // realtime is a fast-follow enhancement on top of this.
+    // Realtime first: the gateway pushes `order:status` to this order's room
+    // the moment the shopkeeper advances it. Any push refetches the order so
+    // the UI always renders the server's full state, never just the event.
+    _socketSub = ref.read(orderSocketProvider).watchOrder(widget.orderId).listen((_) {
+      if (mounted) ref.invalidate(orderProvider(widget.orderId));
+    });
+    // Polling stays as the belt-and-suspenders fallback (same pattern as the
+    // RN app): every 5s without a socket, every 20s while one is connected.
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _ticks++;
+      if (ref.read(orderSocketProvider).isConnected && _ticks % 4 != 0) return;
       ref.invalidate(orderProvider(widget.orderId));
     });
   }
@@ -51,6 +61,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _socketSub?.cancel();
+    ref.read(orderSocketProvider).unwatchOrder(widget.orderId);
     super.dispose();
   }
 

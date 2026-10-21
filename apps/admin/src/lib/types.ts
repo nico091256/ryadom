@@ -214,6 +214,39 @@ export interface PromoCode {
   updated_at: string;
 }
 
+export type AuditTargetType = 'shop' | 'order' | 'user' | 'product' | 'category' | 'promo';
+
+export type AuditAction =
+  | 'shop.create'
+  | 'shop.approve'
+  | 'shop.block'
+  | 'shop.unblock'
+  | 'shop.reset_password'
+  | 'shop.update'
+  | 'order.cancel'
+  | 'user.block'
+  | 'user.unblock'
+  | 'promo.create'
+  | 'promo.update'
+  | 'promo.delete'
+  | 'category.create'
+  | 'category.update'
+  | 'category.delete'
+  | 'product.update'
+  | 'product.delete';
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  action: AuditAction | string;
+  target_type: AuditTargetType | string;
+  target_id: string | null;
+  meta: Record<string, unknown> | null;
+  ip: string | null;
+  created_at: string;
+  actor: { id: string; name: string | null; login: string | null } | null;
+}
+
 export interface CreateShopPayload {
   name: string;
   phone: string;

@@ -58,6 +58,11 @@ describe('validateEnv', () => {
         /CORS_ORIGINS entries must be origins/,
       );
     });
+
+    it('refuses THROTTLE_DISABLED=true (load-test switch) in production', () => {
+      expect(() => validateEnv({ ...validProd, THROTTLE_DISABLED: 'true' }, logger)).toThrow(/THROTTLE_DISABLED=true is not allowed/);
+      expect(validateEnv({ ...validProd, THROTTLE_DISABLED: 'false' }, logger).THROTTLE_DISABLED).toBe('false');
+    });
   });
 
   describe('development / test', () => {
@@ -76,6 +81,14 @@ describe('validateEnv', () => {
 
     it('still rejects a secret shorter than 32 characters', () => {
       expect(() => validateEnv({ JWT_ACCESS_SECRET: 'too-short' }, logger)).toThrow(/at least 32 characters/);
+    });
+
+    it('allows THROTTLE_DISABLED=true outside production but warns loudly', () => {
+      const out = validateEnv({ JWT_ACCESS_SECRET: STRONG_SECRET, THROTTLE_DISABLED: 'true' }, logger);
+      expect(out.THROTTLE_DISABLED).toBe('true');
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn.mock.calls[0][0]).toMatch(/rate limiting is OFF/);
+      expect(() => validateEnv({ JWT_ACCESS_SECRET: STRONG_SECRET, THROTTLE_DISABLED: 'yes' }, logger)).toThrow(/THROTTLE_DISABLED/);
     });
 
     it('rejects a TRUST_PROXY value other than true/false', () => {
