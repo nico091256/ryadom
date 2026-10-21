@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../data/auth_api.dart';
@@ -20,11 +22,18 @@ class AuthController extends AsyncNotifier<AppUser?> {
     if (token == null) return null;
 
     try {
-      return await ref.read(authApiProvider).fetchMe();
+      final user = await ref.read(authApiProvider).fetchMe();
+      _registerPush();
+      return user;
     } catch (_) {
       await ref.read(tokenStorageProvider).clear();
       return null;
     }
+  }
+
+  /// Fire-and-forget: push registration must never delay or fail sign-in.
+  void _registerPush() {
+    unawaited(ref.read(pushServiceProvider).register());
   }
 
   Future<void> sendCode(String phone) => ref.read(authApiProvider).sendCode(phone);
@@ -35,6 +44,7 @@ class AuthController extends AsyncNotifier<AppUser?> {
     final result = await ref.read(authApiProvider).verify(phone, code);
     await ref.read(tokenStorageProvider).saveTokens(accessToken: result.accessToken, refreshToken: result.refreshToken);
     state = AsyncData(result.user);
+    _registerPush();
     return result.isNewUser;
   }
 
@@ -52,6 +62,9 @@ class AuthController extends AsyncNotifier<AppUser?> {
 
   Future<void> logout() async {
     final tokenStorage = ref.read(tokenStorageProvider);
+    // While the access token is still valid: stop this phone receiving the
+    // account's order pushes.
+    await ref.read(pushServiceProvider).unregister();
     final refreshToken = await tokenStorage.getRefreshToken();
     if (refreshToken != null) {
       try {

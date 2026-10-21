@@ -3,6 +3,7 @@ import 'package:localshop_shared/localshop_shared.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'i18n/i18n_service.dart';
 import 'network/api_client.dart';
+import 'push/push_service.dart';
 import 'realtime/order_socket.dart';
 import 'storage/token_storage.dart';
 
@@ -21,6 +22,9 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     onTokenRefreshed: () => ref.read(orderSocketProvider).reconnect(),
   );
 });
+
+/// FCM token registration; a no-op until a Firebase project is configured.
+final pushServiceProvider = Provider<PushService>((ref) => PushService(client: ref.read(apiClientProvider)));
 
 /// Realtime order status pushes (Socket.IO). Connects lazily on first
 /// [OrderSocket.watchOrder] and disconnects when nobody is watching.
