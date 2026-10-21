@@ -1,6 +1,7 @@
 import {
   BadRequestException,
-  ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -12,9 +13,15 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 import { ISmsService, SMS_SERVICE } from '../sms/sms.interface';
 import { SendCodeDto, VerifyCodeDto, LoginDto, ChangePasswordDto } from './auth.dto';
 import { REFRESH_TOKEN_TTL_DAYS, UserRole } from '@localshop/shared';
+
+/** Per-phone SMS abuse limits (the per-IP limits live on the controller via @Throttle). */
+export const SMS_RESEND_COOLDOWN_MS = 30 * 1000;
+export const SMS_HOURLY_WINDOW_MS = 60 * 60 * 1000;
+export const SMS_MAX_PER_PHONE_PER_HOUR = 5;
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -33,12 +40,14 @@ export class AuthService {
 
   async sendCode(dto: SendCodeDto) {
     const phone = dto.phone.trim();
+    const now = Date.now();
+    const hourAgo = new Date(now - SMS_HOURLY_WINDOW_MS);
 
-    // Check rate limit: recent code sent within 30 seconds
+    // 1) Short cooldown: a code was sent to this phone within the last 30 seconds.
     const existing = await this.prisma.smsCode.findFirst({
       where: {
         phone,
-        created_at: { gte: new Date(Date.now() - 30 * 1000) },
+        created_at: { gte: new Date(now - SMS_RESEND_COOLDOWN_MS) },
       },
     });
 
@@ -49,17 +58,35 @@ export class AuthService {
       });
     }
 
+    // 2) Rolling-hour cap per phone. Counted BEFORE any cleanup so the history
+    //    of codes issued in the last hour is preserved (see the pruning below).
+    const sentLastHour = await this.prisma.smsCode.count({
+      where: { phone, created_at: { gte: hourAgo } },
+    });
+
+    if (sentLastHour >= SMS_MAX_PER_PHONE_PER_HOUR) {
+      throw new HttpException(
+        {
+          code: 'SMS_HOURLY_LIMIT',
+          message: `Too many verification codes requested for this phone. Limit is ${SMS_MAX_PER_PHONE_PER_HOUR} per hour; please try again later.`,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     // In dev / test or mock provider, code is 123456
     const code = process.env.NODE_ENV === 'production' && this.configService.get('SMS_PROVIDER') === 'eskiz'
       ? Math.floor(100000 + Math.random() * 900000).toString()
       : '123456';
 
     const codeHash = await bcrypt.hash(code, 8);
-    const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
+    const expiresAt = new Date(now + 2 * 60 * 1000); // 2 minutes
 
-    // Delete older expired codes for this phone
+    // Prune only codes that fell out of the rolling hour; rows inside the window
+    // stay so the hourly count above cannot be reset by simply requesting again.
+    // verifyCode() always picks the newest row, so older rows are never usable.
     await this.prisma.smsCode.deleteMany({
-      where: { phone },
+      where: { phone, created_at: { lt: hourAgo } },
     });
 
     await this.prisma.smsCode.create({
@@ -318,9 +345,8 @@ export class AuthService {
   private async generateTokens(userId: string, role: string, extra: Record<string, any> = {}) {
     const payload = { sub: userId, role, ...extra };
 
-    const accessSecret = this.configService.get<string>('JWT_ACCESS_SECRET', 'super-secret-jwt-access-key-minimum-32-chars-long');
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: accessSecret,
+      secret: getJwtAccessSecret(this.configService),
       expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m'),
     });
 

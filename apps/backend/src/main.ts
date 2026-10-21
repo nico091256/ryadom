@@ -4,14 +4,28 @@ import { SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import helmet from 'helmet';
+// cookie-parser is CommonJS (`module.exports = fn`) and this tsconfig has no esModuleInterop.
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { initSentry } from './common/observability/sentry';
 import { buildSwaggerDocument } from './swagger.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // No-op unless SENTRY_DSN is set; must run before the app (and its filters) is created.
+  initSentry(process.env);
+
+  // Credentialed (cookie) requests need an explicit origin list in production;
+  // validateEnv() refuses to boot without CORS_ORIGINS there. In development
+  // `origin: true` reflects the request origin (never a literal '*').
   const corsOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
     : true;
+  if (isProduction && corsOrigins === true) {
+    throw new Error('CORS_ORIGINS must be set in production (comma-separated list of allowed origins).');
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: {
@@ -19,6 +33,17 @@ async function bootstrap() {
       credentials: true,
     },
   });
+
+  // Behind a reverse proxy / load balancer the throttler must key on the real
+  // client IP (X-Forwarded-For). Opt-in only: trusting the header on a directly
+  // exposed server lets clients spoof their IP.
+  if (process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+    logger.log('TRUST_PROXY=true: honouring X-Forwarded-For from the first proxy hop');
+  }
+
+  // httpOnly refresh-token cookie for the web panels (see modules/auth/refresh-cookie.ts)
+  app.use(cookieParser());
 
   // Security HTTP headers
   app.use(
@@ -41,12 +66,12 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      // Reject (400) instead of silently stripping unknown body fields.
+      forbidNonWhitelisted: true,
     }),
   );
 
   // OpenAPI (Swagger) API documentation served at /docs (Section 11)
-  const isProduction = process.env.NODE_ENV === 'production';
   const enableSwagger = process.env.ENABLE_SWAGGER === 'true' || !isProduction;
 
   if (enableSwagger) {

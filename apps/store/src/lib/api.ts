@@ -18,9 +18,16 @@ export const API_ORIGIN = API_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
 /** Fired on `window` after a successful token refresh (socket re-auth hook). */
 export const TOKEN_REFRESHED_EVENT = 'ryadom:token-refreshed';
 
-const TOKEN_KEY = 'ryadom_store_token';
-const REFRESH_KEY = 'ryadom_store_refresh';
+/**
+ * Session model:
+ *  - refresh token: httpOnly `ryadom_rt` cookie set by the API (never visible to JS, never stored here);
+ *  - access token: in memory, mirrored to sessionStorage so a reload keeps the session;
+ *  - user profile (non-secret): localStorage, so a new tab can resume via the cookie.
+ */
+const ACCESS_KEY = 'ryadom_store_access';
 const USER_KEY = 'ryadom_store_user';
+/** Pre-cookie keys; removed once so no refresh token lingers in localStorage. */
+const LEGACY_KEYS = ['ryadom_store_token', 'ryadom_store_refresh'];
 
 /** Turns a server-relative upload path ('/uploads/x.jpg') or an absolute URL into something an <img> can load. */
 export function resolveMediaUrl(pathOrUrl: string | null | undefined): string | null {
@@ -77,12 +84,9 @@ function toPaginated<T>(res: any, page = 1, limit = 100): Paginated<T> {
   };
 }
 
-interface TokenPair {
+/** Cookie-transport login response: the refresh token is NOT in the body. */
+interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
-}
-
-interface LoginResponse extends TokenPair {
   tokenType?: string;
   expiresIn?: number;
   user: {
@@ -108,38 +112,61 @@ type RequestOptions = RequestInit & {
 class ApiService {
   /** Coalesces concurrent 401s into one refresh round-trip. */
   private refreshPromise: Promise<boolean> | null = null;
+  private accessToken: string | null = null;
+  private legacyCleaned = false;
 
   // ---------- Session storage ----------
-  private read(key: string): string | null {
-    if (typeof window === 'undefined') return null;
+  private cleanupLegacy() {
+    if (this.legacyCleaned || typeof window === 'undefined') return;
+    this.legacyCleaned = true;
     try {
-      return localStorage.getItem(key);
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch {
-      return null;
+      /* ignore */
     }
   }
 
   getToken(): string | null {
-    return this.read(TOKEN_KEY);
+    if (this.accessToken) return this.accessToken;
+    if (typeof window === 'undefined') return null;
+    this.cleanupLegacy();
+    try {
+      this.accessToken = sessionStorage.getItem(ACCESS_KEY);
+    } catch {
+      this.accessToken = null;
+    }
+    return this.accessToken;
   }
 
-  getRefreshToken(): string | null {
-    return this.read(REFRESH_KEY);
+  private setToken(token: string | null) {
+    this.accessToken = token;
+    if (typeof window === 'undefined') return;
+    try {
+      if (token) sessionStorage.setItem(ACCESS_KEY, token);
+      else sessionStorage.removeItem(ACCESS_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 
   getUser(): StoreUser | null {
-    const raw = this.read(USER_KEY);
-    if (!raw) return null;
+    if (typeof window === 'undefined') return null;
+    this.cleanupLegacy();
     try {
-      return JSON.parse(raw) as StoreUser;
+      const raw = localStorage.getItem(USER_KEY);
+      return raw ? (JSON.parse(raw) as StoreUser) : null;
     } catch {
       return null;
     }
   }
 
+  /**
+   * True when a seller profile is present. The access token itself may be
+   * missing (new tab); the first request then silently resumes via the cookie.
+   */
   isAuthenticated(): boolean {
     const user = this.getUser();
-    return !!this.getToken() && !!user && user.role === 'seller';
+    return !!user && user.role === 'seller';
   }
 
   saveUser(user: StoreUser): void {
@@ -151,33 +178,23 @@ class ApiService {
     }
   }
 
-  private saveTokens(tokens: TokenPair) {
+  private clearSession() {
+    this.setToken(null);
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(TOKEN_KEY, tokens.accessToken);
-      localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private clearStorage() {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(REFRESH_KEY);
       localStorage.removeItem(USER_KEY);
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch {
       /* ignore */
     }
   }
 
-  /** Revokes the refresh token on the server (best effort) and always clears local storage. */
+  /** Revokes the cookie refresh token on the server (best effort) and always clears local state. */
   async logout(): Promise<void> {
-    const refreshToken = this.getRefreshToken();
+    const hadSession = !!this.getUser() || !!this.getToken();
     const accessToken = this.getToken();
-    this.clearStorage();
-    if (!refreshToken) return;
+    this.clearSession();
+    if (!hadSession || typeof window === 'undefined') return;
     try {
       await fetch(`${API_URL}/auth/logout`, {
         method: 'POST',
@@ -185,7 +202,8 @@ class ApiService {
           'Content-Type': 'application/json',
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+        body: '{}',
         keepalive: true,
       });
     } catch {
@@ -194,7 +212,7 @@ class ApiService {
   }
 
   private expireSession() {
-    this.clearStorage();
+    this.clearSession();
     if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
       window.location.replace('/login?expired=1');
     }
@@ -204,19 +222,18 @@ class ApiService {
   private refreshTokens(): Promise<boolean> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
-      const refreshToken = this.getRefreshToken();
-      if (!refreshToken) return false;
       try {
+        // The refresh token travels only in the httpOnly cookie; the server rotates it.
         const res = await fetch(`${API_URL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
+          credentials: 'include',
+          body: '{}',
         });
         if (!res.ok) return false;
-        const data = (await res.json().catch(() => null)) as TokenPair | null;
-        if (!data?.accessToken || !data?.refreshToken) return false;
-        // Refresh tokens rotate: the old one is now revoked, persist the new pair.
-        this.saveTokens(data);
+        const data = (await res.json().catch(() => null)) as { accessToken?: string } | null;
+        if (!data?.accessToken) return false;
+        this.setToken(data.accessToken);
         // Let long-lived consumers (the Socket.IO client) re-authenticate with the new token.
         window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
         return true;
@@ -232,7 +249,18 @@ class ApiService {
   // ---------- Core request ----------
   private async request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { auth = true, _retried = false, ...init } = options;
-    const token = auth ? this.getToken() : null;
+    let token = auth ? this.getToken() : null;
+
+    // New tab / lost in-memory token but a profile exists: resume via the cookie first.
+    if (auth && !token && !_retried && typeof window !== 'undefined' && this.getUser()) {
+      if (await this.refreshTokens()) {
+        token = this.getToken();
+      } else {
+        this.expireSession();
+        throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, 'SESSION_EXPIRED');
+      }
+    }
+
     const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
     const headers: Record<string, string> = {
       // Let the browser set the multipart boundary for FormData bodies.
@@ -278,6 +306,9 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ login, password }),
       auth: false,
+      // Ask the API to deliver the refresh token as an httpOnly cookie instead of in the body.
+      headers: { 'X-Auth-Transport': 'cookie' },
+      credentials: 'include',
     });
     if (!data?.user || data.user.role !== 'seller') {
       throw new ApiError("Bu panel faqat do'konchilar uchun", 403, 'NOT_SELLER');
@@ -293,7 +324,7 @@ class ApiService {
       must_change_password: !!u.must_change_password,
       shopId: u.shopId ?? u.shop?.id ?? null,
     };
-    this.saveTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    this.setToken(data.accessToken);
     this.saveUser(user);
     return user;
   }

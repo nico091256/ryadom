@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { SOCKET_EVENTS, UserRole } from '@localshop/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 
 interface SocketUser {
   sub: string;
@@ -62,8 +63,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
         return;
       }
 
-      const secret = this.configService.get<string>('JWT_ACCESS_SECRET', 'super-secret-jwt-access-key-minimum-32-chars-long');
-      const payload = this.jwtService.verify(token, { secret });
+      const payload = this.jwtService.verify(token, { secret: getJwtAccessSecret(this.configService) });
       client.data.user = payload;
 
       // Automatically join user room

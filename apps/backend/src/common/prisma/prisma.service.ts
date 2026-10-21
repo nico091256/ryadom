@@ -258,6 +258,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       refreshTokens: [],
       deviceTokens: [],
       orderReviews: [],
+      auditLogs: [],
       promoCodes: [
         {
           id: 'promo-1',
@@ -297,6 +298,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       { key: 'deviceToken', storeKey: 'deviceTokens' },
       { key: 'promoCode', storeKey: 'promoCodes' },
       { key: 'orderReview', storeKey: 'orderReviews' },
+      { key: 'auditLog', storeKey: 'auditLogs' },
     ];
 
     for (const { key, storeKey } of models) {
@@ -633,6 +635,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           reviews: many('orderReviews', (u) => byField('orderReviews', 'customer_id', u.id)),
           device_tokens: many('deviceTokens', (u) => byField('deviceTokens', 'user_id', u.id)),
           refresh_tokens: many('refreshTokens', (u) => byField('refreshTokens', 'user_id', u.id)),
+          audit_logs: many('auditLogs', (u) => byField('auditLogs', 'actor_id', u.id)),
         };
       case 'shops':
         return {
@@ -700,6 +703,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         };
       case 'payments':
         return { order: one('orders', (p) => byId('orders', p.order_id)) };
+      case 'auditLogs':
+        return { actor: one('users', (a) => byId('users', a.actor_id)) };
       case 'refreshTokens':
       case 'deviceTokens':
       case 'notifications':

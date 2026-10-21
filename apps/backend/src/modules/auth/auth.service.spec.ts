@@ -1,6 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, HttpException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { AuthService } from './auth.service';
+import { AuthService, SMS_MAX_PER_PHONE_PER_HOUR } from './auth.service';
+
+const TEST_JWT_SECRET = 'unit-test-access-secret-minimum-32-characters-long';
 
 describe('AuthService', () => {
   let prisma: any;
@@ -13,11 +15,71 @@ describe('AuthService', () => {
     prisma = {
       user: { findUnique: jest.fn(), create: jest.fn() },
       refreshToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+      smsCode: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
     };
     jwtService = { signAsync: jest.fn().mockResolvedValue('signed-access-token') };
-    configService = { get: jest.fn((_key: string, def?: any) => def) };
+    // The JWT secret is guaranteed by env validation at boot; mirror that here.
+    configService = {
+      get: jest.fn((key: string, def?: any) => (key === 'JWT_ACCESS_SECRET' ? TEST_JWT_SECRET : def)),
+    };
     smsService = { sendSms: jest.fn() };
     service = new AuthService(prisma, jwtService, configService, smsService);
+  });
+
+  describe('sendCode', () => {
+    const phone = '+998901234567';
+
+    it('sends a code and prunes only rows older than the rolling hour (count happens before cleanup)', async () => {
+      prisma.smsCode.count.mockResolvedValue(SMS_MAX_PER_PHONE_PER_HOUR - 1);
+
+      const result = await service.sendCode({ phone });
+
+      expect(result.success).toBe(true);
+      expect(smsService.sendSms).toHaveBeenCalledWith(phone, expect.stringContaining('123456'));
+      expect(prisma.smsCode.count).toHaveBeenCalledWith({
+        where: { phone, created_at: { gte: expect.any(Date) } },
+      });
+      // Only expired-window rows are deleted, never the whole phone history.
+      expect(prisma.smsCode.deleteMany).toHaveBeenCalledWith({
+        where: { phone, created_at: { lt: expect.any(Date) } },
+      });
+      const countOrder = prisma.smsCode.count.mock.invocationCallOrder[0];
+      const deleteOrder = prisma.smsCode.deleteMany.mock.invocationCallOrder[0];
+      expect(countOrder).toBeLessThan(deleteOrder);
+      expect(prisma.smsCode.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects with 429 SMS_HOURLY_LIMIT once 5 codes were issued to the phone within an hour', async () => {
+      prisma.smsCode.count.mockResolvedValue(SMS_MAX_PER_PHONE_PER_HOUR);
+
+      let caught: unknown;
+      try {
+        await service.sendCode({ phone });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(HttpException);
+      expect((caught as HttpException).getStatus()).toBe(429);
+      expect((caught as HttpException).getResponse()).toEqual(
+        expect.objectContaining({ code: 'SMS_HOURLY_LIMIT' }),
+      );
+      expect(prisma.smsCode.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.smsCode.create).not.toHaveBeenCalled();
+      expect(smsService.sendSms).not.toHaveBeenCalled();
+    });
+
+    it('keeps the 30 second cooldown (400 RATE_LIMIT_EXCEEDED) ahead of the hourly check', async () => {
+      prisma.smsCode.findFirst.mockResolvedValue({ id: 'c1', phone, created_at: new Date() });
+
+      await expect(service.sendCode({ phone })).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.smsCode.count).not.toHaveBeenCalled();
+    });
   });
 
   describe('login', () => {

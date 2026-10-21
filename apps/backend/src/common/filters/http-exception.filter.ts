@@ -6,7 +6,8 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import { captureException } from '../observability/sentry';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -39,6 +40,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = exception.message;
     }
 
+    // Only server faults go to Sentry (no-op unless SENTRY_DSN is set); 4xx are expected client errors.
+    if (status >= 500) {
+      const request = ctx.getRequest<Request>();
+      captureException(exception, {
+        method: request?.method,
+        url: request?.originalUrl ?? request?.url,
+        statusCode: status,
+        code,
+      });
+    }
+
     response.status(status).json({
       code,
       message,
@@ -62,6 +74,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         return 'CONFLICT';
       case HttpStatus.UNPROCESSABLE_ENTITY:
         return 'VALIDATION_ERROR';
+      case HttpStatus.TOO_MANY_REQUESTS:
+        return 'TOO_MANY_REQUESTS';
       default:
         return 'INTERNAL_SERVER_ERROR';
     }

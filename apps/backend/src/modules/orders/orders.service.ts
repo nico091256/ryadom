@@ -5,9 +5,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { MetricsService } from '../../common/observability/metrics.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
@@ -36,6 +38,8 @@ export class OrdersService {
     private pushNotificationService: PushNotificationService,
     private paymentsService: PaymentsService,
     @InjectQueue(ORDER_AUTO_CANCEL_QUEUE) private autoCancelQueue: Queue,
+    // Optional so unit tests can construct the service without the metrics registry.
+    @Optional() private metrics?: MetricsService,
   ) {}
 
   /**
@@ -178,9 +182,10 @@ ${promoLine}` : promoLine;
       await tx.cart.delete({ where: { id: cart.id } });
 
       return newOrder;
-    });
+    }, { timeout: 5000, maxWait: 2000 });
 
     // 6. Broadcast Realtime Socket.IO event to Seller Room
+    this.metrics?.ordersCreated.inc();
     this.notificationsGateway.broadcastNewOrder(shop.id, order);
 
     // 7. Dispatch High-Priority Push Notification to Seller
@@ -383,6 +388,9 @@ ${promoLine}` : promoLine;
       where.payment_method = filters.paymentMethod;
     }
 
+    // List payload is intentionally lean: it carries only what the list views read
+    // (apps/store OrderCard, mobile_client Order.fromJson). The full shape (items.product,
+    // status_history.actor) is served by getOrderById.
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -390,7 +398,10 @@ ${promoLine}` : promoLine;
           items: true,
           shop: { select: { id: true, name: true, phone: true, logo_url: true } },
           customer: { select: { id: true, name: true, phone: true } },
-          status_history: { orderBy: { created_at: 'asc' } },
+          status_history: {
+            select: { status: true, reason: true, created_at: true },
+            orderBy: { created_at: 'asc' },
+          },
           review: { select: { stars: true, comment: true, created_at: true } },
         },
         orderBy: [

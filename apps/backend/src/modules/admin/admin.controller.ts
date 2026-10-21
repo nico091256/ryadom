@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { AdminService } from './admin.service';
+import { Request } from 'express';
+import { AdminActor, AdminService } from './admin.service';
+import { AuditService } from './audit.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -15,7 +17,11 @@ import {
   AdminUpdatePromoCodeDto,
   AdminUpdateShopDto,
 } from './admin.dto';
-import { CategoriesService } from '../categories/categories.service';
+
+/** Builds the audit actor (admin id + client ip) for a mutating request. */
+function actorOf(adminId: string, req: Request): AdminActor {
+  return { id: adminId, ip: req.ip ?? null };
+}
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -25,7 +31,7 @@ import { CategoriesService } from '../categories/categories.service';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly categoriesService: CategoriesService,
+    private readonly auditService: AuditService,
   ) {}
 
   // ── Dashboard ──
@@ -34,6 +40,25 @@ export class AdminController {
   @ApiOperation({ summary: 'Platform dashboard: totals, status breakdown, 30-day trend, top shops, recent orders' })
   async getDashboardStats() {
     return this.adminService.getDashboardStats();
+  }
+
+  // ── Audit log ──
+
+  @Get('audit-log')
+  @ApiOperation({ summary: 'Audit trail of mutating admin actions (paginated, newest first)' })
+  @ApiQuery({ name: 'actorId', required: false })
+  @ApiQuery({ name: 'targetType', required: false, enum: ['shop', 'order', 'user', 'product', 'category', 'promo'] })
+  @ApiQuery({ name: 'action', required: false, description: "e.g. 'shop.block', 'order.cancel'" })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getAuditLog(
+    @Query('actorId') actorId?: string,
+    @Query('targetType') targetType?: string,
+    @Query('action') action?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.auditService.list({ actorId, targetType, action, page, limit });
   }
 
   // ── Orders ──
@@ -73,16 +98,17 @@ export class AdminController {
     @Param('id') orderId: string,
     @CurrentUser('id') adminId: string,
     @Body() dto: AdminCancelOrderDto,
+    @Req() req: Request,
   ) {
-    return this.adminService.cancelOrder(orderId, adminId, dto.reason);
+    return this.adminService.cancelOrder(orderId, adminId, dto.reason, req.ip ?? null);
   }
 
   // ── Shops ──
 
   @Post('shops')
   @ApiOperation({ summary: 'Create a shop together with its shopkeeper account' })
-  async createShop(@Body() dto: AdminCreateShopDto) {
-    return this.adminService.createShop(dto);
+  async createShop(@Body() dto: AdminCreateShopDto, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.createShop(dto, actorOf(adminId, req));
   }
 
   @Get('shops')
@@ -111,46 +137,53 @@ export class AdminController {
   async updateShop(
     @Param('id') shopId: string,
     @Body() dto: AdminUpdateShopDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
   ) {
-    return this.adminService.updateShop(shopId, dto);
+    return this.adminService.updateShop(shopId, dto, actorOf(adminId, req));
   }
 
   @Post('shops/:id/approve')
   @ApiOperation({ summary: 'Approve a self-registered (pending) shop, making it visible to customers' })
-  async approveShop(@Param('id') shopId: string) {
-    return this.adminService.approveShop(shopId);
+  async approveShop(@Param('id') shopId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.approveShop(shopId, actorOf(adminId, req));
   }
 
   @Post('shops/:id/block')
   @ApiOperation({ summary: 'Block a shop (hidden from customers, cannot accept orders)' })
-  async blockShop(@Param('id') shopId: string) {
-    return this.adminService.blockShop(shopId);
+  async blockShop(@Param('id') shopId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.blockShop(shopId, actorOf(adminId, req));
   }
 
   @Post('shops/:id/unblock')
   @ApiOperation({ summary: 'Unblock a previously blocked shop' })
-  async unblockShop(@Param('id') shopId: string) {
-    return this.adminService.unblockShop(shopId);
+  async unblockShop(@Param('id') shopId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.unblockShop(shopId, actorOf(adminId, req));
   }
 
   @Post('shops/:id/reset-password')
   @ApiOperation({ summary: 'Reset the shopkeeper password to a random temporary one' })
-  async resetShopPassword(@Param('id') shopId: string) {
-    return this.adminService.resetShopPassword(shopId);
+  async resetShopPassword(@Param('id') shopId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.resetShopPassword(shopId, actorOf(adminId, req));
   }
 
   // ── Products (moderation) ──
 
   @Patch('products/:id')
   @ApiOperation({ summary: 'Moderate a product (toggle availability)' })
-  async updateProduct(@Param('id') productId: string, @Body() dto: AdminUpdateProductDto) {
-    return this.adminService.updateProduct(productId, dto);
+  async updateProduct(
+    @Param('id') productId: string,
+    @Body() dto: AdminUpdateProductDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
+    return this.adminService.updateProduct(productId, dto, actorOf(adminId, req));
   }
 
   @Delete('products/:id')
   @ApiOperation({ summary: 'Soft-delete a product' })
-  async deleteProduct(@Param('id') productId: string) {
-    return this.adminService.deleteProduct(productId);
+  async deleteProduct(@Param('id') productId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.deleteProduct(productId, actorOf(adminId, req));
   }
 
   // ── Users ──
@@ -183,8 +216,10 @@ export class AdminController {
   async toggleBlockUser(
     @Param('id') userId: string,
     @Body() dto: AdminBlockUserDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
   ) {
-    return this.adminService.toggleBlockUser(userId, dto.is_blocked);
+    return this.adminService.toggleBlockUser(userId, dto.is_blocked, actorOf(adminId, req));
   }
 
   // ── Categories ──
@@ -197,8 +232,8 @@ export class AdminController {
 
   @Post('categories')
   @ApiOperation({ summary: 'Create a global category' })
-  async createCategory(@Body() dto: AdminCategoryDto) {
-    return this.categoriesService.create(dto);
+  async createCategory(@Body() dto: AdminCategoryDto, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.createCategory(dto, actorOf(adminId, req));
   }
 
   @Put('categories/:id')
@@ -206,14 +241,16 @@ export class AdminController {
   async updateCategory(
     @Param('id') categoryId: string,
     @Body() dto: Partial<AdminCategoryDto>,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
   ) {
-    return this.categoriesService.update(categoryId, dto);
+    return this.adminService.updateCategory(categoryId, dto, actorOf(adminId, req));
   }
 
   @Delete('categories/:id')
   @ApiOperation({ summary: 'Delete a category (409 if products use it)' })
-  async deleteCategory(@Param('id') categoryId: string) {
-    return this.adminService.deleteCategory(categoryId);
+  async deleteCategory(@Param('id') categoryId: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.deleteCategory(categoryId, actorOf(adminId, req));
   }
 
   // ── Promo codes ──
@@ -226,19 +263,24 @@ export class AdminController {
 
   @Post('promo-codes')
   @ApiOperation({ summary: 'Create a promo code' })
-  async createPromoCode(@Body() dto: AdminCreatePromoCodeDto) {
-    return this.adminService.createPromoCode(dto);
+  async createPromoCode(@Body() dto: AdminCreatePromoCodeDto, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.createPromoCode(dto, actorOf(adminId, req));
   }
 
   @Patch('promo-codes/:id')
   @ApiOperation({ summary: 'Update a promo code (code itself is not editable)' })
-  async updatePromoCode(@Param('id') id: string, @Body() dto: AdminUpdatePromoCodeDto) {
-    return this.adminService.updatePromoCode(id, dto);
+  async updatePromoCode(
+    @Param('id') id: string,
+    @Body() dto: AdminUpdatePromoCodeDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
+    return this.adminService.updatePromoCode(id, dto, actorOf(adminId, req));
   }
 
   @Delete('promo-codes/:id')
   @ApiOperation({ summary: 'Delete a promo code' })
-  async deletePromoCode(@Param('id') id: string) {
-    return this.adminService.deletePromoCode(id);
+  async deletePromoCode(@Param('id') id: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+    return this.adminService.deletePromoCode(id, actorOf(adminId, req));
   }
 }

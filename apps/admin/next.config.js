@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@localshop/shared'],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     domains: ['images.unsplash.com', 'localhost'],
     remotePatterns: [

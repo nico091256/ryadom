@@ -1,31 +1,50 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderStatus, PaymentMethod } from '@localshop/shared';
+import { UZ_PHONE_MESSAGE, UZ_PHONE_REGEX } from '../auth/auth.dto';
 
 export class CreateOrderDto {
   @ApiProperty({ example: 'address-uuid', required: false, description: 'Saved address ID or custom address' })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   address_id?: string;
 
-  @ApiProperty({ example: 'Toshkent sh., Chilonzor 5-mavze, 12-uy' })
+  @ApiProperty({ example: 'Toshkent sh., Chilonzor 5-mavze, 12-uy', maxLength: 300 })
   @IsNotEmpty()
   @IsString()
+  @MaxLength(300)
   address_text: string;
 
   @ApiProperty({ example: 41.2840 })
   @IsNotEmpty()
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   lat: number;
 
   @ApiProperty({ example: 69.2160 })
   @IsNotEmpty()
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   lng: number;
 
   @ApiProperty({ example: '+998901234567' })
   @IsNotEmpty()
   @IsString()
+  @Matches(UZ_PHONE_REGEX, { message: `customer_${UZ_PHONE_MESSAGE}` })
   customer_phone: string;
 
   @ApiProperty({ example: PaymentMethod.CASH, enum: PaymentMethod })
@@ -33,28 +52,32 @@ export class CreateOrderDto {
   @IsEnum(PaymentMethod)
   payment_method: PaymentMethod;
 
-  @ApiProperty({ example: 'Iltimos eshik qo\'ng\'irog\'ini chaling', required: false })
+  @ApiProperty({ example: 'Iltimos eshik qo\'ng\'irog\'ini chaling', required: false, maxLength: 500 })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   comment?: string;
 
-  @ApiProperty({ example: 'YANGI10', required: false, description: 'Optional promo code (validated server-side)' })
+  @ApiProperty({ example: 'YANGI10', required: false, maxLength: 32, description: 'Optional promo code (validated server-side)' })
   @IsOptional()
   @IsString()
+  @MaxLength(32)
   promo_code?: string;
 }
 
 export class RejectOrderDto {
-  @ApiProperty({ example: 'Mahsulot tugab qolgan', description: 'Reason is strictly required when rejecting' })
+  @ApiProperty({ example: 'Mahsulot tugab qolgan', maxLength: 300, description: 'Reason is strictly required when rejecting' })
   @IsNotEmpty()
   @IsString()
+  @MaxLength(300)
   reason: string;
 }
 
 export class CancelOrderDto {
-  @ApiProperty({ example: 'Rejalar o\'zgardi', required: false })
+  @ApiProperty({ example: 'Rejalar o\'zgardi', required: false, maxLength: 300 })
   @IsOptional()
   @IsString()
+  @MaxLength(300)
   reason?: string;
 }
 

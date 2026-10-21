@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
+  AdminCategoryDto,
   AdminCreatePromoCodeDto,
   AdminCreateShopDto,
   AdminUpdateProductDto,
@@ -13,6 +14,14 @@ import {
 import { UserRole } from '@localshop/shared';
 import { OrdersService } from '../orders/orders.service';
 import { ShopsService } from '../shops/shops.service';
+import { CategoriesService } from '../categories/categories.service';
+import { AuditService } from './audit.service';
+
+/** The admin performing a mutating action (for the audit trail). */
+export interface AdminActor {
+  id: string;
+  ip?: string | null;
+}
 
 /** Uzbekistan local time offset (UTC+5, no DST) used for day buckets */
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
@@ -110,9 +119,16 @@ export class AdminService {
     private prisma: PrismaService,
     private ordersService: OrdersService,
     private shopsService: ShopsService,
+    private categoriesService: CategoriesService,
+    private audit: AuditService,
   ) {}
 
   // ───────────────────────────── helpers ─────────────────────────────
+
+  /** Fields of a DTO that were actually sent (for `meta.fields` in the audit log). */
+  private changedFields(dto: object): string[] {
+    return Object.entries(dto).filter(([, v]) => v !== undefined).map(([k]) => k);
+  }
 
   private toOrderSummary(order: OrderSummaryRow) {
     const { _count, ...rest } = order;
@@ -139,7 +155,7 @@ export class AdminService {
   /**
    * Admin creates a shop together with its shopkeeper account (Section 4 & 6)
    */
-  async createShop(dto: AdminCreateShopDto) {
+  async createShop(dto: AdminCreateShopDto, actor?: AdminActor) {
     const existingUser = await this.prisma.user.findUnique({
       where: { login: dto.seller_login },
     });
@@ -160,7 +176,7 @@ export class AdminService {
 
     const passwordHash = await bcrypt.hash(dto.seller_password, 10);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const seller = await tx.user.create({
         data: {
           login: dto.seller_login,
@@ -196,6 +212,16 @@ export class AdminService {
 
       return shop;
     });
+
+    if (actor) {
+      await this.audit.log(actor.id, 'shop.create', {
+        targetType: 'shop',
+        targetId: created.id,
+        meta: { name: created.name, seller_login: dto.seller_login },
+        ip: actor.ip,
+      });
+    }
+    return created;
   }
 
   private readonly shopOwnerSelect = {
@@ -296,7 +322,7 @@ export class AdminService {
     };
   }
 
-  async updateShop(shopId: string, dto: AdminUpdateShopDto) {
+  async updateShop(shopId: string, dto: AdminUpdateShopDto, actor?: AdminActor) {
     const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
     if (!shop) {
       throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
@@ -320,7 +346,7 @@ export class AdminService {
       if (dto[f] !== undefined) (data as any)[f] = dto[f];
     }
 
-    return this.prisma.shop.update({
+    const updated = await this.prisma.shop.update({
       where: { id: shopId },
       data,
       include: {
@@ -328,54 +354,66 @@ export class AdminService {
         city: true,
       },
     });
+    if (actor) {
+      await this.audit.log(actor.id, 'shop.update', {
+        targetType: 'shop',
+        targetId: shopId,
+        meta: { fields: Object.keys(data) },
+        ip: actor.ip,
+      });
+    }
+    return updated;
+  }
+
+  /** Shared implementation of approve / block / unblock: status transition + audit entry. */
+  private async transitionShop(
+    shopId: string,
+    action: 'shop.approve' | 'shop.block' | 'shop.unblock',
+    data: Prisma.ShopUpdateInput,
+    actor?: AdminActor,
+  ) {
+    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
+    if (!shop) {
+      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
+    }
+    const updated = await this.prisma.shop.update({
+      where: { id: shopId },
+      data,
+      include: { owner: { select: this.shopOwnerSelect }, city: true },
+    });
+    if (actor) {
+      await this.audit.log(actor.id, action, {
+        targetType: 'shop',
+        targetId: shopId,
+        meta: { from: shop.status, to: updated.status },
+        ip: actor.ip,
+      });
+    }
+    return updated;
   }
 
   /**
    * Approves a self-registered (pending) shop: becomes visible to customers.
    */
-  async approveShop(shopId: string) {
-    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
-    if (!shop) {
-      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
-    }
-    return this.prisma.shop.update({
-      where: { id: shopId },
-      data: { status: 'active' as any, is_active: true, is_open: true },
-      include: { owner: { select: this.shopOwnerSelect }, city: true },
-    });
+  async approveShop(shopId: string, actor?: AdminActor) {
+    return this.transitionShop(shopId, 'shop.approve', { status: 'active' as any, is_active: true, is_open: true }, actor);
   }
 
   /**
    * Blocks a shop (whether previously pending or active): hidden from customers.
    */
-  async blockShop(shopId: string) {
-    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
-    if (!shop) {
-      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
-    }
-    return this.prisma.shop.update({
-      where: { id: shopId },
-      data: { status: 'blocked' as any, is_active: false },
-      include: { owner: { select: this.shopOwnerSelect }, city: true },
-    });
+  async blockShop(shopId: string, actor?: AdminActor) {
+    return this.transitionShop(shopId, 'shop.block', { status: 'blocked' as any, is_active: false }, actor);
   }
 
   /**
    * Unblocks a previously blocked shop, restoring it to active.
    */
-  async unblockShop(shopId: string) {
-    const shop = await this.prisma.shop.findUnique({ where: { id: shopId } });
-    if (!shop) {
-      throw new NotFoundException({ code: 'SHOP_NOT_FOUND', message: 'Shop not found' });
-    }
-    return this.prisma.shop.update({
-      where: { id: shopId },
-      data: { status: 'active' as any, is_active: true },
-      include: { owner: { select: this.shopOwnerSelect }, city: true },
-    });
+  async unblockShop(shopId: string, actor?: AdminActor) {
+    return this.transitionShop(shopId, 'shop.unblock', { status: 'active' as any, is_active: true }, actor);
   }
 
-  async resetShopPassword(shopId: string) {
+  async resetShopPassword(shopId: string, actor?: AdminActor) {
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
       include: { owner: { select: { id: true, login: true } } },
@@ -396,6 +434,16 @@ export class AdminService {
       },
     });
 
+    if (actor) {
+      // Never record the temporary password itself.
+      await this.audit.log(actor.id, 'shop.reset_password', {
+        targetType: 'shop',
+        targetId: shopId,
+        meta: { owner_id: shop.owner.id, login: shop.owner.login },
+        ip: actor.ip,
+      });
+    }
+
     return { login: shop.owner.login, tempPassword };
   }
 
@@ -409,19 +457,32 @@ export class AdminService {
     return product;
   }
 
-  async updateProduct(productId: string, dto: AdminUpdateProductDto) {
-    await this.findProductOrThrow(productId);
-    return this.prisma.product.update({
+  async updateProduct(productId: string, dto: AdminUpdateProductDto, actor?: AdminActor) {
+    const product = await this.findProductOrThrow(productId);
+    const updated = await this.prisma.product.update({
       where: { id: productId },
       data: {
         ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
       },
       include: { category: true },
     });
+    if (actor) {
+      await this.audit.log(actor.id, 'product.update', {
+        targetType: 'product',
+        targetId: productId,
+        meta: {
+          shop_id: product.shop_id,
+          fields: this.changedFields(dto),
+          ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
+        },
+        ip: actor.ip,
+      });
+    }
+    return updated;
   }
 
-  async deleteProduct(productId: string) {
-    await this.findProductOrThrow(productId);
+  async deleteProduct(productId: string, actor?: AdminActor) {
+    const product = await this.findProductOrThrow(productId);
     await this.prisma.$transaction([
       this.prisma.product.update({
         where: { id: productId },
@@ -430,6 +491,14 @@ export class AdminService {
       // Remove from any active carts so customers can't check it out
       this.prisma.cartItem.deleteMany({ where: { product_id: productId } }),
     ]);
+    if (actor) {
+      await this.audit.log(actor.id, 'product.delete', {
+        targetType: 'product',
+        targetId: productId,
+        meta: { shop_id: product.shop_id, name_uz: product.name_uz },
+        ip: actor.ip,
+      });
+    }
     return { success: true };
   }
 
@@ -538,8 +607,9 @@ export class AdminService {
     };
   }
 
-  async cancelOrder(orderId: string, adminId: string, reason: string) {
+  async cancelOrder(orderId: string, adminId: string, reason: string, ip?: string | null) {
     await this.ordersService.adminCancelOrder(orderId, adminId, reason);
+    await this.audit.log(adminId, 'order.cancel', { targetType: 'order', targetId: orderId, meta: { reason }, ip });
     return this.getOrder(orderId);
   }
 
@@ -641,7 +711,7 @@ export class AdminService {
     };
   }
 
-  async toggleBlockUser(userId: string, isBlocked: boolean) {
+  async toggleBlockUser(userId: string, isBlocked: boolean, actor?: AdminActor) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
     if (!user) {
       throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
@@ -650,11 +720,20 @@ export class AdminService {
       throw new BadRequestException({ code: 'CANNOT_BLOCK_ADMIN', message: 'Admin accounts cannot be blocked.' });
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { is_blocked: isBlocked },
       select: { id: true, login: true, phone: true, name: true, role: true, is_blocked: true },
     });
+    if (actor) {
+      await this.audit.log(actor.id, isBlocked ? 'user.block' : 'user.unblock', {
+        targetType: 'user',
+        targetId: userId,
+        meta: { role: user.role },
+        ip: actor.ip,
+      });
+    }
+    return updated;
   }
 
   // ───────────────────────────── categories ─────────────────────────────
@@ -667,7 +746,33 @@ export class AdminService {
     return categories.map(({ _count, ...c }) => ({ ...c, productCount: _count.products }));
   }
 
-  async deleteCategory(categoryId: string) {
+  async createCategory(dto: AdminCategoryDto, actor?: AdminActor) {
+    const category = await this.categoriesService.create(dto);
+    if (actor) {
+      await this.audit.log(actor.id, 'category.create', {
+        targetType: 'category',
+        targetId: category.id,
+        meta: { name_uz: category.name_uz, parent_id: category.parent_id ?? null },
+        ip: actor.ip,
+      });
+    }
+    return category;
+  }
+
+  async updateCategory(categoryId: string, dto: Partial<AdminCategoryDto>, actor?: AdminActor) {
+    const category = await this.categoriesService.update(categoryId, dto);
+    if (actor) {
+      await this.audit.log(actor.id, 'category.update', {
+        targetType: 'category',
+        targetId: categoryId,
+        meta: { fields: this.changedFields(dto) },
+        ip: actor.ip,
+      });
+    }
+    return category;
+  }
+
+  async deleteCategory(categoryId: string, actor?: AdminActor) {
     const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
     if (!category) {
       throw new NotFoundException({ code: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
@@ -697,6 +802,14 @@ export class AdminService {
       await tx.category.delete({ where: { id: categoryId } });
     });
 
+    if (actor) {
+      await this.audit.log(actor.id, 'category.delete', {
+        targetType: 'category',
+        targetId: categoryId,
+        meta: { name_uz: category.name_uz },
+        ip: actor.ip,
+      });
+    }
     return { success: true };
   }
 
@@ -706,13 +819,14 @@ export class AdminService {
     return this.prisma.promoCode.findMany({ orderBy: { created_at: 'desc' } });
   }
 
-  async createPromoCode(dto: AdminCreatePromoCodeDto) {
+  async createPromoCode(dto: AdminCreatePromoCodeDto, actor?: AdminActor) {
     const code = dto.code.trim().toUpperCase();
     if (!code) {
       throw new BadRequestException({ code: 'INVALID_PROMO_CODE', message: 'Code must not be empty' });
     }
+    let promo;
     try {
-      return await this.prisma.promoCode.create({
+      promo = await this.prisma.promoCode.create({
         data: {
           code,
           description: dto.description?.trim() || null,
@@ -730,6 +844,15 @@ export class AdminService {
       }
       throw e;
     }
+    if (actor) {
+      await this.audit.log(actor.id, 'promo.create', {
+        targetType: 'promo',
+        targetId: promo.id,
+        meta: { code, discount_percent: dto.discount_percent },
+        ip: actor.ip,
+      });
+    }
+    return promo;
   }
 
   private async findPromoOrThrow(id: string) {
@@ -740,8 +863,8 @@ export class AdminService {
     return promo;
   }
 
-  async updatePromoCode(id: string, dto: AdminUpdatePromoCodeDto) {
-    await this.findPromoOrThrow(id);
+  async updatePromoCode(id: string, dto: AdminUpdatePromoCodeDto, actor?: AdminActor) {
+    const promo = await this.findPromoOrThrow(id);
     const data: Prisma.PromoCodeUpdateInput = {};
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
     if (dto.discount_percent !== undefined) data.discount_percent = dto.discount_percent;
@@ -750,12 +873,29 @@ export class AdminService {
     if (dto.usage_limit !== undefined) data.usage_limit = dto.usage_limit;
     if (dto.is_active !== undefined) data.is_active = dto.is_active;
     if (dto.expires_at !== undefined) data.expires_at = dto.expires_at ? new Date(dto.expires_at) : null;
-    return this.prisma.promoCode.update({ where: { id }, data });
+    const updated = await this.prisma.promoCode.update({ where: { id }, data });
+    if (actor) {
+      await this.audit.log(actor.id, 'promo.update', {
+        targetType: 'promo',
+        targetId: id,
+        meta: { code: promo.code, fields: Object.keys(data) },
+        ip: actor.ip,
+      });
+    }
+    return updated;
   }
 
-  async deletePromoCode(id: string) {
-    await this.findPromoOrThrow(id);
+  async deletePromoCode(id: string, actor?: AdminActor) {
+    const promo = await this.findPromoOrThrow(id);
     await this.prisma.promoCode.delete({ where: { id } });
+    if (actor) {
+      await this.audit.log(actor.id, 'promo.delete', {
+        targetType: 'promo',
+        targetId: id,
+        meta: { code: promo.code },
+        ip: actor.ip,
+      });
+    }
     return { success: true };
   }
 

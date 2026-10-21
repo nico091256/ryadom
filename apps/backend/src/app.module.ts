@@ -5,9 +5,11 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
+import { ObservabilityModule } from './common/observability/observability.module';
 import { FirebaseModule } from './common/firebase/firebase.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { validateEnv } from './common/config/env.validation';
 import { SmsModule } from './modules/sms/sms.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -29,7 +31,10 @@ import { AppController } from './app.controller';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../../.env'],
+      // Fail fast on a broken deployment (missing/weak JWT secret, no CORS list in prod, ...).
+      validate: (config) => validateEnv(config),
     }),
+    // Global baseline; the auth endpoints add stricter per-route windows via @Throttle.
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -49,6 +54,7 @@ import { AppController } from './app.controller';
     }),
     PrismaModule,
     RedisModule,
+    ObservabilityModule,
     FirebaseModule,
     SmsModule,
     AuthModule,

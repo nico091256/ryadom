@@ -76,6 +76,7 @@ model User {
   notifications        Notification[]
   refresh_tokens       RefreshToken[]
   device_tokens        DeviceToken[]
+  audit_logs           AuditLog[] @relation("AuditActor")
 
   @@map("users")
 }
@@ -379,4 +380,23 @@ model PromoCode {
   updated_at         DateTime  @updatedAt
 
   @@map("promo_codes")
+}
+
+/// Immutable trail of mutating admin actions: who did what to which entity, from where.
+model AuditLog {
+  id          String   @id @default(uuid())
+  actor_id    String
+  action      String   // e.g. 'shop.block', 'order.cancel', 'promo.create'
+  target_type String   // 'shop' | 'order' | 'user' | 'product' | 'category' | 'promo'
+  target_id   String?
+  meta        Json?    // small diff / reason; never credentials
+  ip          String?
+  created_at  DateTime @default(now())
+
+  actor       User     @relation("AuditActor", fields: [actor_id], references: [id])
+
+  @@index([actor_id, created_at])
+  @@index([target_type, target_id])
+  @@index([created_at])
+  @@map("audit_logs")
 }

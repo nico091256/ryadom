@@ -19,8 +19,19 @@ import type {
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
-const TOKEN_KEY = 'ryadom_admin_token';
+/** Fired on `window` after a successful token refresh. */
+export const TOKEN_REFRESHED_EVENT = 'ryadom:token-refreshed';
+
+/**
+ * Session model:
+ *  - refresh token: httpOnly `ryadom_rt` cookie set by the API (never visible to JS, never stored here);
+ *  - access token: in memory, mirrored to sessionStorage so a reload keeps the session;
+ *  - user profile (non-secret): localStorage, so a new tab can resume via the cookie.
+ */
+const ACCESS_KEY = 'ryadom_admin_access';
 const USER_KEY = 'ryadom_admin_user';
+/** Pre-cookie keys (this panel and the previous one); removed once so no token lingers in localStorage. */
+const LEGACY_KEYS = ['ryadom_admin_token', 'localshop_admin_token', 'localshop_admin_user'];
 
 export class ApiError extends Error {
   status: number;
@@ -85,18 +96,56 @@ function normalizeUser<T extends Partial<UserRow>>(u: any): T {
   } as T;
 }
 
+type RequestOptions = RequestInit & {
+  /** Attach the Bearer token (default true). */
+  auth?: boolean;
+  /** Internal: set when the request is already a retry after a token refresh. */
+  _retried?: boolean;
+};
+
 class ApiService {
-  getToken(): string | null {
-    if (typeof window === 'undefined') return null;
+  /** Coalesces concurrent 401s into one refresh round-trip. */
+  private refreshPromise: Promise<boolean> | null = null;
+  private accessToken: string | null = null;
+  private legacyCleaned = false;
+
+  // ---------- Session storage ----------
+  private cleanupLegacy() {
+    if (this.legacyCleaned || typeof window === 'undefined') return;
+    this.legacyCleaned = true;
     try {
-      return localStorage.getItem(TOKEN_KEY);
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
     } catch {
-      return null;
+      /* ignore */
+    }
+  }
+
+  getToken(): string | null {
+    if (this.accessToken) return this.accessToken;
+    if (typeof window === 'undefined') return null;
+    this.cleanupLegacy();
+    try {
+      this.accessToken = sessionStorage.getItem(ACCESS_KEY);
+    } catch {
+      this.accessToken = null;
+    }
+    return this.accessToken;
+  }
+
+  private setToken(token: string | null) {
+    this.accessToken = token;
+    if (typeof window === 'undefined') return;
+    try {
+      if (token) sessionStorage.setItem(ACCESS_KEY, token);
+      else sessionStorage.removeItem(ACCESS_KEY);
+    } catch {
+      /* ignore */
     }
   }
 
   getUser(): AdminUser | null {
     if (typeof window === 'undefined') return null;
+    this.cleanupLegacy();
     try {
       const raw = localStorage.getItem(USER_KEY);
       return raw ? (JSON.parse(raw) as AdminUser) : null;
@@ -105,32 +154,106 @@ class ApiService {
     }
   }
 
+  /**
+   * True when an admin profile is present. The access token itself may be
+   * missing (new tab); the first request then silently resumes via the cookie.
+   */
   isAuthenticated(): boolean {
     const user = this.getUser();
-    return !!this.getToken() && !!user && user.role === 'admin';
+    return !!user && user.role === 'admin';
   }
 
   private saveSession(token: string, user: AdminUser) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-  }
-
-  logout() {
-    if (typeof window === 'undefined') return;
+    this.setToken(token);
     try {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-      // Legacy keys from the previous panel
-      localStorage.removeItem('localshop_admin_token');
-      localStorage.removeItem('localshop_admin_user');
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {
       /* ignore */
     }
   }
 
-  private async request<T = any>(endpoint: string, options: RequestInit & { auth?: boolean } = {}): Promise<T> {
-    const { auth = true, ...init } = options;
-    const token = auth ? this.getToken() : null;
+  private clearSession() {
+    this.setToken(null);
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem(USER_KEY);
+      LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Revokes the cookie refresh token on the server (best effort) and always clears local state. */
+  async logout(): Promise<void> {
+    const hadSession = !!this.getUser() || !!this.getToken();
+    const accessToken = this.getToken();
+    this.clearSession();
+    if (!hadSession || typeof window === 'undefined') return;
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        credentials: 'include',
+        body: '{}',
+        keepalive: true,
+      });
+    } catch {
+      /* best effort */
+    }
+  }
+
+  private expireSession() {
+    this.clearSession();
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.replace('/login?expired=1');
+    }
+  }
+
+  // ---------- Refresh (single-flight) ----------
+  private refreshTokens(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      try {
+        // The refresh token travels only in the httpOnly cookie; the server rotates it.
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: '{}',
+        });
+        if (!res.ok) return false;
+        const data = (await res.json().catch(() => null)) as { accessToken?: string } | null;
+        if (!data?.accessToken) return false;
+        this.setToken(data.accessToken);
+        window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
+        return true;
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
+
+  // ---------- Core request ----------
+  private async request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const { auth = true, _retried = false, ...init } = options;
+    let token = auth ? this.getToken() : null;
+
+    // New tab / lost in-memory token but a profile exists: resume via the cookie first.
+    if (auth && !token && !_retried && typeof window !== 'undefined' && this.getUser()) {
+      if (await this.refreshTokens()) {
+        token = this.getToken();
+      } else {
+        this.expireSession();
+        throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, 'SESSION_EXPIRED');
+      }
+    }
+
     const headers: Record<string, string> = {
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -149,11 +272,15 @@ class ApiService {
       const rawMsg = body?.message;
       const message = Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg || res.statusText || "So'rov bajarilmadi";
 
-      if (res.status === 401 && auth && typeof window !== 'undefined') {
-        this.logout();
-        if (window.location.pathname !== '/login') {
-          window.location.replace('/login?expired=1');
+      const isAuthEndpoint = endpoint.startsWith('/auth/');
+      if (res.status === 401 && auth && !isAuthEndpoint && typeof window !== 'undefined') {
+        if (!_retried) {
+          const refreshed = await this.refreshTokens();
+          if (refreshed) {
+            return this.request<T>(endpoint, { ...options, _retried: true });
+          }
         }
+        this.expireSession();
         throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, body?.code);
       }
       throw new ApiError(message, res.status, body?.code);
@@ -170,6 +297,9 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ login, password }),
       auth: false,
+      // Ask the API to deliver the refresh token as an httpOnly cookie instead of in the body.
+      headers: { 'X-Auth-Transport': 'cookie' },
+      credentials: 'include',
     });
     if (!data?.user || data.user.role !== 'admin') {
       throw new ApiError("Kirish taqiqlangan: bu panel faqat administratorlar uchun.", 403, 'NOT_ADMIN');

@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { SmsModule } from '../sms/sms.module';
 import { PrismaModule } from '../../common/prisma/prisma.module';
+import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_ACCESS_SECRET', 'super-secret-jwt-access-key-minimum-32-chars-long'),
+        secret: getJwtAccessSecret(config),
         signOptions: {
           expiresIn: config.get<string>('JWT_ACCESS_EXPIRATION', '15m'),
         },

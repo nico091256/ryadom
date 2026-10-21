@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: localshop
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
     ports:
       - "5432:5432"
     volumes:
@@ -42,10 +42,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/localshop?schema=public
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/localshop?schema=public
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=production-secret-access-token-key-change-in-prod
+      # Required: generate with `openssl rand -hex 32` and put it in the root .env (compose reads it automatically).
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required - put it in .env}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
       - SMS_PROVIDER=mock
       - ONLINE_PAYMENTS_ENABLED=false
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
