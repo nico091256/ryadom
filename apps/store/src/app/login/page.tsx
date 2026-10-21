@@ -46,7 +46,7 @@ function LoginForm() {
     <div className="flex min-h-screen bg-white">
       <div className="relative hidden w-1/2 overflow-hidden bg-brand-700 lg:block">
         <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-brand-500/40 blur-3xl" />
-        <div className="absolute -bottom-32 right-0 h-[28rem] w-[28rem] rounded-full bg-emerald-300/20 blur-3xl" />
+        <div className="absolute -bottom-32 right-0 h-[28rem] w-[28rem] rounded-full bg-accent-500/25 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-xl font-bold text-brand-700">R</div>

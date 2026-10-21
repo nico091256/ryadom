@@ -6,9 +6,14 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   body {
     @apply bg-slate-50 text-slate-900;
+    font-feature-settings: 'ss01', 'cv05';
+  }
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
   }
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {
@@ -17,6 +22,20 @@
   }
   input[type='number'] {
     -moz-appearance: textfield;
+  }
+  /* Thin, palette-tinted scrollbars (WebKit); Firefox uses scrollbar-color. */
+  * {
+    scrollbar-color: theme('colors.slate.300') transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 

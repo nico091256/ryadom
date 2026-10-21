@@ -59,7 +59,7 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-xl bg-brand-600 font-bold text-white shadow-sm shadow-brand-600/30',
+        'flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-bold text-white shadow-brand',
         size === 'lg' ? 'h-12 w-12 text-2xl' : 'h-9 w-9 text-lg',
       )}
     >
