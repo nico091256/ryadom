@@ -53,12 +53,17 @@ export class CacheService {
   async delPattern(pattern: string): Promise<void> {
     try {
       if (this.redis.status !== 'ready') return;
-      const stream = this.redis.scanStream({ match: pattern, count: 100 });
-      stream.on('data', async (keys: string[]) => {
+      // Plain awaited SCAN loop. The previous scanStream version attached an async
+      // 'data' listener with no 'error' listener, so a failing DEL became an
+      // unhandled rejection instead of a cache miss.
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = next;
         if (keys.length > 0) {
           await this.redis.del(...keys);
         }
-      });
+      } while (cursor !== '0');
     } catch (err: any) {
       this.logger.debug(`Cache delPattern error for '${pattern}': ${err.message}`);
     }

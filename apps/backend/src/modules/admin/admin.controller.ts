@@ -13,6 +13,7 @@ import {
   AdminCategoryDto,
   AdminCreatePromoCodeDto,
   AdminCreateShopDto,
+  AdminUpdateCategoryDto,
   AdminUpdateProductDto,
   AdminUpdatePromoCodeDto,
   AdminUpdateShopDto,
@@ -240,7 +241,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Update a global category' })
   async updateCategory(
     @Param('id') categoryId: string,
-    @Body() dto: Partial<AdminCategoryDto>,
+    @Body() dto: AdminUpdateCategoryDto,
     @CurrentUser('id') adminId: string,
     @Req() req: Request,
   ) {

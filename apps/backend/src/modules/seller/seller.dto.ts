@@ -1,10 +1,37 @@
 import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MAX_PRODUCT_PRICE_TIYIN, MAX_PRODUCT_STOCK } from '@localshop/shared';
 import { UZ_PHONE_MESSAGE, UZ_PHONE_REGEX } from '../auth/auth.dto';
 
 const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const URL_MAX = 2048;
+
+export const SELLER_PRODUCTS_DEFAULT_LIMIT = 50;
+export const SELLER_PRODUCTS_MAX_LIMIT = 100;
+/** Hard cap on the legacy (non-paginated) bare-array response. */
+export const SELLER_PRODUCTS_UNPAGED_CAP = 500;
+
+/**
+ * Query of GET /seller/products. Pagination is opt-in: the store panel parses a
+ * bare array today, so the envelope is only returned when page or limit is sent.
+ */
+export class SellerProductsQueryDto {
+  @ApiPropertyOptional({ minimum: 1, description: 'Enables the paginated envelope { data, total, page, limit }' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: SELLER_PRODUCTS_MAX_LIMIT, default: SELLER_PRODUCTS_DEFAULT_LIMIT })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(SELLER_PRODUCTS_MAX_LIMIT)
+  limit?: number;
+}
 
 export class UpdateShopProfileDto {
   @ApiProperty({ example: 'Chilonzor Oziq-Ovqat', required: false, maxLength: 120 })

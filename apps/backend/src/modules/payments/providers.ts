@@ -33,7 +33,8 @@ export class PaymePaymentProvider implements IPaymentProvider {
   }
 
   async handleWebhook(payload: Record<string, any>): Promise<PaymentCallbackResult> {
-    this.logger.log(`[Payme Webhook] Received callback: ${JSON.stringify(payload)}`);
+    // Never log the raw payload: it carries account details and card/transaction data.
+    this.logger.log(`[Payme Webhook] id=${payload.id ?? '-'} method=${payload.method ?? '-'} state=${payload.params?.state ?? '-'}`);
     return {
       success: true,
       orderId: payload.params?.account?.order_id || payload.orderId,
@@ -58,7 +59,8 @@ export class ClickPaymentProvider implements IPaymentProvider {
   }
 
   async handleWebhook(payload: Record<string, any>): Promise<PaymentCallbackResult> {
-    this.logger.log(`[Click Webhook] Received callback: ${JSON.stringify(payload)}`);
+    // Never log the raw payload: it carries account details and card/transaction data.
+    this.logger.log(`[Click Webhook] merchant_trans_id=${payload.merchant_trans_id ?? '-'} action=${payload.action ?? '-'} error=${payload.error ?? '-'}`);
     return {
       success: true,
       orderId: payload.merchant_trans_id,

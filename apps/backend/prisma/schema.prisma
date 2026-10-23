@@ -1,10 +1,13 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // postgis: 0_init (geo GIST indexes, ST_DWithin nearby search); pg_trgm: 9_search_indexes_and_postgis.
+  extensions = [postgis, pg_trgm]
 }
 
 enum UserRole {
@@ -54,6 +57,11 @@ model City {
   @@map("cities")
 }
 
+/// Hand-written indexes NOT modelled here (Prisma cannot express GIN + gin_trgm_ops),
+/// created in migration 9_search_indexes_and_postgis:
+///   users_phone_trgm_idx  GIN ("phone" gin_trgm_ops)  -- AdminService.getUsers / getOrders search
+///   users_name_trgm_idx   GIN ("name"  gin_trgm_ops)
+/// `prisma migrate diff` will propose DROP INDEX for them: never accept it.
 model User {
   id                   String    @id @default(uuid())
   phone                String?   @unique
@@ -111,6 +119,9 @@ model DeviceToken {
   @@map("device_tokens")
 }
 
+/// Hand-written expression index NOT modelled here, created in 0_init:
+///   addresses_geo_gist_idx GIST (ST_SetSRID(ST_MakePoint("lng","lat"),4326)::geography)
+/// `prisma migrate diff` will propose DROP INDEX for it: never accept it (CI guards this).
 model Address {
   id           String   @id @default(uuid())
   user_id      String
@@ -134,6 +145,10 @@ model Address {
   @@map("addresses")
 }
 
+/// Hand-written expression index NOT modelled here, created in 0_init:
+///   shops_geo_gist_idx GIST (ST_SetSRID(ST_MakePoint("lng","lat"),4326)::geography)
+/// It matches the exact expression ShopsService.computeNearby uses in ST_DWithin / ST_Distance.
+/// `prisma migrate diff` will propose DROP INDEX for it: never accept it (CI guards this).
 model Shop {
   id                      String    @id @default(uuid())
   owner_id                String
@@ -240,6 +255,9 @@ model CartItem {
   @@map("cart_items")
 }
 
+/// Hand-written index NOT modelled here (GIN + gin_trgm_ops), created in 9_search_indexes_and_postgis:
+///   orders_customer_phone_trgm_idx GIN ("customer_phone" gin_trgm_ops)  -- AdminService.getOrders search
+/// `prisma migrate diff` will propose DROP INDEX for it: never accept it.
 model Order {
   id                      String        @id @default(uuid())
   customer_id             String
@@ -270,6 +288,8 @@ model Order {
 
   @@index([shop_id, status, created_at])
   @@index([customer_id, created_at])
+  @@index([created_at])
+  @@index([needs_attention, created_at])
   @@map("orders")
 }
 

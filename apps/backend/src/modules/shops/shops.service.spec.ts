@@ -1,5 +1,9 @@
 import { ConflictException } from '@nestjs/common';
-import { ShopsService } from './shops.service';
+import { Prisma } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ShopsService, gridCellCentre } from './shops.service';
+import { NearbyQueryDto, ShopProductsQueryDto } from './shops.dto';
 
 describe('ShopsService', () => {
   let prisma: any;
@@ -7,11 +11,12 @@ describe('ShopsService', () => {
 
   beforeEach(() => {
     prisma = {
-      user: { findUnique: jest.fn() },
+      user: { findUnique: jest.fn(), findFirst: jest.fn() },
       city: { findFirst: jest.fn() },
       shop: { findUnique: jest.fn(), findMany: jest.fn() },
-      product: { count: jest.fn().mockResolvedValue(5) },
+      product: { count: jest.fn().mockResolvedValue(5), findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]) },
       calculateDistanceMeters: jest.fn().mockReturnValue(1234),
+      $queryRaw: jest.fn(),
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
     service = new ShopsService(prisma);
@@ -29,13 +34,33 @@ describe('ShopsService', () => {
       lng: 69.24,
     };
 
-    it('rejects a duplicate login', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'existing' });
-      await expect(service.registerShop(dto as any)).rejects.toBeInstanceOf(ConflictException);
+    it('rejects a duplicate login OR phone with one generic REGISTRATION_CONFLICT', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'existing' });
+      const err = await service.registerShop(dto as any).catch((e) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse()).toEqual({
+        code: 'REGISTRATION_CONFLICT',
+        message: 'This login or phone number is already registered.',
+      });
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { OR: [{ login: 'new_seller' }, { phone: '+998900000000' }] },
+        select: { id: true },
+      });
+    });
+
+    it('turns a P2002 race on insert into the same 409 instead of a 500', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.city.findFirst.mockResolvedValue({ id: 'city-1' });
+      prisma.user.create = jest.fn().mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: '5.22.0' }),
+      );
+      const err = await service.registerShop(dto as any).catch((e) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse().code).toBe('REGISTRATION_CONFLICT');
     });
 
     it('creates the shop as pending/inactive and the owner without a forced password change', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue(null);
       prisma.city.findFirst.mockResolvedValue({ id: 'city-1' });
       prisma.user.create = jest.fn().mockResolvedValue({ id: 'owner-1' });
       prisma.shop.create = jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'shop-1', ...data }));
@@ -49,7 +74,153 @@ describe('ShopsService', () => {
     });
   });
 
-  describe('findOne / findShopProducts — status gating', () => {
+  describe('findNearby', () => {
+    const rawShop = (id: string, dist: number) => ({
+      id,
+      owner_id: `owner-${id}`,
+      name: id,
+      lat: 41.3,
+      lng: 69.24,
+      open_time: '00:00',
+      close_time: '23:59',
+      is_open: true,
+      distanceMeters: dist,
+    });
+
+    it('gridCellCentre snaps to the centre of the ~111 m cell', () => {
+      expect(gridCellCentre(41.28213)).toBeCloseTo(41.2825, 10);
+      expect(gridCellCentre(41.28299)).toBeCloseTo(41.2825, 10);
+      expect(gridCellCentre(41.28301)).toBeCloseTo(41.2835, 10);
+    });
+
+    it('queries PostGIS from the cell centre and scopes the product count to the shops in range', async () => {
+      prisma.$queryRaw.mockResolvedValue([rawShop('s1', 120), rawShop('s2', 900)]);
+      prisma.product.groupBy.mockResolvedValue([{ shop_id: 's1', _count: { _all: 3 } }]);
+
+      const result = await service.findNearby(41.28213, 69.21377, 3000);
+
+      // SQL parameters are the snapped centre, not the raw position.
+      const sqlValues = prisma.$queryRaw.mock.calls[0].slice(1);
+      expect(sqlValues).toContain(gridCellCentre(41.28213));
+      expect(sqlValues).toContain(gridCellCentre(69.21377));
+      expect(sqlValues).not.toContain(41.28213);
+
+      expect(prisma.product.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { shop_id: { in: ['s1', 's2'] }, is_available: true, deleted_at: null },
+        }),
+      );
+      expect(result.map((s) => s.productCount)).toEqual([3, 0]);
+      expect(result.map((s) => s.distanceMeters)).toEqual([120, 900]);
+    });
+
+    it('does not run the product aggregate at all when no shop is in range', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      expect(await service.findNearby(41.3, 69.24, 500)).toEqual([]);
+      expect(prisma.product.groupBy).not.toHaveBeenCalled();
+    });
+
+    it('never exposes owner_id (PostGIS path and Haversine fallback)', async () => {
+      // The raw SELECT no longer lists s.owner_id, so PostGIS rows never carry it.
+      const { owner_id: _omitted, ...postgisRow } = rawShop('s1', 10);
+      prisma.$queryRaw.mockResolvedValue([postgisRow]);
+      const viaPostgis = await service.findNearby(41.3, 69.24);
+      expect(viaPostgis[0]).not.toHaveProperty('owner_id');
+      expect(service['computeNearby'].toString()).not.toMatch(/s\.owner_id/);
+
+      prisma.$queryRaw.mockRejectedValue(new Error('no postgis'));
+      prisma.shop.findMany.mockResolvedValue([rawShop('s2', 0)]);
+      const viaFallback = await service.findNearby(41.3, 69.24);
+      expect(viaFallback).toHaveLength(1);
+      expect(viaFallback[0]).not.toHaveProperty('owner_id');
+      expect(viaFallback[0].distanceMeters).toBe(1234);
+    });
+
+    it('with a category filter drops shops that stock nothing in it', async () => {
+      prisma.$queryRaw.mockResolvedValue([rawShop('s1', 1), rawShop('s2', 2)]);
+      prisma.product.groupBy.mockResolvedValue([{ shop_id: 's2', _count: { _all: 1 } }]);
+
+      const result = await service.findNearby(41.3, 69.24, 3000, 'cat-1');
+
+      expect(prisma.product.groupBy.mock.calls[0][0].where).toMatchObject({ category_id: 'cat-1', shop_id: { in: ['s1', 's2'] } });
+      expect(result.map((s) => s.id)).toEqual(['s2']);
+    });
+
+    it('caches under a key derived from the cell, radius and category only', async () => {
+      const cache = { wrap: jest.fn((_k: string, fetcher: () => Promise<any>, _ttl?: number) => fetcher()) };
+      service = new ShopsService(prisma, cache as any);
+      prisma.$queryRaw.mockResolvedValue([]);
+
+      await service.findNearby(41.28213, 69.21377, 2500, 'cat-1');
+      await service.findNearby(41.28299, 69.21301, 2500, 'cat-1');
+
+      expect(cache.wrap.mock.calls[0][0]).toBe('nearby:41.2825:69.2135:2500:cat-1');
+      expect(cache.wrap.mock.calls[1][0]).toBe('nearby:41.2825:69.2135:2500:cat-1');
+      expect(cache.wrap.mock.calls[0][2]).toBe(30);
+    });
+  });
+
+  describe('NearbyQueryDto', () => {
+    const parse = (q: Record<string, unknown>) => plainToInstance(NearbyQueryDto, q);
+
+    it('coerces strings to numbers and applies the default radius', async () => {
+      const dto = parse({ lat: '41.28', lng: '69.21' });
+      expect(await validate(dto)).toHaveLength(0);
+      expect(dto).toMatchObject({ lat: 41.28, lng: 69.21, radius: 3000 });
+    });
+
+    it.each([
+      [{ lat: '91', lng: '0' }, 'lat'],
+      [{ lat: '0', lng: '-181' }, 'lng'],
+      [{ lat: 'abc', lng: '0' }, 'lat'],
+      [{ lat: '0', lng: '0', radius: '50' }, 'radius'],
+      [{ lat: '0', lng: '0', radius: '20000' }, 'radius'],
+      [{ lat: '0', lng: '0', radius: '1.5' }, 'radius'],
+      [{ lat: '0', lng: '0', category: 'x'.repeat(65) }, 'category'],
+    ])('rejects %j on %s', async (q, prop) => {
+      const errors = await validate(parse(q));
+      expect(errors.map((e) => e.property)).toContain(prop);
+    });
+  });
+
+  describe('findShopProducts — opt-in pagination (#33)', () => {
+    beforeEach(() => {
+      prisma.shop.findUnique.mockResolvedValue({ id: 's1', is_active: true, status: 'active' });
+      prisma.product.findMany.mockResolvedValue([{ id: 'p1' }]);
+      prisma.product.count.mockResolvedValue(120);
+    });
+
+    it('returns a bare array capped at 500 when neither page nor limit is given', async () => {
+      const result = await service.findShopProducts('s1', undefined, undefined, {});
+      expect(result).toEqual([{ id: 'p1' }]);
+      expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 500 }));
+      expect(prisma.product.findMany.mock.calls[0][0]).not.toHaveProperty('skip');
+      expect(prisma.product.count).not.toHaveBeenCalled();
+    });
+
+    it('returns the envelope with defaults when only page is given', async () => {
+      const result = await service.findShopProducts('s1', 'cat', 'milk', { page: 2 });
+      expect(result).toEqual({ data: [{ id: 'p1' }], total: 120, page: 2, limit: 50 });
+      expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 50, take: 50 }));
+      expect(prisma.product.count.mock.calls[0][0].where).toMatchObject({ shop_id: 's1', category_id: 'cat' });
+    });
+
+    it('clamps limit to 100', async () => {
+      const result: any = await service.findShopProducts('s1', undefined, undefined, { limit: 1000 });
+      expect(result.limit).toBe(100);
+    });
+
+    it('ShopProductsQueryDto validates page/limit as positive ints, limit <= 100', async () => {
+      const ok = plainToInstance(ShopProductsQueryDto, { page: '2', limit: '20', q: 'non' });
+      expect(await validate(ok)).toHaveLength(0);
+      expect(ok).toMatchObject({ page: 2, limit: 20 });
+
+      const bad = await validate(plainToInstance(ShopProductsQueryDto, { page: '0', limit: '101' }));
+      expect(bad.map((e) => e.property).sort()).toEqual(['limit', 'page']);
+    });
+  });
+
+  describe('findOne — status gating', () => {
     it('treats a pending shop as not found (not yet approved)', async () => {
       prisma.shop.findUnique.mockResolvedValue({ id: 's1', is_active: false, status: 'pending' });
       await expect(service.findOne('s1')).rejects.toThrow();

@@ -100,6 +100,26 @@ jobs:
       - name: Apply Prisma migrations
         run: pnpm --filter @localshop/backend exec prisma migrate deploy
 
+      # Guard the hand-written PostGIS expression indexes (0_init) and trigram
+      # indexes (migration 9) that schema.prisma cannot model: a generated
+      # migration that drops them would silently turn /shops/nearby and the admin
+      # searches into full scans. Any other drift is reported but not gated.
+      - name: Check schema drift does not drop hand-written indexes
+        shell: bash
+        working-directory: apps/backend
+        run: |
+          pnpm --filter @localshop/backend exec prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --shadow-database-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script > drift.sql
+          echo "--- drift between migrations and schema.prisma ---"
+          cat drift.sql
+          if grep -Eiq 'DROP INDEX[^;]*(shops_geo_gist_idx|addresses_geo_gist_idx|_trgm_idx)' drift.sql; then
+            echo "::error::Schema drift would DROP a hand-written GIST/trigram index. Do not accept this diff; see the comments above model Shop/Address/Order/User in schema.prisma."
+            exit 1
+          fi
+
       - name: Run backend e2e tests
         run: pnpm --filter @localshop/backend test:e2e
 

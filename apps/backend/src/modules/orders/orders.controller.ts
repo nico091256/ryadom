@@ -13,13 +13,13 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { ERROR_CODES, OrderStatus, PaymentMethod, UserRole } from '@localshop/shared';
-import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
+import { ERROR_CODES, UserRole } from '@localshop/shared';
+import { CreateOrderDto, RejectOrderDto, CancelOrderDto, ListOrdersQueryDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 
 @ApiTags('Orders')
@@ -78,26 +78,17 @@ export class OrdersController {
 
   @Get()
   @ApiOperation({ summary: 'List orders (Customer: own; Seller: shop; Admin: all with filters)' })
-  @ApiQuery({ name: 'status', required: false, enum: OrderStatus })
-  @ApiQuery({ name: 'shopId', required: false, type: String })
-  @ApiQuery({ name: 'paymentMethod', required: false, enum: PaymentMethod })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   async getOrders(
     @CurrentUser('id') actorId: string,
     @CurrentUser('role') actorRole: UserRole,
-    @Query('status') status?: OrderStatus,
-    @Query('shopId') shopId?: string,
-    @Query('paymentMethod') paymentMethod?: PaymentMethod,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: ListOrdersQueryDto,
   ) {
     return this.ordersService.getOrders(actorId, actorRole, {
-      status,
-      shopId,
-      paymentMethod,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
+      status: query.status,
+      shopId: query.shopId,
+      paymentMethod: query.paymentMethod,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
     });
   }
 

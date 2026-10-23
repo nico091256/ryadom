@@ -14,10 +14,17 @@ class CheckoutPaymentSelector extends ConsumerWidget {
     required this.onMethodChanged,
     required this.changeFrom,
     required this.onChangeFromChanged,
+    this.onlineEnabled = false,
   });
 
   final PaymentMethod method;
   final ValueChanged<PaymentMethod> onMethodChanged;
+
+  /// Online payments are gated server-side (ONLINE_PAYMENTS_ENABLED, 400
+  /// ONLINE_PAYMENTS_DISABLED otherwise); until the gateway is live the card
+  /// is shown as "coming soon" instead of letting the order fail at submit.
+  final bool onlineEnabled;
+
   /// 'exact' or a banknote label such as '50 000' (kept verbatim in the comment).
   final String changeFrom;
   final ValueChanged<String> onChangeFromChanged;
@@ -47,8 +54,9 @@ class CheckoutPaymentSelector extends ConsumerWidget {
               child: _PaymentOption(
                 icon: LucideIcons.creditCard,
                 label: ref.t('checkout.online'),
-                hint: ref.t('checkout.onlineHint'),
+                hint: ref.t(onlineEnabled ? 'checkout.onlineHint' : 'checkout.onlineSoon'),
                 selected: !isCash,
+                enabled: onlineEnabled,
                 onTap: () => onMethodChanged(PaymentMethod.online),
               ),
             ),
@@ -98,63 +106,65 @@ class _PaymentOption extends StatelessWidget {
     required this.hint,
     required this.selected,
     required this.onTap,
+    this.enabled = true,
   });
 
   final IconData icon;
   final String label;
   final String hint;
   final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
-      onTap: onTap,
-      haptic: true,
-      scale: 0.97,
+      onTap: enabled ? onTap : null,
+      haptic: enabled,
+      scale: enabled ? 0.97 : 1,
       borderRadius: AppRadius.control,
-      child: AnimatedContainer(
-        duration: AppDurations.normal,
-        curve: AppCurves.standard,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.green50 : AppColors.surface,
-          borderRadius: AppRadius.control,
-          border: Border.all(
-            color: selected ? AppColors.brand : AppColors.border,
-            width: selected ? 1.5 : 1,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.55,
+        child: AnimatedContainer(
+          duration: AppDurations.normal,
+          curve: AppCurves.standard,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.green50 : AppColors.surface,
+            borderRadius: AppRadius.control,
+            border: Border.all(color: selected ? AppColors.brand : AppColors.border, width: selected ? 1.5 : 1),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AnimatedContainer(
-                  duration: AppDurations.normal,
-                  curve: AppCurves.standard,
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.brand : AppColors.ink100,
-                    shape: BoxShape.circle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AnimatedContainer(
+                    duration: AppDurations.normal,
+                    curve: AppCurves.standard,
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.brand : AppColors.ink100,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: 18, color: selected ? AppColors.white : AppColors.ink600),
                   ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, size: 18, color: selected ? AppColors.white : AppColors.ink600),
-                ),
-                const Spacer(),
-                AnimatedOpacity(
-                  duration: AppDurations.fast,
-                  opacity: selected ? 1 : 0,
-                  child: const Icon(LucideIcons.checkCircle2, size: 20, color: AppColors.brand),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(label, style: AppText.bodyStrong, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: AppSpacing.xxs),
-            Text(hint, style: AppText.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
+                  const Spacer(),
+                  AnimatedOpacity(
+                    duration: AppDurations.fast,
+                    opacity: selected ? 1 : 0,
+                    child: const Icon(LucideIcons.checkCircle2, size: 20, color: AppColors.brand),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(label, style: AppText.bodyStrong, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(hint, style: AppText.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+          ),
         ),
       ),
     );

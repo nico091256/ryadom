@@ -7,8 +7,28 @@ import helmet from 'helmet';
 // cookie-parser is CommonJS (`module.exports = fn`) and this tsconfig has no esModuleInterop.
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { initSentry } from './common/observability/sentry';
+import { captureException, initSentry } from './common/observability/sentry';
 import { buildSwaggerDocument } from './swagger.config';
+
+/**
+ * Last-resort handlers. A rejected fire-and-forget promise (push, cache, job)
+ * must be logged and reported, not silently dropped or left to Node's default
+ * behaviour. An uncaught exception leaves the process in an unknown state, so
+ * after logging we exit non-zero and let the orchestrator restart us.
+ */
+function registerProcessHandlers() {
+  const logger = new Logger('Process');
+  process.on('unhandledRejection', (reason: unknown) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error(`Unhandled promise rejection: ${err.message}`, err.stack);
+    captureException(err, { source: 'unhandledRejection' });
+  });
+  process.on('uncaughtException', (err: Error) => {
+    logger.error(`Uncaught exception, shutting down: ${err.message}`, err.stack);
+    captureException(err, { source: 'uncaughtException' });
+    process.exit(1);
+  });
+}
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -16,6 +36,7 @@ async function bootstrap() {
 
   // No-op unless SENTRY_DSN is set; must run before the app (and its filters) is created.
   initSentry(process.env);
+  registerProcessHandlers();
 
   // Credentialed (cookie) requests need an explicit origin list in production;
   // validateEnv() refuses to boot without CORS_ORIGINS there. In development

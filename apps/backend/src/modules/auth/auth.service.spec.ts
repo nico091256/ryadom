@@ -33,7 +33,7 @@ describe('AuthService', () => {
     configService = {
       get: jest.fn((key: string, def?: any) => (key === 'JWT_ACCESS_SECRET' ? TEST_JWT_SECRET : def)),
     };
-    smsService = { sendSms: jest.fn() };
+    smsService = { sendSms: jest.fn().mockResolvedValue(true) };
     service = new AuthService(prisma, jwtService, configService, smsService);
   });
 
@@ -58,6 +58,21 @@ describe('AuthService', () => {
       const deleteOrder = prisma.smsCode.deleteMany.mock.invocationCallOrder[0];
       expect(countOrder).toBeLessThan(deleteOrder);
       expect(prisma.smsCode.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers 503 SMS_DELIVERY_FAILED instead of a fake success when the gateway refuses the message', async () => {
+      smsService.sendSms.mockResolvedValue(false);
+
+      let caught: unknown;
+      try {
+        await service.sendCode({ phone });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(HttpException);
+      expect((caught as HttpException).getStatus()).toBe(503);
+      expect((caught as HttpException).getResponse()).toEqual(expect.objectContaining({ code: 'SMS_DELIVERY_FAILED' }));
     });
 
     it('rejects with 429 SMS_HOURLY_LIMIT once 5 codes were issued to the phone within an hour', async () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
@@ -7,6 +7,7 @@ import {
   AdminCategoryDto,
   AdminCreatePromoCodeDto,
   AdminCreateShopDto,
+  AdminUpdateCategoryDto,
   AdminUpdateProductDto,
   AdminUpdatePromoCodeDto,
   AdminUpdateShopDto,
@@ -14,8 +15,13 @@ import {
 import { UserRole } from '@localshop/shared';
 import { OrdersService } from '../orders/orders.service';
 import { ShopsService } from '../shops/shops.service';
-import { CategoriesService } from '../categories/categories.service';
+import { CATEGORIES_CACHE_KEY, CategoriesService } from '../categories/categories.service';
 import { AuditService } from './audit.service';
+import { CacheService } from '../../common/redis/cache.service';
+
+/** Dashboard numbers are expensive aggregates; 30 s staleness is fine for an admin screen. */
+const STATS_CACHE_KEY = 'admin:stats';
+const STATS_CACHE_TTL_SECONDS = 30;
 
 /** The admin performing a mutating action (for the audit trail). */
 export interface AdminActor {
@@ -121,6 +127,7 @@ export class AdminService {
     private shopsService: ShopsService,
     private categoriesService: CategoriesService,
     private audit: AuditService,
+    @Optional() private cache?: CacheService,
   ) {}
 
   // ───────────────────────────── helpers ─────────────────────────────
@@ -128,6 +135,20 @@ export class AdminService {
   /** Fields of a DTO that were actually sent (for `meta.fields` in the audit log). */
   private changedFields(dto: object): string[] {
     return Object.entries(dto).filter(([, v]) => v !== undefined).map(([k]) => k);
+  }
+
+  /**
+   * Admin mutations change what customers see: drop the shop profile and every
+   * nearby listing (same keys ShopsService caches under). No-op without Redis.
+   */
+  private async invalidateShopCaches(shopId: string) {
+    if (!this.cache) return;
+    await Promise.all([this.cache.del(`shop:${shopId}:profile`), this.cache.delPattern('nearby:*')]);
+  }
+
+  private async invalidateCategoriesCache() {
+    if (!this.cache) return;
+    await this.cache.del(CATEGORIES_CACHE_KEY);
   }
 
   private toOrderSummary(order: OrderSummaryRow) {
@@ -354,6 +375,7 @@ export class AdminService {
         city: true,
       },
     });
+    await this.invalidateShopCaches(shopId);
     if (actor) {
       await this.audit.log(actor.id, 'shop.update', {
         targetType: 'shop',
@@ -381,6 +403,7 @@ export class AdminService {
       data,
       include: { owner: { select: this.shopOwnerSelect }, city: true },
     });
+    await this.invalidateShopCaches(shopId);
     if (actor) {
       await this.audit.log(actor.id, action, {
         targetType: 'shop',
@@ -471,6 +494,7 @@ export class AdminService {
       },
       include: { category: true },
     });
+    await this.invalidateShopCaches(product.shop_id);
     if (actor) {
       await this.audit.log(actor.id, 'product.update', {
         targetType: 'product',
@@ -496,6 +520,7 @@ export class AdminService {
       // Remove from any active carts so customers can't check it out
       this.prisma.cartItem.deleteMany({ where: { product_id: productId } }),
     ]);
+    await this.invalidateShopCaches(product.shop_id);
     if (actor) {
       await this.audit.log(actor.id, 'product.delete', {
         targetType: 'product',
@@ -538,8 +563,14 @@ export class AdminService {
 
     const q = filters.q?.trim();
     if (q) {
+      // Phone / name searches are served by the pg_trgm GIN indexes (migration 9).
+      // Order-id search is kept as a prefix match, but only when the term is at
+      // least 8 hex-ish chars (the short id admins copy from the UI): a 1-2 char
+      // `startsWith` on a uuid column matches a large share of the table and the
+      // btree PK can't be used case-insensitively anyway.
+      const idPrefix = q.toLowerCase();
       where.OR = [
-        { id: { startsWith: q.toLowerCase() } },
+        ...(/^[0-9a-f-]{8,36}$/.test(idPrefix) ? [{ id: { startsWith: idPrefix } }] : []),
         { customer_phone: { contains: q, mode: 'insensitive' } },
         { customer: { phone: { contains: q, mode: 'insensitive' } } },
         { customer: { name: { contains: q, mode: 'insensitive' } } },
@@ -760,6 +791,7 @@ export class AdminService {
 
   async createCategory(dto: AdminCategoryDto, actor?: AdminActor) {
     const category = await this.categoriesService.create(dto);
+    await this.invalidateCategoriesCache();
     if (actor) {
       await this.audit.log(actor.id, 'category.create', {
         targetType: 'category',
@@ -771,8 +803,9 @@ export class AdminService {
     return category;
   }
 
-  async updateCategory(categoryId: string, dto: Partial<AdminCategoryDto>, actor?: AdminActor) {
+  async updateCategory(categoryId: string, dto: AdminUpdateCategoryDto, actor?: AdminActor) {
     const category = await this.categoriesService.update(categoryId, dto);
+    await this.invalidateCategoriesCache();
     if (actor) {
       await this.audit.log(actor.id, 'category.update', {
         targetType: 'category',
@@ -813,6 +846,7 @@ export class AdminService {
       await tx.category.updateMany({ where: { parent_id: categoryId }, data: { parent_id: null } });
       await tx.category.delete({ where: { id: categoryId } });
     });
+    await this.invalidateCategoriesCache();
 
     if (actor) {
       await this.audit.log(actor.id, 'category.delete', {
@@ -918,6 +952,50 @@ export class AdminService {
    * Day boundaries use Tashkent local time (UTC+5).
    */
   async getDashboardStats() {
+    if (!this.cache) return this.computeDashboardStats();
+    return this.cache.wrap(STATS_CACHE_KEY, () => this.computeDashboardStats(), STATS_CACHE_TTL_SECONDS);
+  }
+
+  /**
+   * Orders + delivered revenue per Tashkent day for the last 30 days.
+   * Postgres does the bucketing (one GROUP BY over the created_at index);
+   * the in-memory dev store falls back to fetching the rows and bucketing in JS.
+   */
+  private async dailyOrderBuckets(since30: Date): Promise<Map<string, { orders: number; revenueTiyin: number }>> {
+    const buckets = new Map<string, { orders: number; revenueTiyin: number }>();
+
+    if (this.prisma.isPostgresConnected) {
+      // `+ interval '5 hours'` is the UTC+5 day shift localDayKey() applies in JS.
+      const rows = await this.prisma.$queryRaw<Array<{ day: string; orders: bigint | number; revenue: bigint | number | null }>>(Prisma.sql`
+        SELECT
+          to_char(o.created_at + interval '5 hours', 'YYYY-MM-DD') AS day,
+          COUNT(*)::bigint AS orders,
+          COALESCE(SUM(CASE WHEN o.status = 'delivered' THEN o.total_amount ELSE 0 END), 0)::bigint AS revenue
+        FROM orders o
+        WHERE o.created_at >= ${since30}
+        GROUP BY day
+      `);
+      for (const r of rows) {
+        buckets.set(r.day, { orders: Number(r.orders), revenueTiyin: Number(r.revenue ?? 0) });
+      }
+      return buckets;
+    }
+
+    const last30Orders = await this.prisma.order.findMany({
+      where: { created_at: { gte: since30 } },
+      select: { created_at: true, total_amount: true, status: true },
+    });
+    for (const o of last30Orders) {
+      const key = localDayKey(o.created_at);
+      const entry = buckets.get(key) ?? { orders: 0, revenueTiyin: 0 };
+      entry.orders += 1;
+      if (o.status === 'delivered') entry.revenueTiyin += o.total_amount;
+      buckets.set(key, entry);
+    }
+    return buckets;
+  }
+
+  private async computeDashboardStats() {
     const todayKey = localDayKey(new Date());
     const todayStart = localDayStart(todayKey);
     const since30 = new Date(todayStart.getTime() - 29 * DAY_MS);
@@ -933,7 +1011,7 @@ export class AdminService {
       deliveredAgg,
       deliveredTodayAgg,
       statusGroups,
-      last30Orders,
+      dailyBuckets,
       topShopRows,
       recentOrders,
     ] = await Promise.all([
@@ -957,10 +1035,7 @@ export class AdminService {
         _sum: { total_amount: true },
       }),
       this.prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.order.findMany({
-        where: { created_at: { gte: since30 } },
-        select: { created_at: true, total_amount: true, status: true },
-      }),
+      this.dailyOrderBuckets(since30),
       this.prisma.order.groupBy({
         by: ['shop_id'],
         where: { status: 'delivered', created_at: { gte: since30 } },
@@ -978,16 +1053,12 @@ export class AdminService {
     const revenueTiyin = deliveredAgg._sum.total_amount ?? 0;
     const deliveredCount = deliveredAgg._count._all;
 
-    const dayMap = new Map<string, { date: string; orders: number; revenueTiyin: number }>();
+    // Dense 30-day series (days without orders are present as zeros).
+    const daily: Array<{ date: string; orders: number; revenueTiyin: number }> = [];
     for (let i = 0; i < 30; i++) {
       const key = localDayKey(new Date(since30.getTime() + i * DAY_MS));
-      dayMap.set(key, { date: key, orders: 0, revenueTiyin: 0 });
-    }
-    for (const o of last30Orders) {
-      const entry = dayMap.get(localDayKey(o.created_at));
-      if (!entry) continue;
-      entry.orders += 1;
-      if (o.status === 'delivered') entry.revenueTiyin += o.total_amount;
+      const bucket = dailyBuckets.get(key);
+      daily.push({ date: key, orders: bucket?.orders ?? 0, revenueTiyin: bucket?.revenueTiyin ?? 0 });
     }
 
     const topShopNames = await this.prisma.shop.findMany({
@@ -1013,7 +1084,7 @@ export class AdminService {
         cancelRatePercent: orders > 0 ? Math.round((ordersByStatus.cancelled / orders) * 1000) / 10 : 0,
       },
       ordersByStatus,
-      daily: Array.from(dayMap.values()),
+      daily,
       topShops: topShopRows.map((r) => ({
         id: r.shop_id,
         name: nameById.get(r.shop_id) ?? '',

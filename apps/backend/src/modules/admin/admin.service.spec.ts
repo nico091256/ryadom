@@ -120,3 +120,162 @@ describe('AdminService — audit trail', () => {
     });
   });
 });
+
+describe('AdminService — cache invalidation (#24)', () => {
+  let prisma: any;
+  let cache: any;
+  let categories: any;
+  let service: AdminService;
+  const actor = { id: 'admin-1', ip: null };
+  const shop = { id: 's-1', name: 'Shop', status: 'active', is_active: true, is_open: true, open_time: '08:00', close_time: '22:00' };
+
+  beforeEach(() => {
+    prisma = {
+      shop: {
+        findUnique: jest.fn().mockResolvedValue(shop),
+        update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ ...shop, ...data })),
+      },
+      product: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'p-1', shop_id: 's-1', deleted_at: null, name_uz: 'Non' }),
+        update: jest.fn().mockResolvedValue({ id: 'p-1' }),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      cartItem: { deleteMany: jest.fn() },
+      category: { findUnique: jest.fn().mockResolvedValue({ id: 'c-1', name_uz: 'Non' }) },
+      $transaction: jest.fn((arg: any) => (typeof arg === 'function' ? arg(prisma) : Promise.all(arg))),
+    };
+    cache = { del: jest.fn().mockResolvedValue(undefined), delPattern: jest.fn().mockResolvedValue(undefined), wrap: jest.fn() };
+    categories = {
+      create: jest.fn().mockResolvedValue({ id: 'c-1', name_uz: 'Non', parent_id: null }),
+      update: jest.fn().mockResolvedValue({ id: 'c-1' }),
+    };
+    const audit = { log: jest.fn().mockResolvedValue(undefined) };
+    service = new AdminService(prisma, {} as any, { isShopOpen: () => true } as any, categories, audit as any, cache);
+  });
+
+  const expectShopInvalidated = () => {
+    expect(cache.del).toHaveBeenCalledWith('shop:s-1:profile');
+    expect(cache.delPattern).toHaveBeenCalledWith('nearby:*');
+  };
+
+  it.each([
+    ['approveShop', () => service.approveShop('s-1', actor)],
+    ['blockShop', () => service.blockShop('s-1', actor)],
+    ['unblockShop', () => service.unblockShop('s-1', actor)],
+    ['updateShop', () => service.updateShop('s-1', { name: 'Renamed' }, actor)],
+  ])('%s drops the shop profile and nearby caches', async (_name, run) => {
+    await run();
+    expectShopInvalidated();
+  });
+
+  it('updateProduct / deleteProduct invalidate the owning shop', async () => {
+    await service.updateProduct('p-1', { is_available: false }, actor);
+    expectShopInvalidated();
+
+    cache.del.mockClear();
+    cache.delPattern.mockClear();
+    prisma.product.update.mockResolvedValue({ id: 'p-1' });
+    prisma.$transaction.mockResolvedValue([]);
+    await service.deleteProduct('p-1', actor);
+    expectShopInvalidated();
+  });
+
+  it('category create / update / delete drop categories:all', async () => {
+    await service.createCategory({ name_uz: 'Non' }, actor);
+    await service.updateCategory('c-1', { name_ru: 'Хлеб' }, actor);
+    prisma.$transaction.mockImplementation(async (cb: any) =>
+      cb({
+        product: { deleteMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+        category: { updateMany: jest.fn(), delete: jest.fn() },
+      }),
+    );
+    await service.deleteCategory('c-1', actor);
+
+    expect(cache.del.mock.calls.filter((c: any[]) => c[0] === 'categories:all')).toHaveLength(3);
+  });
+
+  it('works without a CacheService (optional dependency)', async () => {
+    const audit = { log: jest.fn() };
+    const noCache = new AdminService(prisma, {} as any, { isShopOpen: () => true } as any, categories, audit as any);
+    await expect(noCache.approveShop('s-1', actor)).resolves.toBeDefined();
+  });
+});
+
+describe('AdminService — orders search and dashboard (#22)', () => {
+  let prisma: any;
+  let cache: any;
+  let service: AdminService;
+
+  beforeEach(() => {
+    prisma = {
+      isPostgresConnected: true,
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      user: { count: jest.fn().mockResolvedValue(0) },
+      shop: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      product: { count: jest.fn().mockResolvedValue(0) },
+      order: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { total_amount: null, commission_amount: null }, _count: { _all: 0 } }),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    };
+    cache = { wrap: jest.fn((_k: string, fetcher: () => Promise<any>, _ttl?: number) => fetcher()) };
+    service = new AdminService(prisma, {} as any, { isShopOpen: () => true } as any, {} as any, { log: jest.fn() } as any, cache);
+  });
+
+  it('getOrders: short search terms skip the uuid prefix match, long hex ones keep it', async () => {
+    await service.getOrders({ q: 'Ali' });
+    let where = prisma.order.findMany.mock.calls[0][0].where;
+    expect(where.OR.some((c: any) => c.id)).toBe(false);
+    expect(where.OR).toContainEqual({ customer: { name: { contains: 'Ali', mode: 'insensitive' } } });
+
+    await service.getOrders({ q: 'A1B2C3D4' });
+    where = prisma.order.findMany.mock.calls[1][0].where;
+    expect(where.OR[0]).toEqual({ id: { startsWith: 'a1b2c3d4' } });
+  });
+
+  it('getDashboardStats is served through cache.wrap(admin:stats, 30s)', async () => {
+    await service.getDashboardStats();
+    expect(cache.wrap).toHaveBeenCalledWith('admin:stats', expect.any(Function), 30);
+  });
+
+  // Yesterday in Tashkent (UTC+5), always inside the 30-day window.
+  const yesterdayKey = new Date(Date.now() + 5 * 3600e3 - 86400e3).toISOString().slice(0, 10);
+
+  it('on Postgres the 30-day series comes from one GROUP BY day query, zero-filled to 30 entries', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ day: yesterdayKey, orders: BigInt(3), revenue: BigInt(450000) }]);
+
+    const stats = await service.getDashboardStats();
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    // The old per-row scan of 30 days of orders is gone.
+    expect(prisma.order.findMany).toHaveBeenCalledTimes(1); // recentOrders only
+    expect(prisma.order.findMany.mock.calls[0][0]).toMatchObject({ take: 8 });
+    expect(stats.daily).toHaveLength(30);
+    const hit = stats.daily.find((d) => d.date === yesterdayKey);
+    expect(hit).toEqual({ date: yesterdayKey, orders: 3, revenueTiyin: 450000 });
+    expect(stats.daily.filter((d) => d.orders === 0)).toHaveLength(29);
+  });
+
+  it('without Postgres (memory store) it buckets rows in JS using UTC+5 days', async () => {
+    prisma.isPostgresConnected = false;
+    // 00:30 Tashkent time on `yesterdayKey` == 19:30Z of the UTC day before: a UTC bucket would misfile it.
+    const createdAt = new Date(`${yesterdayKey}T00:30:00.000+05:00`);
+    prisma.order.findMany.mockImplementation(({ take }: any) =>
+      Promise.resolve(
+        take === undefined // the bucket scan; recentOrders passes take: 8
+          ? [
+              { created_at: createdAt, total_amount: 100000, status: 'delivered' },
+              { created_at: createdAt, total_amount: 999, status: 'cancelled' },
+            ]
+          : [],
+      ),
+    );
+
+    const stats = await service.getDashboardStats();
+
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(stats.daily.find((d) => d.date === yesterdayKey)).toEqual({ date: yesterdayKey, orders: 2, revenueTiyin: 100000 });
+  });
+});

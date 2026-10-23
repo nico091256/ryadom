@@ -117,7 +117,16 @@ export class AuthService {
     });
 
     const smsMessage = `LocalShop tasdiqlash kodi: ${code}. Hech kimga bermang!`;
-    await this.smsService.sendSms(phone, smsMessage);
+    const sent = await this.smsService.sendSms(phone, smsMessage);
+    if (!sent) {
+      // The code row stays (it expires in 2 minutes) but the client must not be told
+      // a message is on its way when the gateway refused or is not configured.
+      this.logger.error(`SMS delivery failed for ${phone.slice(0, 7)}******; verification code not delivered.`);
+      throw new HttpException(
+        { code: 'SMS_DELIVERY_FAILED', message: 'Could not send the verification SMS. Please try again later.' },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
 
     return {
       success: true,

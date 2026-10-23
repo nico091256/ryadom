@@ -55,3 +55,40 @@ describe('SellerService.getStats', () => {
     expect(stats.today.revenueTiyin).toBe(0);
   });
 });
+
+describe('SellerService.getProducts — opt-in pagination (#33)', () => {
+  let prisma: any;
+  let service: SellerService;
+
+  beforeEach(() => {
+    prisma = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ id: 'shop-1', owner_id: 'owner-1' }) },
+      product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1' }]), count: jest.fn().mockResolvedValue(130) },
+    };
+    service = new SellerService(prisma);
+  });
+
+  it('returns a bare array capped at 500 when no pagination is requested (store panel shape)', async () => {
+    const result = await service.getProducts('owner-1', {});
+    expect(result).toEqual([{ id: 'p1' }]);
+    expect(prisma.product.findMany).toHaveBeenCalledWith({
+      where: { shop_id: 'shop-1', deleted_at: null },
+      include: { category: true },
+      orderBy: { created_at: 'desc' },
+      take: 500,
+    });
+    expect(prisma.product.count).not.toHaveBeenCalled();
+  });
+
+  it('returns the envelope when limit is given, defaulting page to 1', async () => {
+    const result = await service.getProducts('owner-1', { limit: 20 });
+    expect(result).toEqual({ data: [{ id: 'p1' }], total: 130, page: 1, limit: 20 });
+    expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 20 }));
+  });
+
+  it('clamps limit to 100 and offsets by page', async () => {
+    const result: any = await service.getProducts('owner-1', { page: 3, limit: 999 });
+    expect(result).toMatchObject({ page: 3, limit: 100 });
+    expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 200, take: 100 }));
+  });
+});

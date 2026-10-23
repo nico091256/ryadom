@@ -15,7 +15,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@localshop/shared';
-import { CreateProductDto, UpdateProductDto, UpdateShopProfileDto } from './seller.dto';
+import { CreateProductDto, SellerProductsQueryDto, UpdateProductDto, UpdateShopProfileDto } from './seller.dto';
 
 @ApiTags('Seller')
 @ApiBearerAuth()
@@ -41,9 +41,14 @@ export class SellerController {
   }
 
   @Get('products')
-  @ApiOperation({ summary: 'Get all products belonging to seller shop' })
-  async getProducts(@CurrentUser('id') sellerId: string) {
-    return this.sellerService.getProducts(sellerId);
+  @ApiOperation({
+    summary: 'Get products belonging to seller shop',
+    description:
+      'Without `page`/`limit` the response is a bare array (capped at 500 newest products) for backward compatibility. ' +
+      'With either `page` or `limit` it is the paginated envelope `{ data, total, page, limit }` (limit default 50, max 100).',
+  })
+  async getProducts(@CurrentUser('id') sellerId: string, @Query() query: SellerProductsQueryDto) {
+    return this.sellerService.getProducts(sellerId, { page: query.page, limit: query.limit });
   }
 
   @Post('products')

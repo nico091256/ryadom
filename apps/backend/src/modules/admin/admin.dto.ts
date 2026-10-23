@@ -178,6 +178,46 @@ export class AdminCategoryDto {
   parent_id?: string;
 }
 
+/**
+ * PUT /admin/categories/:id body. Every field optional; `parent_id: null`
+ * detaches the category from its parent. A plain `Partial<AdminCategoryDto>`
+ * would compile to `Object` and skip validation entirely.
+ */
+export class AdminUpdateCategoryDto {
+  @ApiProperty({ required: false, maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  name_uz?: string;
+
+  @ApiProperty({ required: false, maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name_ru?: string;
+
+  @ApiProperty({ required: false, maxLength: 80 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name_en?: string;
+
+  @ApiProperty({ required: false, nullable: true, maxLength: 2048 })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(2048)
+  icon_url?: string | null;
+
+  @ApiProperty({ required: false, nullable: true, maxLength: 64, description: 'null detaches from the parent' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(64)
+  parent_id?: string | null;
+}
+
 export class AdminCancelOrderDto {
   @ApiProperty({ example: 'Mijoz bilan bog\'lanib bo\'lmadi', maxLength: 300 })
   @IsNotEmpty()

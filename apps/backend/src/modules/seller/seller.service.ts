@@ -1,7 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/redis/cache.service';
-import { CreateProductDto, UpdateProductDto, UpdateShopProfileDto } from './seller.dto';
+import {
+  CreateProductDto,
+  SELLER_PRODUCTS_DEFAULT_LIMIT,
+  SELLER_PRODUCTS_MAX_LIMIT,
+  SELLER_PRODUCTS_UNPAGED_CAP,
+  UpdateProductDto,
+  UpdateShopProfileDto,
+} from './seller.dto';
 import { OrderStatus } from '@localshop/shared';
 
 @Injectable()
@@ -59,17 +66,38 @@ export class SellerService {
     return updated;
   }
 
-  async getProducts(ownerId: string) {
+  /**
+   * Seller's own catalogue (incl. unavailable, excl. soft-deleted). Without
+   * `page`/`limit` it stays the bare array the store panel parses (capped at
+   * SELLER_PRODUCTS_UNPAGED_CAP); with either present it is `{ data, total, page, limit }`.
+   */
+  async getProducts(ownerId: string, pagination?: { page?: number; limit?: number }) {
     const shop = await this.getSellerShop(ownerId);
+    const where = { shop_id: shop.id, deleted_at: null };
 
-    return this.prisma.product.findMany({
-      where: {
-        shop_id: shop.id,
-        deleted_at: null,
-      },
-      include: { category: true },
-      orderBy: { created_at: 'desc' },
-    });
+    const paged = pagination && (pagination.page !== undefined || pagination.limit !== undefined);
+    if (!paged) {
+      return this.prisma.product.findMany({
+        where,
+        include: { category: true },
+        orderBy: { created_at: 'desc' },
+        take: SELLER_PRODUCTS_UNPAGED_CAP,
+      });
+    }
+
+    const page = Math.max(1, pagination!.page ?? 1);
+    const limit = Math.min(SELLER_PRODUCTS_MAX_LIMIT, Math.max(1, pagination!.limit ?? SELLER_PRODUCTS_DEFAULT_LIMIT));
+    const [data, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        include: { category: true },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+    return { data, total, page, limit };
   }
 
   async createProduct(ownerId: string, dto: CreateProductDto) {

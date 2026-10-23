@@ -123,6 +123,7 @@
     "cashHint": "Pay on delivery",
     "online": "Online",
     "onlineHint": "By card",
+    "onlineSoon": "Coming soon",
     "changeQuestion": "Need change prepared?",
     "changeExact": "Exact amount",
     "commentTitle": "Note for the courier",
