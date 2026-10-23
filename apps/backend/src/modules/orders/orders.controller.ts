@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Query,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -49,8 +50,15 @@ export class OrdersController {
     }
 
     const scope = `orders:create:${customerId}`;
-    const { claimed, cached } = await this.idempotencyService.claim(scope, idempotencyKey);
+    const bodyHash = IdempotencyService.hashBody(dto);
+    const { claimed, cached, bodyMismatch } = await this.idempotencyService.claim(scope, idempotencyKey, bodyHash);
     if (!claimed) {
+      if (bodyMismatch) {
+        throw new UnprocessableEntityException({
+          code: ERROR_CODES.IDEMPOTENCY_KEY_REUSED,
+          message: 'This Idempotency-Key was already used with a different request body. Use a new key.',
+        });
+      }
       if (cached) return cached;
       throw new ConflictException({
         code: ERROR_CODES.DUPLICATE_REQUEST,
@@ -60,7 +68,7 @@ export class OrdersController {
 
     try {
       const result = await this.ordersService.createOrder(customerId, dto);
-      await this.idempotencyService.store(scope, idempotencyKey, result);
+      await this.idempotencyService.store(scope, idempotencyKey, bodyHash, result);
       return result;
     } catch (err) {
       await this.idempotencyService.release(scope, idempotencyKey);
@@ -128,7 +136,9 @@ export class OrdersController {
 
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel order (Customer: while new; Seller: with reason)' })
+  // Admins cancel via the audited POST /admin/orders/:id/cancel instead.
+  @Roles(UserRole.CUSTOMER, UserRole.SELLER)
+  @ApiOperation({ summary: 'Cancel order (Customer: while new; Seller: with reason). Admins use /admin/orders/:id/cancel' })
   async cancelOrder(
     @Param('id') orderId: string,
     @CurrentUser('id') actorId: string,

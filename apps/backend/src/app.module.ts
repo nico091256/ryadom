@@ -10,6 +10,8 @@ import { ObservabilityModule } from './common/observability/observability.module
 import { FirebaseModule } from './common/firebase/firebase.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { MustChangePasswordGuard } from './common/guards/must-change-password.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { validateEnv } from './common/config/env.validation';
 import { SmsModule } from './modules/sms/sms.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -81,6 +83,17 @@ import { AppController } from './app.controller';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Order matters: both read req.user, which JwtAuthGuard populates.
+    // A temporary-password account may only change its password / log out / read /me.
+    {
+      provide: APP_GUARD,
+      useClass: MustChangePasswordGuard,
+    },
+    // @Roles() is honoured on every controller; routes without it pass through.
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     {
       provide: APP_FILTER,

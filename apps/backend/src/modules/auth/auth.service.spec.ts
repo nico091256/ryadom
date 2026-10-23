@@ -13,7 +13,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     prisma = {
-      user: { findUnique: jest.fn(), create: jest.fn() },
+      user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       refreshToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
       smsCode: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -21,8 +21,14 @@ describe('AuthService', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         create: jest.fn().mockResolvedValue({}),
       },
+      // Prisma's array form: the operations are already-built promises, resolve them all.
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     };
-    jwtService = { signAsync: jest.fn().mockResolvedValue('signed-access-token') };
+    jwtService = {
+      signAsync: jest.fn().mockResolvedValue('signed-access-token'),
+      // iat/exp of the signed token: 10 minutes (JWT_ACCESS_EXPIRATION may differ from 15m).
+      decode: jest.fn().mockReturnValue({ sub: 'u1', role: 'seller', iat: 1_700_000_000, exp: 1_700_000_600 }),
+    };
     // The JWT secret is guaranteed by env validation at boot; mirror that here.
     configService = {
       get: jest.fn((key: string, def?: any) => (key === 'JWT_ACCESS_SECRET' ? TEST_JWT_SECRET : def)),
@@ -123,6 +129,58 @@ describe('AuthService', () => {
       const storedHash = prisma.refreshToken.create.mock.calls[0][0].data.token_hash;
       expect(storedHash).not.toBe(result.refreshToken);
     });
+
+    it('signs a minimal HS256 payload ({ sub, role }, no login/phone) and reports the real expiry', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        login: 'seller_chilonzor',
+        phone: '+998901234567',
+        password_hash: await bcrypt.hash('pw-123456!', 4),
+        is_blocked: false,
+        role: 'seller',
+        shops: [],
+      });
+
+      const result = await service.login({ login: 'seller_chilonzor', password: 'pw-123456!' } as any);
+
+      const [payload, options] = jwtService.signAsync.mock.calls[0];
+      expect(payload).toEqual({ sub: 'u1', role: 'seller' });
+      expect(options).toEqual(expect.objectContaining({ algorithm: 'HS256', secret: TEST_JWT_SECRET }));
+      // From the token's exp - iat, not a hard-coded 900.
+      expect(result.expiresIn).toBe(600);
+      expect(result.tokenType).toBe('Bearer');
+    });
+
+    it('always runs exactly one bcrypt.compare, even for an unknown login (no timing enumeration)', async () => {
+      const compare = jest.spyOn(bcrypt, 'compare');
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.login({ login: 'nobody', password: 'whatever' } as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'INVALID_CREDENTIALS' }),
+      });
+      expect(compare).toHaveBeenCalledTimes(1);
+
+      // A staff row without a password hash takes the same path.
+      compare.mockClear();
+      prisma.user.findUnique.mockResolvedValue({ id: 'u2', login: 'nopw', password_hash: null, is_blocked: false, shops: [] });
+      await expect(service.login({ login: 'nopw', password: 'whatever' } as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'INVALID_CREDENTIALS' }),
+      });
+      expect(compare).toHaveBeenCalledTimes(1);
+      compare.mockRestore();
+    });
+
+    it('reveals a blocked account only to someone who knows the password', async () => {
+      const hash = await bcrypt.hash('right-password', 4);
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1', login: 'x', password_hash: hash, is_blocked: true, role: 'seller', shops: [] });
+
+      await expect(service.login({ login: 'x', password: 'wrong' } as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'INVALID_CREDENTIALS' }),
+      });
+      await expect(service.login({ login: 'x', password: 'right-password' } as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'USER_BLOCKED' }),
+      });
+    });
   });
 
   describe('refreshToken', () => {
@@ -163,6 +221,87 @@ describe('AuthService', () => {
         expires_at: new Date(Date.now() - 1000),
       });
       await expect(service.refreshToken('expired')).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('treats reuse of an already-revoked token as theft: revokes every session of that user', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt-old',
+        user_id: 'u-victim',
+        revoked_at: new Date(Date.now() - 60_000),
+        expires_at: new Date(Date.now() + 1000 * 60 * 60),
+      });
+      const warn = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+
+      await expect(service.refreshToken('replayed')).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { user_id: 'u-victim', revoked_at: null },
+        data: { revoked_at: expect.any(Date) },
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('u-victim'));
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
+    });
+
+    it('does not touch other sessions for an unknown or merely expired token', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue(null);
+      await expect(service.refreshToken('bogus')).rejects.toBeInstanceOf(UnauthorizedException);
+      prisma.refreshToken.findUnique.mockResolvedValue({ id: 'rt1', user_id: 'u1', revoked_at: null, expires_at: new Date(0) });
+      await expect(service.refreshToken('expired')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    const currentPassword = 'Temp-pass-1234';
+
+    beforeEach(async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        role: 'seller',
+        password_hash: await bcrypt.hash(currentPassword, 4),
+        must_change_password: true,
+      });
+      prisma.user.update.mockResolvedValue({ id: 'u1' });
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 2 });
+      prisma.refreshToken.create.mockResolvedValue({});
+    });
+
+    it('updates the hash and revokes all refresh tokens in one transaction, then issues a fresh pair', async () => {
+      const result = await service.changePassword('u1', { currentPassword, newPassword: 'New-pass-5678' } as any);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { password_hash: expect.any(String), must_change_password: false },
+      });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { user_id: 'u1', revoked_at: null },
+        data: { revoked_at: expect.any(Date) },
+      });
+      // The revocation happens before the new token for this device is created.
+      expect(prisma.refreshToken.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.refreshToken.create.mock.invocationCallOrder[0],
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: true,
+          accessToken: 'signed-access-token',
+          refreshToken: expect.any(String),
+          tokenType: 'Bearer',
+          expiresIn: 600,
+        }),
+      );
+      const newHash = prisma.user.update.mock.calls[0][0].data.password_hash;
+      expect(await bcrypt.compare('New-pass-5678', newHash)).toBe(true);
+    });
+
+    it('rejects a wrong current password without touching anything', async () => {
+      await expect(
+        service.changePassword('u1', { currentPassword: 'nope', newPassword: 'New-pass-5678' } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
   });
 

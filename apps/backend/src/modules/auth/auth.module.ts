@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { RefreshTokenJanitor } from './refresh-token.janitor';
 import { SmsModule } from '../sms/sms.module';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { getJwtAccessSecret } from '../../common/config/jwt-secret';
@@ -26,7 +27,7 @@ import { getJwtAccessSecret } from '../../common/config/jwt-secret';
     PrismaModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, RefreshTokenJanitor],
   exports: [AuthService, JwtModule, PassportModule],
 })
 export class AuthModule {}

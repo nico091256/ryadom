@@ -3,6 +3,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { Public } from '../decorators/public.decorator';
+import { metricsTokenAccepted } from './metrics-token';
 import { MetricsService } from './metrics.service';
 
 /**
@@ -19,8 +20,7 @@ export class MetricsController {
   @Public()
   @Get()
   async getMetrics(@Headers('authorization') authorization: string | undefined, @Res() res: Response) {
-    const required = process.env.METRICS_TOKEN;
-    if (required && authorization !== `Bearer ${required}`) {
+    if (!metricsTokenAccepted(authorization)) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Invalid metrics token.' });
     }
 

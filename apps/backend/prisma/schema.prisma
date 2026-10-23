@@ -93,6 +93,7 @@ model RefreshToken {
   user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+  @@index([expires_at])
   @@map("refresh_tokens")
 }
 
@@ -309,12 +310,12 @@ model OrderStatusHistory {
   id         String      @id @default(uuid())
   order_id   String
   status     OrderStatus
-  changed_by String
+  changed_by String?     // null = system action (e.g. auto-cancel)
   reason     String?
   created_at DateTime    @default(now())
 
   order      Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  actor      User        @relation(fields: [changed_by], references: [id])
+  actor      User?       @relation(fields: [changed_by], references: [id], onDelete: Restrict)
 
   @@index([order_id, created_at])
   @@index([changed_by])

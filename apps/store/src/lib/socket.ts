@@ -51,6 +51,14 @@ export function getSocket(): Socket {
   socket.on('connect', () => {
     if (joinedShopId && socket) emitJoin(socket, joinedShopId);
   });
+  // The gateway closes a socket when its access token expires ("io server disconnect");
+  // socket.io does not auto-reconnect from that reason, so reconnect explicitly - the auth
+  // callback above re-reads the current (refreshed) token for the new handshake.
+  socket.on('disconnect', (reason) => {
+    if (reason === 'io server disconnect' && joinedShopId && api.getToken()) {
+      setTimeout(() => socket?.connect(), 500);
+    }
+  });
   if (!refreshListenerBound && typeof window !== 'undefined') {
     refreshListenerBound = true;
     window.addEventListener(TOKEN_REFRESHED_EVENT, () => {

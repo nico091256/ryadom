@@ -19,6 +19,7 @@ describe('AuthController refresh-token transport', () => {
     login: jest.Mock;
     refreshToken: jest.Mock;
     logout: jest.Mock;
+    changePassword: jest.Mock;
   };
   let controller: AuthController;
 
@@ -35,6 +36,9 @@ describe('AuthController refresh-token transport', () => {
       login: jest.fn().mockResolvedValue({ ...tokens, user: { id: 'u1', role: 'seller' } }),
       refreshToken: jest.fn().mockResolvedValue({ ...tokens, accessToken: 'access-2', refreshToken: 'refresh-2' }),
       logout: jest.fn().mockResolvedValue({ success: true }),
+      changePassword: jest
+        .fn()
+        .mockResolvedValue({ success: true, message: 'ok', ...tokens, accessToken: 'access-3', refreshToken: 'refresh-3' }),
     };
     const configService = { get: jest.fn((_key: string, def?: any) => def) };
     controller = new AuthController(authService as any, configService as any);
@@ -139,6 +143,40 @@ describe('AuthController refresh-token transport', () => {
     it('returns 401 when no token is available anywhere', async () => {
       await expect(controller.logout({}, makeReq(), makeRes())).rejects.toBeInstanceOf(UnauthorizedException);
       expect(authService.logout).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('change-password', () => {
+    const dto = { currentPassword: 'old', newPassword: 'new-password-1' } as any;
+
+    it('returns the fresh token pair in the body for mobile-style clients', async () => {
+      const res = makeRes();
+      const body: any = await controller.changePassword('u1', dto, makeReq(), res);
+
+      expect(authService.changePassword).toHaveBeenCalledWith('u1', dto);
+      expect(body).toEqual(expect.objectContaining({ success: true, accessToken: 'access-3', refreshToken: 'refresh-3' }));
+      expect(res.cookie).not.toHaveBeenCalled();
+    });
+
+    it('with X-Auth-Transport: cookie rotates the httpOnly cookie and omits refreshToken from the body', async () => {
+      const res = makeRes();
+      const body: any = await controller.changePassword('u1', dto, makeReq({ header: 'cookie' }), res);
+
+      expect(body).not.toHaveProperty('refreshToken');
+      expect(body.accessToken).toBe('access-3');
+      expect(res.cookie).toHaveBeenCalledWith(
+        REFRESH_COOKIE_NAME,
+        'refresh-3',
+        expect.objectContaining({ httpOnly: true, path: REFRESH_COOKIE_PATH }),
+      );
+    });
+
+    it('also treats a request that carries the refresh cookie as a cookie client', async () => {
+      const res = makeRes();
+      const body: any = await controller.changePassword('u1', dto, makeReq({ cookie: 'old-cookie' }), res);
+
+      expect(body).not.toHaveProperty('refreshToken');
+      expect(res.cookie).toHaveBeenCalledWith(REFRESH_COOKIE_NAME, 'refresh-3', expect.anything());
     });
   });
 });

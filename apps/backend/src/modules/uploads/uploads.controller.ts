@@ -15,6 +15,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { fromBuffer } from 'file-type';
 import type { OutputInfo } from 'sharp';
+import { UserRole } from '@localshop/shared';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 // sharp ships ESM-style typings (`export default`) but a CommonJS build (`module.exports = sharp`);
 // without esModuleInterop a default import would be `undefined` at runtime, so bind it explicitly.
@@ -47,6 +49,8 @@ function invalidFileType(): BadRequestException {
 @ApiTags('Uploads')
 @ApiBearerAuth()
 @Controller('uploads')
+// Only staff upload (product photos, shop logo/cover); enforced by the global RolesGuard.
+@Roles(UserRole.SELLER, UserRole.ADMIN)
 export class UploadsController {
   @Post('image')
   @Throttle(UPLOAD_THROTTLE)

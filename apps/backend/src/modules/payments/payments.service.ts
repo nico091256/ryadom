@@ -26,6 +26,11 @@ export class PaymentsService {
     return this.configService.get<string>('ONLINE_PAYMENTS_ENABLED') === 'true';
   }
 
+  /** Provider key written to `payments.provider` for `payment_method: 'online'` orders. */
+  get onlineProviderKey(): string {
+    return this.paymeProvider.providerName;
+  }
+
   getProvider(providerName: string): IPaymentProvider {
     const provider = this.providers.get(providerName);
     if (!provider) {

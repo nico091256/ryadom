@@ -221,6 +221,80 @@ describe('Orders lifecycle (e2e)', () => {
     expect(productAfter?.stock).toBe((productBefore?.stock ?? 0) - 3 + 3);
   });
 
+  it('rolls back the whole order when a later item is out of stock (first item stock untouched)', async () => {
+    const customerToken = await loginCustomer(customerPhone);
+
+    const second = await prisma.product.create({
+      data: {
+        shop_id: shopId,
+        category_id: categoryId,
+        name_uz: 'Ikkinchi mahsulot',
+        name_ru: 'Второй продукт',
+        name_en: 'Second product',
+        price: 250000,
+        stock: 5,
+        is_available: true,
+      },
+    });
+
+    // Cart validation passes (both in stock) ...
+    await request(app.getHttpServer())
+      .put(api('/cart'))
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ shop_id: shopId, items: [{ product_id: productId, quantity: 1 }, { product_id: second.id, quantity: 2 }] })
+      .expect(200);
+
+    // ... then the second product sells out before checkout.
+    await prisma.product.update({ where: { id: second.id }, data: { stock: 0 } });
+    const firstBefore = await prisma.product.findUnique({ where: { id: productId } });
+    const ordersBefore = await prisma.order.count();
+
+    await request(app.getHttpServer())
+      .post(api('/orders'))
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ address_text: 'addr', lat: 41.3, lng: 69.24, customer_phone: customerPhone, payment_method: 'cash' })
+      .expect(409)
+      .expect((res) => expect(res.body.code).toBe('OUT_OF_STOCK'));
+
+    // Whichever item was processed first, the transaction rolled back: no stock moved, no order row.
+    const firstAfter = await prisma.product.findUnique({ where: { id: productId } });
+    expect(firstAfter?.stock).toBe(firstBefore?.stock);
+    expect((await prisma.product.findUnique({ where: { id: second.id } }))?.stock).toBe(0);
+    expect(await prisma.order.count()).toBe(ordersBefore);
+
+    // The cart survives a failed checkout; clear it so later cases start clean.
+    await request(app.getHttpServer()).delete(api('/cart')).set('Authorization', `Bearer ${customerToken}`);
+  });
+
+  it('restores stock exactly once when the customer double-cancels concurrently', async () => {
+    const customerToken = await loginCustomer(customerPhone);
+    const stockBefore = (await prisma.product.findUnique({ where: { id: productId } }))?.stock ?? 0;
+
+    await addToCart(customerToken, 2);
+    const createRes = await request(app.getHttpServer())
+      .post(api('/orders'))
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ address_text: 'addr', lat: 41.3, lng: 69.24, customer_phone: customerPhone, payment_method: 'cash' })
+      .expect(201);
+    const orderId = createRes.body.id;
+    expect((await prisma.product.findUnique({ where: { id: productId } }))?.stock).toBe(stockBefore - 2);
+
+    const cancel = () =>
+      request(app.getHttpServer())
+        .post(api(`/orders/${orderId}/cancel`))
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ reason: 'double tap' });
+    const [a, b] = await Promise.all([cancel(), cancel()]);
+
+    // One wins (200), the other loses the status-guarded update (409) - never two successes.
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { status_history: true } });
+    expect(order?.status).toBe('cancelled');
+    expect(order?.status_history.filter((h) => h.status === ('cancelled' as any))).toHaveLength(1);
+    expect((await prisma.product.findUnique({ where: { id: productId } }))?.stock).toBe(stockBefore);
+  });
+
   it('deduplicates order creation via Idempotency-Key', async () => {
     const customerToken = await loginCustomer(customerPhone);
     await addToCart(customerToken, 1);
@@ -246,5 +320,30 @@ describe('Orders lifecycle (e2e)', () => {
       .expect(201);
 
     expect(second.body.id).toBe(first.body.id);
+
+    // Same key, different body: refused instead of replaying an unrelated response.
+    await request(app.getHttpServer())
+      .post(api('/orders'))
+      .set('Authorization', `Bearer ${customerToken}`)
+      .set('Idempotency-Key', key)
+      .send({ ...payload, address_text: 'another address' })
+      .expect(422);
+  });
+
+  it('writes a system history row (changed_by = null) when the processor auto-cancels', async () => {
+    const customerToken = await loginCustomer(customerPhone);
+    await addToCart(customerToken, 1);
+
+    const createRes = await request(app.getHttpServer())
+      .post(api('/orders'))
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ address_text: 'addr', lat: 41.3, lng: 69.24, customer_phone: customerPhone, payment_method: 'cash' })
+      .expect(201);
+
+    await app.get(OrderAutoCancelProcessor).process({ data: { orderId: createRes.body.id } } as any);
+
+    const history = await prisma.orderStatusHistory.findMany({ where: { order_id: createRes.body.id }, orderBy: { created_at: 'asc' } });
+    expect(history.map((h) => h.status)).toEqual(['new', 'cancelled']);
+    expect(history[1].changed_by).toBeNull();
   });
 });

@@ -317,10 +317,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       (this as any)[key] = this.createModelMemoryHandler(storeKey);
     }
 
-    // Override $transaction
+    // Override $transaction. The callback form gets rollback semantics: the whole
+    // store is snapshotted first and restored if the callback throws, so a failed
+    // multi-step write (e.g. second order item out of stock) leaves no partial state.
+    // The array form stays Promise.all (it is only used for independent reads).
     (this as any).$transaction = async (cb: any) => {
       if (typeof cb === 'function') {
-        return cb(this);
+        const snapshot = PrismaService.cloneStore(this.memoryStore);
+        try {
+          return await cb(this);
+        } catch (err) {
+          this.memoryStore = snapshot;
+          throw err;
+        }
       }
       return Promise.all(cb);
     };
@@ -333,6 +342,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     (this as any).$executeRaw = (this as any).$queryRaw;
   }
 
+  /** Deep clone of the memory store that keeps Date instances intact (JSON would stringify them). */
+  private static cloneStore<T>(value: T): T {
+    if (value instanceof Date) return new Date(value.getTime()) as any;
+    if (Array.isArray(value)) return value.map((v) => PrismaService.cloneStore(v)) as any;
+    if (value && typeof value === 'object') {
+      const out: any = {};
+      for (const [k, v] of Object.entries(value)) out[k] = PrismaService.cloneStore(v);
+      return out;
+    }
+    return value;
+  }
+
   private createModelMemoryHandler(storeKey: string) {
     const getStore = () => this.memoryStore[storeKey] || [];
     const setStore = (data: any[]) => {
@@ -343,6 +364,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       findUnique: async ({ where, include, select }: any) => {
         const item = getStore().find((i) => this.matchesWhere(i, where));
         return item ? this.enrichItem(item, storeKey, include, select) : null;
+      },
+      findUniqueOrThrow: async ({ where, include, select }: any) => {
+        const item = getStore().find((i) => this.matchesWhere(i, where));
+        if (!item) throw new Error(`No ${storeKey} record found for ${JSON.stringify(where)}`);
+        return this.enrichItem(item, storeKey, include, select);
       },
       findFirst: async ({ where, include, select, orderBy }: any) => {
         let items = getStore().filter((i) => this.matchesWhere(i, where));

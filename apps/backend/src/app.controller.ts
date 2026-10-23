@@ -1,7 +1,8 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Headers, Inject, UnauthorizedException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import Redis from 'ioredis';
 import { Public } from './common/decorators/public.decorator';
+import { metricsTokenAccepted } from './common/observability/metrics-token';
 import { PrismaService } from './common/prisma/prisma.service';
 import { REDIS_CLIENT } from './common/redis/redis.module';
 
@@ -15,8 +16,26 @@ export class AppController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Liveness and readiness health check for load balancer and monitoring' })
+  @ApiOperation({ summary: 'Liveness and readiness health check for load balancer and monitoring (status only)' })
   async getHealth() {
+    const { status, timestamp } = await this.collect();
+    // Anonymous callers learn nothing about the topology (Redis state, memory, uptime).
+    return { status, timestamp };
+  }
+
+  @Public()
+  @Get('details')
+  @ApiOperation({
+    summary: 'Detailed health (services, memory, uptime). Requires `Authorization: Bearer <METRICS_TOKEN>` when that variable is set.',
+  })
+  async getHealthDetails(@Headers('authorization') authorization: string | undefined) {
+    if (!metricsTokenAccepted(authorization)) {
+      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Invalid metrics token.' });
+    }
+    return this.collect();
+  }
+
+  private async collect() {
     let dbStatus = 'down';
     try {
       await this.prisma.$queryRaw`SELECT 1`;

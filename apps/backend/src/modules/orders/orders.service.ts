@@ -23,13 +23,39 @@ import {
   ALLOWED_STATUS_TRANSITIONS,
   CANCELLATION_ALLOWED_ROLES,
   ERROR_CODES,
+  MAX_ORDER_TOTAL_TIYIN,
   ORDER_ACCEPTANCE_TIMEOUT_MS,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
   UserRole,
   formatPrice,
+  isShopOpenNow,
 } from '@localshop/shared';
+
+/**
+ * `commission_rate_percent` is stored as a Float (e.g. 2.5). Money math must stay
+ * integer-only, so the rate is first quantised to basis points (1 bp = 0.01 %):
+ * `2.675 -> 268 bp` (not 267 via a naive `Math.round(2.675 * 100)` float artefact).
+ */
+export function percentToBasisPoints(percent: number): number {
+  // toPrecision(12) strips float noise such as 1.005 * 100 = 100.49999999999999
+  return Math.round(parseFloat((percent * 100).toPrecision(12)));
+}
+
+/** Commission in tiyin: integer × integer with a single final division. */
+export function computeCommissionTiyin(totalAmountTiyin: number, ratePercent: number): number {
+  const rateBp = percentToBasisPoints(ratePercent || 0);
+  return Math.round((totalAmountTiyin * rateBp) / 10000);
+}
+
+/** Shared include for the order payload returned by status transitions. */
+const TRANSITION_INCLUDE = {
+  items: true,
+  shop: { select: { id: true, name: true, phone: true } },
+  customer: { select: { id: true, name: true, phone: true } },
+  status_history: true,
+} as const;
 
 @Injectable()
 export class OrdersService {
@@ -54,44 +80,54 @@ export class OrdersService {
    * Atomically decrements stock and initializes order.
    */
   async createOrder(customerId: string, dto: CreateOrderDto) {
-    const cart = await this.prisma.cart.findUnique({
-      where: { user_id: customerId },
-      include: {
-        shop: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-    });
-
-    if (!cart || cart.items.length === 0) {
+    const isOnline = dto.payment_method === PaymentMethod.ONLINE;
+    if (isOnline && !this.paymentsService.isOnlinePaymentsEnabled) {
       throw new BadRequestException({
-        code: 'CART_EMPTY',
-        message: 'Your cart is empty. Please add items before checking out.',
+        code: ERROR_CODES.ONLINE_PAYMENTS_DISABLED,
+        message: 'Online payments are currently disabled. Please select Cash on Delivery.',
       });
     }
 
     // Promo code is validated against the promo_codes table inside the transaction below
     const promoCode = dto.promo_code?.trim().toUpperCase() || null;
 
-    const shop = cart.shop;
-    if (!shop.is_active || shop.status !== ('active' as any)) {
-      throw new ConflictException({
-        code: ERROR_CODES.SHOP_INACTIVE,
-        message: 'This shop is not active. Orders cannot be accepted.',
-      });
-    }
-    if (!shop.is_open) {
-      throw new ConflictException({
-        code: ERROR_CODES.SHOP_CLOSED,
-        message: 'This shop is currently closed. Orders cannot be accepted.',
-      });
-    }
-
-    // Perform atomic transaction: check & decrement stock, create order, clear cart
+    // Everything below runs in one transaction so the cart (prices, quantities), the
+    // stock decrements and the order row are read/written under the same snapshot.
     const order = await this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findUnique({
+        where: { user_id: customerId },
+        include: {
+          shop: true,
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+
+      if (!cart || cart.items.length === 0) {
+        throw new BadRequestException({
+          code: 'CART_EMPTY',
+          message: 'Your cart is empty. Please add items before checking out.',
+        });
+      }
+
+      const shop = cart.shop;
+      if (!shop.is_active || shop.status !== ('active' as any)) {
+        throw new ConflictException({
+          code: ERROR_CODES.SHOP_INACTIVE,
+          message: 'This shop is not active. Orders cannot be accepted.',
+        });
+      }
+      // Manual switch AND opening hours (Uzbekistan local time) must both allow ordering.
+      if (!isShopOpenNow(shop.open_time, shop.close_time, shop.is_open)) {
+        throw new ConflictException({
+          code: ERROR_CODES.SHOP_CLOSED,
+          message: 'This shop is currently closed. Orders cannot be accepted.',
+        });
+      }
+
       // 1. Atomically validate and decrement stock in a single conditional update
       let totalAmount = 0;
       for (const item of cart.items) {
@@ -117,6 +153,14 @@ export class OrdersService {
         totalAmount += item.product.price * item.quantity;
       }
 
+      // total_amount is a Postgres int4; refuse anything that would overflow it.
+      if (totalAmount > MAX_ORDER_TOTAL_TIYIN) {
+        throw new BadRequestException({
+          code: ERROR_CODES.ORDER_TOTAL_TOO_LARGE,
+          message: `Order total exceeds the maximum of ${formatPrice(MAX_ORDER_TOTAL_TIYIN)} per order.`,
+        });
+      }
+
       // 2. Snapshot address
       const addressSnapshot = {
         lat: dto.lat,
@@ -136,9 +180,9 @@ export class OrdersService {
 ${promoLine}` : promoLine;
       }
 
-      // 4. Commission snapshot
+      // 4. Commission snapshot (integer basis-point math, see computeCommissionTiyin)
       const commissionRate = shop.commission_rate_percent || 0;
-      const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
+      const commissionAmount = computeCommissionTiyin(totalAmount, commissionRate);
 
       // 4. Create Order
       const newOrder = await tx.order.create({
@@ -184,22 +228,37 @@ ${promoLine}` : promoLine;
         },
       });
 
-      // 5. Clear cart
+      // 5. Online payment: open a pending Payment row in the same transaction so the
+      //    order never exists without its payment intent (webhooks later flip the status).
+      if (isOnline) {
+        await tx.payment.create({
+          data: {
+            order_id: newOrder.id,
+            provider: this.paymentsService.onlineProviderKey,
+            amount: totalAmount,
+            status: PaymentStatus.PENDING as any,
+          },
+        });
+      }
+
+      // 6. Clear cart
       await tx.cartItem.deleteMany({ where: { cart_id: cart.id } });
       await tx.cart.delete({ where: { id: cart.id } });
 
       return newOrder;
     }, { timeout: 5000, maxWait: 2000 });
 
-    // 6. Broadcast Realtime Socket.IO event to Seller Room
+    const shop = order.shop;
+
+    // 7. Broadcast Realtime Socket.IO event to Seller Room
     this.metrics?.ordersCreated.inc();
     this.notificationsGateway.broadcastNewOrder(shop.id, order);
 
-    // 7. Dispatch High-Priority Push Notification to Seller
+    // 8. Dispatch High-Priority Push Notification to Seller
     const formattedTotal = formatPrice(order.total_amount);
     this.pushNotificationService.sendNewOrderSellerPush(shop.owner_id, order.id, formattedTotal);
 
-    // 8. Schedule the hard auto-cancel job (10-minute acceptance window)
+    // 9. Schedule the hard auto-cancel job (10-minute acceptance window)
     await this.scheduleAutoCancel(order.id);
 
     return order;
@@ -209,6 +268,8 @@ ${promoLine}` : promoLine;
    * Enqueues the delayed auto-cancel job. The order itself is already committed, so a
    * missing/unreachable Redis (local dev without Docker) must not fail or hang the
    * request: BullMQ queues commands offline indefinitely, hence the explicit timeout.
+   * Transient failures (DB hiccup) are retried with exponential backoff; the processor's
+   * per-minute sweep covers the case where the job was never enqueued at all.
    */
   private async scheduleAutoCancel(orderId: string): Promise<void> {
     await this.withQueueTimeout(
@@ -216,7 +277,14 @@ ${promoLine}` : promoLine;
         this.autoCancelQueue.add(
           ORDER_AUTO_CANCEL_JOB,
           { orderId },
-          { delay: ORDER_ACCEPTANCE_TIMEOUT_MS, jobId: orderId, removeOnComplete: true, removeOnFail: true },
+          {
+            delay: ORDER_ACCEPTANCE_TIMEOUT_MS,
+            jobId: orderId,
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 10_000 },
+            removeOnComplete: true,
+            removeOnFail: 1000,
+          },
         ),
       `Auto-cancel job for order ${orderId} was NOT scheduled; the order will not expire automatically until Redis is reachable.`,
     );
@@ -309,8 +377,33 @@ ${promoLine}` : promoLine;
   }
 
   /**
-   * Admin force-cancels an order in any non-final status (new..on_the_way).
-   * Mirrors the regular cancel flow: restores stock, writes history, emits realtime + push events.
+   * Restores what a cancelled order had reserved: product stock and, if a promo
+   * code was redeemed, its usage counter. Must run inside the cancelling transaction,
+   * after the conditional status update succeeded (so it runs exactly once).
+   */
+  private async releaseOrderReservations(
+    tx: any,
+    order: { items: { product_id: string; quantity: number }[]; promo_code?: string | null },
+  ): Promise<void> {
+    for (const item of order.items) {
+      await tx.product.update({
+        where: { id: item.product_id },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
+    if (order.promo_code) {
+      await tx.promoCode.updateMany({
+        where: { code: order.promo_code, usage_count: { gt: 0 } },
+        data: { usage_count: { decrement: 1 } },
+      });
+    }
+  }
+
+  /**
+   * Admin force-cancels an order. Which statuses allow it is defined solely by the
+   * shared ALLOWED_STATUS_TRANSITIONS / CANCELLATION_ALLOWED_ROLES tables (admins may
+   * cancel from on_the_way for support cases; delivered/cancelled are final).
+   * Mirrors the regular cancel flow: restores stock + promo, writes history, emits events.
    */
   async adminCancelOrder(orderId: string, adminId: string, reason: string) {
     const order = await this.prisma.order.findUnique({
@@ -322,7 +415,11 @@ ${promoLine}` : promoLine;
       throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
     }
 
-    if (order.status === (OrderStatus.DELIVERED as any) || order.status === (OrderStatus.CANCELLED as any)) {
+    const currentStatus = order.status as OrderStatus;
+    const adminMayCancel =
+      (ALLOWED_STATUS_TRANSITIONS[currentStatus] || []).includes(OrderStatus.CANCELLED) &&
+      (CANCELLATION_ALLOWED_ROLES[currentStatus] || []).includes(UserRole.ADMIN);
+    if (!adminMayCancel) {
       throw new BadRequestException({
         code: 'ORDER_NOT_CANCELLABLE',
         message: `Order in status '${order.status}' cannot be cancelled.`,
@@ -344,12 +441,7 @@ ${promoLine}` : promoLine;
         });
       }
 
-      for (const item of order.items) {
-        await tx.product.update({
-          where: { id: item.product_id },
-          data: { stock: { increment: item.quantity } },
-        });
-      }
+      await this.releaseOrderReservations(tx, order);
 
       await tx.orderStatusHistory.create({
         data: {
@@ -360,6 +452,11 @@ ${promoLine}` : promoLine;
         },
       });
     });
+
+    // The order left 'new' before the auto-cancel job fired; drop it.
+    if (currentStatus === OrderStatus.NEW) {
+      await this.dropAutoCancel(orderId);
+    }
 
     const timestamp = new Date().toISOString();
     this.notificationsGateway.broadcastOrderStatus(orderId, order.customer_id, OrderStatus.CANCELLED, timestamp);
@@ -506,7 +603,8 @@ ${promoLine}` : promoLine;
       });
     }
 
-    return this.transitionOrder(orderId, OrderStatus.CANCELLED, actorId, actorRole, dto.reason || 'Cancelled');
+    // The reason is passed through unchanged: transitionOrder enforces REASON_REQUIRED for sellers.
+    return this.transitionOrder(orderId, OrderStatus.CANCELLED, actorId, actorRole, dto.reason);
   }
 
   /**
@@ -574,44 +672,40 @@ ${promoLine}` : promoLine;
       }
     }
 
-    // Execute state transition atomically
+    const updateData: any = {
+      status: targetStatus as any,
+    };
+
+    if (targetStatus === OrderStatus.ACCEPTED) {
+      updateData.accepted_at = new Date();
+    } else if (targetStatus === OrderStatus.DELIVERED) {
+      updateData.delivered_at = new Date();
+      // If cash, mark payment as paid upon delivery (Section 9)
+      if (order.payment_method === PaymentMethod.CASH) {
+        updateData.payment_status = PaymentStatus.PAID;
+      }
+    }
+
+    // Execute state transition atomically. The status update is conditional on the
+    // status we validated above, so two concurrent transitions (cancel x2, or
+    // accept vs cancel) can never both succeed: the loser gets 0 rows and a 409,
+    // and stock is restored exactly once.
     const updatedOrder = await this.prisma.$transaction(async (tx) => {
-      // If moving to CANCELLED, restore reserved stock for each item!
-      if (targetStatus === OrderStatus.CANCELLED) {
-        for (const item of order.items) {
-          await tx.product.update({
-            where: { id: item.product_id },
-            data: {
-              stock: { increment: item.quantity },
-            },
-          });
-        }
-      }
-
-      const updateData: any = {
-        status: targetStatus as any,
-      };
-
-      if (targetStatus === OrderStatus.ACCEPTED) {
-        updateData.accepted_at = new Date();
-      } else if (targetStatus === OrderStatus.DELIVERED) {
-        updateData.delivered_at = new Date();
-        // If cash, mark payment as paid upon delivery (Section 9)
-        if (order.payment_method === PaymentMethod.CASH) {
-          updateData.payment_status = PaymentStatus.PAID;
-        }
-      }
-
-      const updated = await tx.order.update({
-        where: { id: orderId },
+      const res = await tx.order.updateMany({
+        where: { id: orderId, status: currentStatus as any },
         data: updateData,
-        include: {
-          items: true,
-          shop: { select: { id: true, name: true, phone: true } },
-          customer: { select: { id: true, name: true, phone: true } },
-          status_history: true,
-        },
       });
+      if (res.count === 0) {
+        throw new ConflictException({
+          code: ERROR_CODES.INVALID_STATUS_TRANSITION,
+          message: 'Order status changed concurrently. Please refresh and try again.',
+        });
+      }
+
+      // Moving to CANCELLED: give back reserved stock (and the promo redemption).
+      if (targetStatus === OrderStatus.CANCELLED) {
+        await this.releaseOrderReservations(tx, order);
+      }
 
       // Write audit log to order_status_history
       await tx.orderStatusHistory.create({
@@ -623,7 +717,10 @@ ${promoLine}` : promoLine;
         },
       });
 
-      return updated;
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: TRANSITION_INCLUDE,
+      });
     });
 
     // The order left 'new' (accepted or cancelled) before the auto-cancel job fired; drop it.

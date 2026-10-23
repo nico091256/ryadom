@@ -139,13 +139,29 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.SELLER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Change password (mandatory on first seller login)' })
-  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiOperation({
+    summary:
+      'Change password (mandatory on first seller login). Revokes every other session and returns a fresh token pair for this device.',
+  })
+  @ApiHeader({
+    name: 'X-Auth-Transport',
+    required: false,
+    description: `"cookie" => the new refresh token is set as the httpOnly ${REFRESH_COOKIE_NAME} cookie and omitted from the body (web panels)`,
+  })
+  @ApiResponse({ status: 200, description: 'Password changed; new accessToken (+ refreshToken) issued' })
   async changePassword(
     @CurrentUser('id') userId: string,
     @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.changePassword(userId, dto);
+    const result = await this.authService.changePassword(userId, dto);
+    // The old cookie was just revoked server-side; a cookie client gets the rotated one.
+    if (!wantsCookieTransport(req) && !readRefreshCookie(req)) return result;
+
+    const { refreshToken, ...body } = result;
+    setRefreshCookie(res, refreshToken, this.refreshTtlDays());
+    return body;
   }
 
   private refreshTtlDays(): number {

@@ -122,7 +122,17 @@ class OrderSocket {
         _join(socket, id);
       }
     });
-    socket.onDisconnect((_) => _setConnected(false));
+    socket.onDisconnect((reason) {
+      _setConnected(false);
+      // The gateway closes the socket when the access token expires; socket.io
+      // does not auto-reconnect from a server-initiated disconnect, so do it
+      // here - the auth callback re-reads the (refreshed) token.
+      if (reason == 'io server disconnect' && _joinedOrders.isNotEmpty) {
+        Future<void>.delayed(const Duration(milliseconds: 500), () {
+          if (_socket == socket && _joinedOrders.isNotEmpty) socket.connect();
+        });
+      }
+    });
     socket.onConnectError((err) {
       _setConnected(false);
       if (kDebugMode) debugPrint('[socket] connect error: $err');

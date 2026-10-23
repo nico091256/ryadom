@@ -433,6 +433,11 @@ export class AdminService {
         must_change_password: true,
       },
     });
+    // A reset means the old credential is no longer trusted: kill every live session too.
+    await this.prisma.refreshToken.updateMany({
+      where: { user_id: shop.owner.id, revoked_at: null },
+      data: { revoked_at: new Date() },
+    });
 
     if (actor) {
       // Never record the temporary password itself.
@@ -725,6 +730,13 @@ export class AdminService {
       data: { is_blocked: isBlocked },
       select: { id: true, login: true, phone: true, name: true, role: true, is_blocked: true },
     });
+    if (isBlocked) {
+      // Blocking must take effect now, not when the current access token expires.
+      await this.prisma.refreshToken.updateMany({
+        where: { user_id: userId, revoked_at: null },
+        data: { revoked_at: new Date() },
+      });
+    }
     if (actor) {
       await this.audit.log(actor.id, isBlocked ? 'user.block' : 'user.unblock', {
         targetType: 'user',

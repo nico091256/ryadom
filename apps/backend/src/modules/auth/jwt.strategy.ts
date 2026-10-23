@@ -5,11 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 
+/** Access-token claims. Deliberately minimal: no phone/login (PII) in a bearer token. */
 export interface JwtPayload {
   sub: string;
   role: string;
-  phone?: string;
-  login?: string;
 }
 
 @Injectable()
@@ -22,6 +21,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: getJwtAccessSecret(configService),
+      // Pin the algorithm: a token signed with anything else (incl. "none") is rejected outright.
+      algorithms: ['HS256'],
     });
   }
 

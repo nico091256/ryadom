@@ -18,6 +18,38 @@ interface SocketUser {
   role: UserRole | string;
 }
 
+/** Per-socket state we keep besides the user: the timer that cuts the connection when its token expires. */
+interface SocketData {
+  user?: SocketUser;
+  expiryTimer?: ReturnType<typeof setTimeout>;
+}
+
+/** Node's setTimeout overflows (fires immediately) above 2^31-1 ms. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+export function parseCorsOrigins(raw: string | undefined): string[] | null {
+  const list = (raw ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
+}
+
+/**
+ * Socket.IO CORS origin check, mirroring the HTTP one in main.ts. Evaluated per
+ * handshake (not when the decorator runs) because ConfigModule only loads .env
+ * into process.env after this file has been imported. With CORS_ORIGINS unset
+ * (development) the request origin is reflected, exactly like `origin: true`.
+ */
+export function socketCorsOrigin(
+  requestOrigin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void,
+): void {
+  const allowed = parseCorsOrigins(process.env.CORS_ORIGINS);
+  if (!allowed) return callback(null, true);
+  callback(null, !!requestOrigin && allowed.includes(requestOrigin));
+}
+
 type JoinResult = { event: 'joined'; room: string } | { event: 'error'; code: string; message: string };
 
 const UNAUTHORIZED: JoinResult = {
@@ -37,7 +69,7 @@ const BAD_REQUEST: JoinResult = {
 };
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: socketCorsOrigin },
 })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -51,37 +83,103 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     private prisma: PrismaService,
   ) {}
 
+  /**
+   * Token from `handshake.auth.token` (Socket.IO's auth payload) or an
+   * Authorization header. Never from the query string: URLs end up in access
+   * logs, proxies and browser history.
+   */
+  private extractToken(client: Socket): string | undefined {
+    const fromAuth = client.handshake.auth?.token;
+    if (typeof fromAuth === 'string' && fromAuth.length > 0) return fromAuth;
+
+    const header = client.handshake.headers?.authorization;
+    if (typeof header === 'string' && /^Bearer\s+/i.test(header)) {
+      const value = header.replace(/^Bearer\s+/i, '').trim();
+      if (value) return value;
+    }
+    return undefined;
+  }
+
   async handleConnection(client: Socket) {
     try {
-      const token =
-        client.handshake.auth?.token ||
-        client.handshake.headers?.authorization?.replace('Bearer ', '') ||
-        (client.handshake.query?.token as string);
+      const token = this.extractToken(client);
 
       if (!token) {
         this.logger.debug(`Anonymous client connected: ${client.id}`);
         return;
       }
 
-      const payload = this.jwtService.verify(token, { secret: getJwtAccessSecret(this.configService) });
-      client.data.user = payload;
+      const payload = this.jwtService.verify<{ sub?: unknown; exp?: unknown }>(token, {
+        secret: getJwtAccessSecret(this.configService),
+        algorithms: ['HS256'],
+      });
+      if (typeof payload.sub !== 'string') {
+        // Stays connected but anonymous (same as a bad/expired token): the
+        // client sees UNAUTHORIZED on its first join and reconnects with a fresh token.
+        this.logger.warn(`Socket ${client.id} presented a token without a subject`);
+        return;
+      }
+
+      // The JWT only says who the user was when it was signed; blocked / deleted
+      // accounts must not keep a live feed, and the role comes from the DB too.
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, role: true, is_blocked: true },
+      });
+      if (!user || user.is_blocked) {
+        this.logger.warn(`Socket ${client.id} refused: user ${payload.sub} ${user ? 'is blocked' : 'does not exist'}`);
+        client.disconnect(true);
+        return;
+      }
+
+      const data = client.data as SocketData;
+      data.user = { sub: user.id, role: user.role };
+      this.scheduleExpiry(client, payload.exp);
 
       // Automatically join user room
-      client.join(`user:${payload.sub}`);
+      client.join(`user:${user.id}`);
 
-      this.logger.log(`Client authenticated: ${client.id} (User: ${payload.sub}, Role: ${payload.role})`);
+      this.logger.log(`Client authenticated: ${client.id} (User: ${user.id}, Role: ${user.role})`);
     } catch (err: any) {
+      // Invalid / expired token: the socket stays anonymous (no rooms). The store
+      // panel and the mobile app rely on the UNAUTHORIZED join ack to reconnect.
       this.logger.warn(`Client connection auth failed: ${err.message}`);
     }
   }
 
+  /**
+   * A socket authenticated with a 15-minute access token must not outlive it:
+   * when `exp` passes the client is cut and has to reconnect with a fresh token
+   * (the store panel and the mobile app already do that on token refresh).
+   */
+  private scheduleExpiry(client: Socket, exp: unknown) {
+    if (typeof exp !== 'number') return;
+    const data = client.data as SocketData;
+    const msLeft = exp * 1000 - Date.now();
+    if (msLeft <= 0) {
+      client.disconnect(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.logger.debug(`Socket ${client.id} access token expired; disconnecting`);
+      client.disconnect(true);
+    }, Math.min(msLeft, MAX_TIMEOUT_MS));
+    timer.unref?.();
+    data.expiryTimer = timer;
+  }
+
   handleDisconnect(client: Socket) {
+    const data = client.data as SocketData | undefined;
+    if (data?.expiryTimer) {
+      clearTimeout(data.expiryTimer);
+      data.expiryTimer = undefined;
+    }
     this.logger.debug(`Client disconnected: ${client.id}`);
   }
 
   private currentUser(client: Socket): SocketUser | null {
-    const u = client.data?.user;
-    return u && typeof u.sub === 'string' ? (u as SocketUser) : null;
+    const u = (client.data as SocketData | undefined)?.user;
+    return u && typeof u.sub === 'string' ? u : null;
   }
 
   /**

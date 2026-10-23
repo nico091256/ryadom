@@ -1,5 +1,6 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { MAX_PRODUCT_PRICE_TIYIN, MAX_PRODUCT_STOCK } from '@localshop/shared';
 import { UZ_PHONE_MESSAGE, UZ_PHONE_REGEX } from '../auth/auth.dto';
 
 const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -91,9 +92,10 @@ export class CreateProductDto {
   @MaxLength(2000)
   description_en?: string | null;
 
-  @ApiProperty({ example: 800000, description: 'Price in tiyin (e.g. 8000 UZS = 800000 tiyin)' })
+  @ApiProperty({ example: 800000, maximum: MAX_PRODUCT_PRICE_TIYIN, description: 'Price in tiyin (e.g. 8000 UZS = 800000 tiyin)' })
   @IsInt()
   @Min(0)
+  @Max(MAX_PRODUCT_PRICE_TIYIN)
   price: number;
 
   @ApiProperty({ example: '/uploads/product.jpg', required: false, nullable: true, maxLength: URL_MAX })
@@ -102,9 +104,10 @@ export class CreateProductDto {
   @MaxLength(URL_MAX)
   image_url?: string | null;
 
-  @ApiProperty({ example: 50, description: 'Stock quantity' })
+  @ApiProperty({ example: 50, maximum: MAX_PRODUCT_STOCK, description: 'Stock quantity' })
   @IsInt()
   @Min(0)
+  @Max(MAX_PRODUCT_STOCK)
   stock: number;
 
   @ApiProperty({ example: true, required: false })
@@ -156,10 +159,11 @@ export class UpdateProductDto {
   @MaxLength(2000)
   description_en?: string | null;
 
-  @ApiProperty({ example: 850000, required: false })
+  @ApiProperty({ example: 850000, required: false, maximum: MAX_PRODUCT_PRICE_TIYIN })
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(MAX_PRODUCT_PRICE_TIYIN)
   price?: number;
 
   @ApiProperty({ required: false, nullable: true, maxLength: URL_MAX })
@@ -168,10 +172,11 @@ export class UpdateProductDto {
   @MaxLength(URL_MAX)
   image_url?: string | null;
 
-  @ApiProperty({ example: 45, required: false })
+  @ApiProperty({ example: 45, required: false, maximum: MAX_PRODUCT_STOCK })
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(MAX_PRODUCT_STOCK)
   stock?: number;
 
   @ApiProperty({ example: true, required: false })

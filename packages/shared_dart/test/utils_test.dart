@@ -52,6 +52,13 @@ void main() {
       expect(canTransitionOrder(OrderStatus.delivered, OrderStatus.cancelled, UserRole.seller), isFalse);
     });
 
+    test('allows only the admin to cancel an order that is already on the way', () {
+      expect(canTransitionOrder(OrderStatus.onTheWay, OrderStatus.cancelled, UserRole.admin), isTrue);
+      expect(canTransitionOrder(OrderStatus.onTheWay, OrderStatus.cancelled, UserRole.seller), isFalse);
+      expect(canTransitionOrder(OrderStatus.onTheWay, OrderStatus.cancelled, UserRole.customer), isFalse);
+      expect(canTransitionOrder(OrderStatus.delivered, OrderStatus.cancelled, UserRole.admin), isFalse);
+    });
+
     test('rejects invalid or illegal skips in state progression', () {
       expect(canTransitionOrder(OrderStatus.newOrder, OrderStatus.onTheWay, UserRole.seller), isFalse);
       expect(canTransitionOrder(OrderStatus.newOrder, OrderStatus.delivered, UserRole.seller), isFalse);

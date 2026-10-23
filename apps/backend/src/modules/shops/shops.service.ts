@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { DEFAULT_SEARCH_RADIUS_METERS, UserRole } from '@localshop/shared';
+import { DEFAULT_SEARCH_RADIUS_METERS, UserRole, isShopOpenNow } from '@localshop/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/redis/cache.service';
 import { RegisterShopDto } from './shops.dto';
@@ -76,30 +76,10 @@ export class ShopsService {
 
   /**
    * Evaluates if a shop is currently open based on current time and manual switch.
+   * Delegates to the shared helper so listing, shop page and order creation agree.
    */
   isShopOpen(openTime: string, closeTime: string, manualIsOpen: boolean): boolean {
-    if (!manualIsOpen) {
-      return false;
-    }
-
-    // Current local time in Uzbekistan (UTC+5)
-    const now = new Date();
-    const utcHours = now.getUTCHours();
-    const utcMinutes = now.getUTCMinutes();
-    const uzHours = (utcHours + 5) % 24;
-    const currentMinutes = uzHours * 60 + utcMinutes;
-
-    const [openH, openM] = (openTime || '08:00').split(':').map(Number);
-    const [closeH, closeM] = (closeTime || '22:00').split(':').map(Number);
-    const openTotal = openH * 60 + openM;
-    const closeTotal = closeH * 60 + closeM;
-
-    if (closeTotal > openTotal) {
-      return currentMinutes >= openTotal && currentMinutes <= closeTotal;
-    } else {
-      // Handles overnight hours (e.g. 20:00 to 02:00)
-      return currentMinutes >= openTotal || currentMinutes <= closeTotal;
-    }
+    return isShopOpenNow(openTime, closeTime, manualIsOpen);
   }
 
   /**

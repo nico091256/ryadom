@@ -27,6 +27,23 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/**
+ * Compared against when the login is unknown (or has no password) so a failed
+ * login costs the same bcrypt work either way - otherwise the fast "no such
+ * user" path lets an attacker enumerate valid logins by response time.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 10);
+
+/** Fallback for `expiresIn` only when the signed token carries no `exp` (never the case with jsonwebtoken). */
+const DEFAULT_ACCESS_TTL_SECONDS = 15 * 60;
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -190,7 +207,7 @@ export class AuthService {
       });
     }
 
-    const tokens = await this.generateTokens(user.id, user.role, { phone: user.phone || undefined });
+    const tokens = await this.generateTokens(user.id, user.role);
 
     return {
       ...tokens,
@@ -216,13 +233,17 @@ export class AuthService {
       },
     });
 
-    if (!user || !user.password_hash) {
+    // Always pay for exactly one bcrypt.compare, whether or not the login exists,
+    // so timing cannot reveal which logins are valid.
+    const isPasswordValid = await bcrypt.compare(dto.password, user?.password_hash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !user.password_hash || !isPasswordValid) {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Incorrect login username or password.',
       });
     }
 
+    // Only after the password is proven: a blocked account must not be detectable without it.
     if (user.is_blocked) {
       throw new UnauthorizedException({
         code: 'USER_BLOCKED',
@@ -230,15 +251,7 @@ export class AuthService {
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password_hash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException({
-        code: 'INVALID_CREDENTIALS',
-        message: 'Incorrect login username or password.',
-      });
-    }
-
-    const tokens = await this.generateTokens(user.id, user.role, { login: user.login || undefined });
+    const tokens = await this.generateTokens(user.id, user.role);
 
     return {
       ...tokens,
@@ -265,6 +278,14 @@ export class AuthService {
     const tokenHash = hashToken(refreshToken);
     const stored = await this.prisma.refreshToken.findUnique({ where: { token_hash: tokenHash } });
 
+    if (stored?.revoked_at) {
+      // Reuse detection: a rotated-away (or logged-out) token is being presented
+      // again, so either the legitimate client or a thief holds a stale copy.
+      // Whoever it is, the whole token family is burnt.
+      this.logger.warn(`Refresh token reuse detected for user ${stored.user_id}; revoking all sessions`);
+      await this.logoutAll(stored.user_id);
+    }
+
     if (!stored || stored.revoked_at || stored.expires_at < new Date()) {
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
@@ -285,10 +306,7 @@ export class AuthService {
       data: { revoked_at: new Date() },
     });
 
-    return this.generateTokens(user.id, user.role, {
-      phone: user.phone || undefined,
-      login: user.login || undefined,
-    });
+    return this.generateTokens(user.id, user.role);
   }
 
   /**
@@ -335,29 +353,43 @@ export class AuthService {
     }
 
     const newHash = await bcrypt.hash(dto.newPassword, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        password_hash: newHash,
-        must_change_password: false,
-      },
-    });
+    // Atomically: new password + every existing session (refresh token) revoked,
+    // so a stolen refresh token dies with the old password.
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          password_hash: newHash,
+          must_change_password: false,
+        },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { user_id: userId, revoked_at: null },
+        data: { revoked_at: new Date() },
+      }),
+    ]);
+
+    // Fresh pair for the device that changed the password so it stays signed in.
+    const tokens = await this.generateTokens(user.id, user.role);
 
     return {
       success: true,
       message: 'Password changed successfully.',
+      ...tokens,
     };
   }
 
   /**
    * Issues a short-lived JWT access token plus an opaque, DB-persisted refresh
    * token (only its SHA-256 hash is stored, so a DB leak can't be replayed).
+   * The JWT carries only `{ sub, role }` - never phone/login (PII in a bearer token).
    */
-  private async generateTokens(userId: string, role: string, extra: Record<string, any> = {}) {
-    const payload = { sub: userId, role, ...extra };
+  private async generateTokens(userId: string, role: string): Promise<TokenPair> {
+    const payload = { sub: userId, role };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: getJwtAccessSecret(this.configService),
+      algorithm: 'HS256',
       expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m'),
     });
 
@@ -375,7 +407,15 @@ export class AuthService {
       accessToken,
       refreshToken,
       tokenType: 'Bearer',
-      expiresIn: 15 * 60, // 15 mins in seconds
+      expiresIn: this.accessTokenTtlSeconds(accessToken),
     };
+  }
+
+  /** Reads the lifetime off the signed token so it always matches JWT_ACCESS_EXPIRATION. */
+  private accessTokenTtlSeconds(accessToken: string): number {
+    const decoded = this.jwtService.decode(accessToken) as { exp?: number; iat?: number } | null;
+    if (!decoded || typeof decoded.exp !== 'number') return DEFAULT_ACCESS_TTL_SECONDS;
+    const issuedAt = typeof decoded.iat === 'number' ? decoded.iat : Math.floor(Date.now() / 1000);
+    return Math.max(0, decoded.exp - issuedAt);
   }
 }

@@ -177,46 +177,35 @@ export class SellerService {
     // Start of this month (1st)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [todayOrders, weekOrders, monthOrders] = await Promise.all([
-      this.prisma.order.findMany({
-        where: {
-          shop_id: shop.id,
-          created_at: { gte: startOfToday },
-          status: { not: OrderStatus.CANCELLED as any },
-        },
-        select: { total_amount: true },
-      }),
-      this.prisma.order.findMany({
-        where: {
-          shop_id: shop.id,
-          created_at: { gte: startOfWeek },
-          status: { not: OrderStatus.CANCELLED as any },
-        },
-        select: { total_amount: true },
-      }),
-      this.prisma.order.findMany({
-        where: {
-          shop_id: shop.id,
-          created_at: { gte: startOfMonth },
-          status: { not: OrderStatus.CANCELLED as any },
-        },
-        select: { total_amount: true },
-      }),
-    ]);
+    // One aggregate per window, grouped by status, so the DB does the summing:
+    //  - orderCount  = orders created in the window that were not cancelled (what the
+    //    store panel labels "ta buyurtma");
+    //  - revenueTiyin = delivered orders only — money actually collected, matching the
+    //    admin panel's revenue definition (an accepted-but-not-delivered order is not revenue).
+    const [today, thisWeek, thisMonth] = await Promise.all(
+      [startOfToday, startOfWeek, startOfMonth].map((since) => this.windowStats(shop.id, since)),
+    );
 
-    return {
-      today: {
-        orderCount: todayOrders.length,
-        revenueTiyin: todayOrders.reduce((acc, o) => acc + o.total_amount, 0),
-      },
-      thisWeek: {
-        orderCount: weekOrders.length,
-        revenueTiyin: weekOrders.reduce((acc, o) => acc + o.total_amount, 0),
-      },
-      thisMonth: {
-        orderCount: monthOrders.length,
-        revenueTiyin: monthOrders.reduce((acc, o) => acc + o.total_amount, 0),
-      },
-    };
+    return { today, thisWeek, thisMonth };
+  }
+
+  private async windowStats(shopId: string, since: Date) {
+    const rows = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: { shop_id: shopId, created_at: { gte: since } },
+      _count: { _all: true },
+      _sum: { total_amount: true },
+    });
+
+    let orderCount = 0;
+    let revenueTiyin = 0;
+    for (const row of rows) {
+      if (row.status === (OrderStatus.CANCELLED as any)) continue;
+      orderCount += row._count._all;
+      if (row.status === (OrderStatus.DELIVERED as any)) {
+        revenueTiyin += row._sum.total_amount ?? 0;
+      }
+    }
+    return { orderCount, revenueTiyin };
   }
 }

@@ -19,6 +19,7 @@ describe('AdminService — audit trail', () => {
         update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ ...shop, ...data })),
       },
       user: { findUnique: jest.fn(), update: jest.fn() },
+      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     orders = { adminCancelOrder: jest.fn().mockResolvedValue(undefined) };
     shops = { isShopOpen: jest.fn().mockReturnValue(true) };
@@ -68,6 +69,41 @@ describe('AdminService — audit trail', () => {
       meta: { role: 'customer' },
       ip: '127.0.0.1',
     });
+  });
+
+  it('toggleBlockUser(true) revokes every refresh token of the user; unblocking does not', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-1', role: 'customer' });
+    prisma.user.update.mockResolvedValue({ id: 'u-1', is_blocked: true });
+
+    await service.toggleBlockUser('u-1', true, actor);
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { user_id: 'u-1', revoked_at: null },
+      data: { revoked_at: expect.any(Date) },
+    });
+
+    prisma.refreshToken.updateMany.mockClear();
+    await service.toggleBlockUser('u-1', false, actor);
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('resetShopPassword sets a temporary password, forces a change and revokes all owner sessions', async () => {
+    prisma.shop.findUnique.mockResolvedValue({ ...shop, owner: { id: 'owner-1', login: 'seller_1' } });
+    prisma.user.update.mockResolvedValue({ id: 'owner-1' });
+
+    const result = await service.resetShopPassword('s-1', actor);
+
+    expect(result.login).toBe('seller_1');
+    expect(typeof result.tempPassword).toBe('string');
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'owner-1' },
+      data: { password_hash: expect.any(String), must_change_password: true },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { user_id: 'owner-1', revoked_at: null },
+      data: { revoked_at: expect.any(Date) },
+    });
+    // The temporary password itself never reaches the audit log.
+    expect(JSON.stringify(audit.log.mock.calls[0])).not.toContain(result.tempPassword);
   });
 
   it('cancelOrder records the reason', async () => {

@@ -115,7 +115,7 @@ export default function StatsPage() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">Izoh</p>
               <p className="mt-0.5 text-sm text-slate-500">
-                Tushum va buyurtmalar soni shu davrda yaratilgan, bekor qilinmagan buyurtmalar bo'yicha hisoblanadi.
+                Buyurtmalar soni shu davrda yaratilgan, bekor qilinmagan buyurtmalar bo'yicha; tushum esa faqat yetkazilgan buyurtmalar bo'yicha hisoblanadi.
               </p>
             </div>
           </Card>

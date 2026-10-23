@@ -330,10 +330,18 @@ class ApiService {
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.request<{ success: boolean; message?: string }>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
+    // The server revokes every refresh token (all devices) and issues a new pair for this one:
+    // the rotated refresh token arrives as the httpOnly cookie, the access token in the body.
+    const data = await this.request<{ success: boolean; message?: string; accessToken?: string }>(
+      '/auth/change-password',
+      {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+        headers: { 'X-Auth-Transport': 'cookie' },
+        credentials: 'include',
+      },
+    );
+    if (data?.accessToken) this.setToken(data.accessToken);
     const user = this.getUser();
     if (user) this.saveUser({ ...user, must_change_password: false });
   }

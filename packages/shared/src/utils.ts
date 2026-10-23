@@ -86,6 +86,37 @@ export function canTransitionOrder(
 }
 
 /**
+ * Whether a shop accepts orders right now: the manual `is_open` switch must be
+ * on AND the current Uzbekistan local time (UTC+5, no DST) must fall inside the
+ * `HH:mm` opening window. Windows that end before they start (e.g. 20:00-02:00)
+ * are treated as overnight. Empty times fall back to 08:00-22:00.
+ */
+export function isShopOpenNow(
+  openTime: string | null | undefined,
+  closeTime: string | null | undefined,
+  isOpen: boolean,
+  now: Date = new Date(),
+): boolean {
+  if (!isOpen) {
+    return false;
+  }
+
+  const uzHours = (now.getUTCHours() + 5) % 24;
+  const currentMinutes = uzHours * 60 + now.getUTCMinutes();
+
+  const [openH, openM] = (openTime || '08:00').split(':').map(Number);
+  const [closeH, closeM] = (closeTime || '22:00').split(':').map(Number);
+  const openTotal = openH * 60 + openM;
+  const closeTotal = closeH * 60 + closeM;
+
+  if (closeTotal > openTotal) {
+    return currentMinutes >= openTotal && currentMinutes <= closeTotal;
+  }
+  // Overnight window (e.g. 20:00 to 02:00)
+  return currentMinutes >= openTotal || currentMinutes <= closeTotal;
+}
+
+/**
  * Multilingual fallback resolver:
  * Attempts selected language; falls back to Uzbek, then to any non-empty string.
  */
