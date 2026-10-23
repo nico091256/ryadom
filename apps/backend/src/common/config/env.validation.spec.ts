@@ -14,7 +14,14 @@ describe('validateEnv', () => {
       DATABASE_URL: 'postgresql://u:p@db:5432/localshop?schema=public',
       REDIS_HOST: 'redis',
       CORS_ORIGINS: 'https://admin.ryadom.uz,https://store.ryadom.uz',
+      SMS_PROVIDER: 'eskiz',
     };
+
+    it('refuses the mock SMS provider (fixed OTP) in production, explicitly or by default', () => {
+      expect(() => validateEnv({ ...validProd, SMS_PROVIDER: 'mock' }, logger)).toThrow(/SMS_PROVIDER must be "eskiz"/);
+      const { SMS_PROVIDER: _omit, ...unset } = validProd;
+      expect(() => validateEnv(unset, logger)).toThrow(/SMS_PROVIDER must be "eskiz"/);
+    });
 
     it('accepts a complete production config unchanged', () => {
       expect(validateEnv(validProd, logger)).toEqual(validProd);

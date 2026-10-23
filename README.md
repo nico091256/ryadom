@@ -81,7 +81,7 @@ pnpm dev:store
 Shopkeepers sign in at `http://localhost:3001` with the login/password the admin issued them (first login forces a password change).
 
 #### Running without Docker (in-memory dev mode)
-If PostgreSQL is not reachable on `localhost:5432`, the backend boots with an **in-memory store** seeded with the same demo data (Tashkent, 5 categories, the demo shop + seller, a customer, 5 products, one `new` order, promo code `YANGI10`). Everything below works against it, including Socket.IO realtime; the BullMQ auto-cancel job is skipped (logged) when Redis is absent, and data resets on restart.
+If PostgreSQL is not reachable on `localhost:5432` **and** `NODE_ENV` is `development`, `test` or unset, the backend boots with an **in-memory store** seeded with the same demo data (Tashkent, 5 categories, the demo shop + seller, a customer, 5 products, one `new` order, promo code `YANGI10`). Everything below works against it, including Socket.IO realtime; the BullMQ auto-cancel job is skipped (logged) when Redis is absent, and data resets on restart.
 ```bash
 # any free ports work — these avoid clashing with other local projects
 PORT=4001 pnpm dev:backend

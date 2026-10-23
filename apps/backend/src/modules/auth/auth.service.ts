@@ -11,7 +11,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 import { ISmsService, SMS_SERVICE } from '../sms/sms.interface';
@@ -74,10 +74,11 @@ export class AuthService {
       );
     }
 
-    // In dev / test or mock provider, code is 123456
-    const code = process.env.NODE_ENV === 'production' && this.configService.get('SMS_PROVIDER') === 'eskiz'
-      ? Math.floor(100000 + Math.random() * 900000).toString()
-      : '123456';
+    // The fixed dev code exists ONLY outside production with the mock provider.
+    // Production is always a CSPRNG code (validateEnv also refuses SMS_PROVIDER=mock there).
+    const isProduction = process.env.NODE_ENV === 'production';
+    const useFixedDevCode = !isProduction && this.configService.get<string>('SMS_PROVIDER', 'mock') !== 'eskiz';
+    const code = useFixedDevCode ? '123456' : randomInt(0, 1_000_000).toString().padStart(6, '0');
 
     const codeHash = await bcrypt.hash(code, 8);
     const expiresAt = new Date(now + 2 * 60 * 1000); // 2 minutes
@@ -158,6 +159,16 @@ export class AuthService {
     let user = await this.prisma.user.findUnique({
       where: { phone },
     });
+
+    // The OTP is a customer-only credential. Staff accounts (seller/admin) carry a
+    // phone too, but must authenticate with login + password - otherwise whoever
+    // holds the shop's SIM owns the shop.
+    if (user && user.role !== UserRole.CUSTOMER) {
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'This phone number belongs to a staff account. Please sign in with your login and password.',
+      });
+    }
 
     let isNewUser = false;
     if (!user) {

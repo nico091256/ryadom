@@ -16,10 +16,22 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       this.logger.log('Connected to PostgreSQL Database.');
     } catch (err: any) {
       this.isPostgresConnected = false;
-      this.logger.warn(`PostgreSQL not detected on localhost:5432 (${err.message}). Activating in-memory store for local development.`);
+      // The seeded in-memory store (well-known demo passwords, data lost on restart) is a
+      // local-development convenience only. Anything that is not plainly dev/test must
+      // fail fast so the orchestrator restarts the process until the database is back.
+      if (!PrismaService.inMemoryFallbackAllowed()) {
+        this.logger.error(`PostgreSQL connection failed (${err.message}). Refusing to start without a database.`);
+        throw err;
+      }
+      this.logger.warn(`PostgreSQL not reachable (${err.message}). Activating the in-memory store for local development.`);
       await this.initInMemoryStore();
       this.wrapModelsWithMemoryFallback();
     }
+  }
+
+  /** Only `development`, `test` or an unset NODE_ENV may fall back to the in-memory store. */
+  static inMemoryFallbackAllowed(env: string | undefined = process.env.NODE_ENV): boolean {
+    return env === undefined || env === '' || env === 'development' || env === 'test';
   }
 
   async onModuleDestroy() {

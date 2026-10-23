@@ -49,7 +49,10 @@ services:
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required - put it in .env}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       - TRUST_PROXY=${TRUST_PROXY:-false}
-      - SMS_PROVIDER=mock
+      # Required: the mock provider issues the fixed OTP 123456, so production must use the real gateway.
+      - SMS_PROVIDER=${SMS_PROVIDER:?SMS_PROVIDER=eskiz is required for the production container}
+      - ESKIZ_EMAIL=${ESKIZ_EMAIL:-}
+      - ESKIZ_PASSWORD=${ESKIZ_PASSWORD:-}
       - ONLINE_PAYMENTS_ENABLED=false
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
     depends_on:

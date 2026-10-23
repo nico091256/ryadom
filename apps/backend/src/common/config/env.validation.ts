@@ -69,6 +69,10 @@ export function validateEnv(
     for (const key of PRODUCTION_REQUIRED) {
       if (!readString(out, key)) problems.push(`${key} is required when NODE_ENV=production`);
     }
+    // The mock SMS provider makes the OTP a fixed, public value - never acceptable in production.
+    if ((readString(out, 'SMS_PROVIDER') || 'mock') !== 'eskiz') {
+      problems.push('SMS_PROVIDER must be "eskiz" when NODE_ENV=production (the mock provider issues a fixed OTP)');
+    }
   }
 
   const corsOrigins = readString(out, 'CORS_ORIGINS');

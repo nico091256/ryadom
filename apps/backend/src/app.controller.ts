@@ -30,7 +30,8 @@ export class AppController {
     const memory = process.memoryUsage();
 
     return {
-      status: dbStatus === 'down' ? 'degraded' : 'ok',
+      // Only a reachable Postgres is "ok": the in-memory dev store must never look healthy to a load balancer.
+      status: dbStatus === 'up' ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.round(process.uptime()),
       services: {

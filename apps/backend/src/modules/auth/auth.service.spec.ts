@@ -166,6 +166,66 @@ describe('AuthService', () => {
     });
   });
 
+  describe('sendCode in production', () => {
+    const originalEnv = process.env.NODE_ENV;
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('never issues the fixed dev code: 6 random digits with the real provider', async () => {
+      process.env.NODE_ENV = 'production';
+      configService.get.mockImplementation((key: string, def?: any) =>
+        key === 'JWT_ACCESS_SECRET' ? TEST_JWT_SECRET : key === 'SMS_PROVIDER' ? 'eskiz' : def,
+      );
+
+      const codes = new Set<string>();
+      for (let i = 0; i < 5; i++) {
+        await service.sendCode({ phone: '+998901234567' });
+        const text: string = smsService.sendSms.mock.calls[i][1];
+        const match = text.match(/\b(\d{6})\b/);
+        expect(match).not.toBeNull();
+        codes.add(match![1]);
+      }
+      expect(codes.has('123456')).toBe(false);
+      expect(codes.size).toBeGreaterThan(1);
+    });
+  });
+
+  describe('verifyCode', () => {
+    const phone = '+998909876543';
+
+    beforeEach(async () => {
+      prisma.smsCode.findFirst.mockResolvedValue({
+        id: 'sms-1',
+        phone,
+        code_hash: await bcrypt.hash('123456', 4),
+        attempts: 0,
+        expires_at: new Date(Date.now() + 60_000),
+      });
+      prisma.smsCode.delete = jest.fn().mockResolvedValue({});
+      prisma.smsCode.update = jest.fn().mockResolvedValue({});
+    });
+
+    it('refuses to log a seller/admin in with an OTP (phone-only auth is customer-only)', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'u-seller-1', phone, role: 'seller', is_blocked: false });
+
+      await expect(service.verifyCode({ phone, code: '123456' })).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+    it('logs an existing customer in and issues tokens', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'u-customer-1', phone, role: 'customer', is_blocked: false });
+      prisma.refreshToken.create.mockResolvedValue({});
+
+      const result = await service.verifyCode({ phone, code: '123456' });
+
+      expect(result.isNewUser).toBe(false);
+      expect(result.accessToken).toBe('signed-access-token');
+      expect(jwtService.signAsync).toHaveBeenCalledWith(expect.objectContaining({ sub: 'u-customer-1', role: 'customer' }), expect.anything());
+    });
+  });
+
   describe('logout', () => {
     it('revokes only the matching, not-yet-revoked refresh token', async () => {
       await service.logout('some-raw-refresh-token');
