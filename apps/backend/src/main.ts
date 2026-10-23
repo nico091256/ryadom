@@ -77,9 +77,19 @@ async function bootstrap() {
   // Global prefix as specified in Technical Spec v2 Section 13: All paths start with /api/v1
   app.setGlobalPrefix('api/v1');
 
-  // Serve static files for uploaded images (avatars, product photos, shop logos)
+  // Serve static files for uploaded images (avatars, product photos, shop logos).
+  // express.static is mounted here, BEFORE Nest's CORS middleware is attached at
+  // init(), so these responses never get Access-Control-Allow-Origin from it.
+  // Flutter web (CanvasKit) cannot decode a cross-origin image without CORS, so
+  // set the headers explicitly: the files are public, UUID-named and immutable.
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
+    index: false,
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
   });
 
   // Global request validation pipeline
