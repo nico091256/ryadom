@@ -337,12 +337,7 @@ class _PromoCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Text(
-                  ref.t('${promo.key}Title'),
-                  style: AppText.sarlavhaM.copyWith(color: AppColors.white, letterSpacing: -0.4, height: 1.15),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                _buildPromoTitle(ref.t('${promo.key}Title')),
                 const SizedBox(height: 4),
                 Text(
                   ref.t('${promo.key}Subtitle'),
@@ -355,6 +350,35 @@ class _PromoCard extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPromoTitle(String text) {
+    if (text.contains('*')) {
+      final parts = text.split('*');
+      return Text.rich(
+        TextSpan(
+          style: AppText.sarlavhaM.copyWith(color: AppColors.white, letterSpacing: -0.4, height: 1.15),
+          children: [
+            for (var i = 0; i < parts.length; i++)
+              if (i.isOdd)
+                TextSpan(
+                  text: parts[i],
+                  style: AppText.editorialUrguCustom(size: 20, color: const Color(0xFFFFD27A)),
+                )
+              else
+                TextSpan(text: parts[i]),
+          ],
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    return Text(
+      text,
+      style: AppText.sarlavhaM.copyWith(color: AppColors.white, letterSpacing: -0.4, height: 1.15),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

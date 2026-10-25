@@ -107,7 +107,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       var comment = _commentController.text.trim();
       if (_paymentMethod == PaymentMethod.cash) {
-        final changeNote = _changeFrom == 'exact' ? "Qaytim kerak emas" : "Qaytim: $_changeFrom so'mdan";
+        String changeNote;
+        if (_changeFrom == 'exact') {
+          changeNote = "Qaytim kerak emas";
+        } else {
+          final banknoteUzs = int.tryParse(_changeFrom.replaceAll(' ', '')) ?? 0;
+          final banknoteTiyin = banknoteUzs * 100;
+          final currentTotal = ref.read(cartControllerProvider).totalAmount;
+          final changeTiyin = banknoteTiyin - currentTotal;
+          if (changeTiyin > 0) {
+            changeNote = "Qaytim: $_changeFrom so'mdan (qaytim ${formatPrice(changeTiyin, SupportedLanguage.uz)})";
+          } else {
+            changeNote = "Qaytim: $_changeFrom so'mdan";
+          }
+        }
         comment = comment.isEmpty ? changeNote : '$comment | $changeNote';
       }
 
@@ -193,6 +206,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   onMethodChanged: (m) => setState(() => _paymentMethod = m),
                   changeFrom: _changeFrom,
                   onChangeFromChanged: (v) => setState(() => _changeFrom = v),
+                  total: total,
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),

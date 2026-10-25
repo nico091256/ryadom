@@ -138,6 +138,8 @@
     "onlineSoon": "Tez kunda",
     "changeQuestion": "Qaytim tayyorlab kelinsinmi?",
     "changeExact": "Aniq summa",
+    "changeDue": "Kuryer olib kelishi kerak bo'lgan qaytim:",
+    "changeShort": "Kupyura summasi buyurtmadan kam",
     "commentTitle": "Kuryerga eslatma yoki izoh",
     "commentPlaceholder": "Masalan, eshik kodi",
     "summaryTitle": "Xarid hisobi",

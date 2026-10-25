@@ -138,6 +138,8 @@
     "onlineSoon": "Скоро",
     "changeQuestion": "Нужна ли сдача?",
     "changeExact": "Без сдачи",
+    "changeDue": "Сдача, которую подготовит курьер:",
+    "changeShort": "Купюра меньше суммы заказа",
     "commentTitle": "Комментарий для курьера",
     "commentPlaceholder": "Например, код от двери",
     "summaryTitle": "Итог покупки",

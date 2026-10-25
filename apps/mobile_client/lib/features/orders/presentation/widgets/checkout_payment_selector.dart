@@ -14,11 +14,15 @@ class CheckoutPaymentSelector extends ConsumerWidget {
     required this.onMethodChanged,
     required this.changeFrom,
     required this.onChangeFromChanged,
+    this.total = 0,
     this.onlineEnabled = false,
   });
 
   final PaymentMethod method;
   final ValueChanged<PaymentMethod> onMethodChanged;
+
+  /// Order total in tiyin (used to calculate exact change).
+  final int total;
 
   /// Online payments are gated server-side (ONLINE_PAYMENTS_ENABLED, 400
   /// ONLINE_PAYMENTS_DISABLED otherwise); until the gateway is live the card
@@ -29,11 +33,16 @@ class CheckoutPaymentSelector extends ConsumerWidget {
   final String changeFrom;
   final ValueChanged<String> onChangeFromChanged;
 
-  static const _changeOptions = ['50 000', '100 000'];
+  static const _changeOptions = ['50 000', '100 000', '200 000'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isCash = method == PaymentMethod.cash;
+
+    // Calculate change if a specific banknote is selected
+    final banknoteUzs = isCash && changeFrom != 'exact' ? int.tryParse(changeFrom.replaceAll(' ', '')) : null;
+    final banknoteTiyin = banknoteUzs != null ? banknoteUzs * 100 : null;
+    final changeTiyin = banknoteTiyin != null && total > 0 ? banknoteTiyin - total : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,12 +93,52 @@ class CheckoutPaymentSelector extends ConsumerWidget {
                         ),
                         for (final option in _changeOptions)
                           AppChip(
-                            label: option,
+                            label: "$option so'm",
                             selected: changeFrom == option,
                             onTap: () => onChangeFromChanged(option),
                           ),
                       ],
                     ),
+                    if (changeTiyin != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      AnimatedContainer(
+                        duration: AppDurations.normal,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: changeTiyin >= 0 ? AppColors.green50 : AppColors.dangerSoft,
+                          borderRadius: AppRadius.control,
+                          border: Border.all(
+                            color: changeTiyin >= 0 ? AppColors.green200 : AppColors.danger.withValues(alpha: 0.3),
+                            width: 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              changeTiyin >= 0 ? LucideIcons.banknote : LucideIcons.alertCircle,
+                              size: 18,
+                              color: changeTiyin >= 0 ? AppColors.brand : AppColors.danger,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                changeTiyin >= 0
+                                    ? ref.t('checkout.changeDue')
+                                    : ref.t('checkout.changeShort'),
+                                style: AppText.captionStrong.copyWith(
+                                  color: changeTiyin >= 0 ? AppColors.brandDark : AppColors.danger,
+                                ),
+                              ),
+                            ),
+                            if (changeTiyin >= 0)
+                              PriceText(
+                                changeTiyin,
+                                style: AppText.bodyStrong.copyWith(color: AppColors.brand),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 )
               : const SizedBox(width: double.infinity, height: 0),

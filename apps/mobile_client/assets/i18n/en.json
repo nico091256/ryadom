@@ -138,6 +138,8 @@
     "onlineSoon": "Coming soon",
     "changeQuestion": "Need change prepared?",
     "changeExact": "Exact amount",
+    "changeDue": "Change prepared by courier:",
+    "changeShort": "Banknote is less than order total",
     "commentTitle": "Note for the courier",
     "commentPlaceholder": "E.g. door code",
     "summaryTitle": "Order summary",

@@ -15,6 +15,9 @@ abstract final class AppColors {
   // Aksent (Joylashuv, qo'ng'iroq, chegirmalar): #FF7A2F
   static const accent = Color(0xFFFF7A2F);
   static const accentLight = Color(0xFFFFF1E8);
+  static const tandirAmber = Color(0xFFD97706);
+  static const emeraldPrimary = brand;
+  static const canvasWarm = Color(0xFFFAF8F5);
 
   // Matn (Asosiy matn): #14231C
   static const textPrimary = Color(0xFF14231C);
