@@ -80,13 +80,7 @@ abstract final class AppText {
   static final overline = _style(11, 700, height: 1.3, letterSpacing: 0.5, color: AppColors.textTertiary);
   static final micro = _style(10, 700, height: 1.2);
 
-  /// Editorial emphasis font style (kursiv / italic for words like "Qibray qaymog'i", "Tandir patir").
-  static final editorialUrgu = _style(18, 600, height: 1.25, letterSpacing: -0.2).copyWith(
-    fontStyle: FontStyle.italic,
-    color: AppColors.tandirAmber,
-  );
-
-  /// Custom editorial emphasis helper.
+  /// Editorial emphasis (kursiv) for `*marked*` words inside promo titles.
   static TextStyle editorialUrguCustom({double size = 18, Color? color}) => _style(size, 600, height: 1.25).copyWith(
     fontStyle: FontStyle.italic,
     color: color ?? AppColors.tandirAmber,

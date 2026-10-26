@@ -72,4 +72,34 @@ void main() {
     expect(find.text("Kuryer olib kelishi kerak bo'lgan qaytim:"), findsOneWidget);
     expect(find.text("45 000 so'm"), findsAtLeastNWidgets(1));
   });
+
+  testWidgets('warns when the chosen banknote is smaller than the order total', (tester) async {
+    tester.view.physicalSize = const Size(390, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer(overrides: [i18nServiceProvider.overrideWithValue(i18n)]);
+    addTearDown(container.dispose);
+
+    // 60 000 so'm total — more than the 50 000 banknote.
+    container.read(cartControllerProvider.notifier).addOrIncrement(
+          const Product(id: 'p1', shopId: 's1', categoryId: 'c1', nameUz: 'Non', price: 6000000, stock: 10, isAvailable: true),
+          'Test Shop',
+        );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: CheckoutScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text("50 000 so'm"));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kupyura summasi buyurtmadan kam'), findsOneWidget);
+    expect(find.text("Kuryer olib kelishi kerak bo'lgan qaytim:"), findsNothing);
+  });
 }

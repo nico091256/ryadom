@@ -76,6 +76,13 @@ void main() {
     expect(find.text('08:00–22:00'), findsNWidgets(2));
   });
 
+  testWidgets('promo titles render the *marked* words as emphasis, never as raw asterisks', (tester) async {
+    await pump(tester, [_shop('Open Shop')]);
+
+    expect(find.textContaining('*', findRichText: true), findsNothing);
+    expect(find.textContaining('eshigingizgacha', findRichText: true), findsOneWidget);
+  });
+
   testWidgets('shows the empty state when there are no nearby shops', (tester) async {
     await pump(tester, []);
     expect(find.text('3 km radiusda do\'konlar topilmadi'), findsOneWidget);

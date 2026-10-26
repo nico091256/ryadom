@@ -115,11 +115,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final banknoteTiyin = banknoteUzs * 100;
           final currentTotal = ref.read(cartControllerProvider).totalAmount;
           final changeTiyin = banknoteTiyin - currentTotal;
-          if (changeTiyin > 0) {
-            changeNote = "Qaytim: $_changeFrom so'mdan (qaytim ${formatPrice(changeTiyin, SupportedLanguage.uz)})";
-          } else {
-            changeNote = "Qaytim: $_changeFrom so'mdan";
+          // A banknote smaller than the total would tell the courier to bring
+          // change that does not exist — the selector already shows the red
+          // hint, so refuse here instead of sending a misleading note.
+          if (changeTiyin < 0) {
+            showAppToast(context, ref.t('checkout.changeShort'), tone: ToastTone.error);
+            return;
           }
+          changeNote = changeTiyin > 0
+              ? "Qaytim: $_changeFrom so'mdan (qaytim ${formatPrice(changeTiyin, SupportedLanguage.uz)})"
+              : "Qaytim: $_changeFrom so'mdan (aniq summa)";
         }
         comment = comment.isEmpty ? changeNote : '$comment | $changeNote';
       }
