@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g pnpm@12.11.2
 
 FROM base AS dependencies
@@ -21,6 +22,7 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
+ENV PATH="/app/node_modules/.bin:/app/apps/backend/node_modules/.bin:$PATH"
 
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/packages/shared/dist ./packages/shared/dist
@@ -32,4 +34,5 @@ COPY --from=dependencies /app/apps/backend/prisma ./apps/backend/prisma
 
 EXPOSE 4000
 WORKDIR /app/apps/backend
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy; node dist/src/main"]
+
