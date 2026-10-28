@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
-import { api, ApiError, errorMessage } from '@/lib/api';
+import { api, ApiError, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Category } from '@/lib/types';
 import { formatNumber } from '@/lib/format';
 import {
@@ -27,9 +27,9 @@ import {
 } from '@/components/ui';
 
 function CategoryIcon({ icon }: { icon: string | null }) {
-  if (icon && /^https?:\/\//.test(icon)) {
+  if (icon && /^(https?:\/\/|\/uploads\/)/i.test(icon)) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={icon} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />;
+    return <img src={resolveMediaUrl(icon) ?? icon} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />;
   }
   return (
     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-brand-100">

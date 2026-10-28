@@ -87,7 +87,7 @@ export class AuthController {
     if (!wantsCookieTransport(req)) return result;
 
     const { refreshToken, ...body } = result;
-    setRefreshCookie(res, refreshToken, this.refreshTtlDays());
+    setRefreshCookie(res, refreshToken, this.refreshTtlDays(), req);
     return body;
   }
 
@@ -110,13 +110,13 @@ export class AuthController {
       result = await this.authService.refreshToken(token);
     } catch (err) {
       // A dead cookie would otherwise be replayed on every page load.
-      if (viaCookie) clearRefreshCookie(res);
+      if (viaCookie) clearRefreshCookie(res, req);
       throw err;
     }
     if (!viaCookie) return result;
 
     const { refreshToken, ...body } = result;
-    setRefreshCookie(res, refreshToken, this.refreshTtlDays());
+    setRefreshCookie(res, refreshToken, this.refreshTtlDays(), req);
     return body;
   }
 
@@ -128,7 +128,7 @@ export class AuthController {
   async logout(@Body() dto: RefreshTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const fromBody = dto.refreshToken?.trim() || undefined;
     const fromCookie = readRefreshCookie(req);
-    if (fromCookie || wantsCookieTransport(req)) clearRefreshCookie(res);
+    if (fromCookie || wantsCookieTransport(req)) clearRefreshCookie(res, req);
 
     const token = fromBody || fromCookie;
     if (!token) throw new UnauthorizedException(MISSING_REFRESH_TOKEN);
@@ -160,7 +160,7 @@ export class AuthController {
     if (!wantsCookieTransport(req) && !readRefreshCookie(req)) return result;
 
     const { refreshToken, ...body } = result;
-    setRefreshCookie(res, refreshToken, this.refreshTtlDays());
+    setRefreshCookie(res, refreshToken, this.refreshTtlDays(), req);
     return body;
   }
 

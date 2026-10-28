@@ -11,12 +11,28 @@ import type {
   UpdateShopPayload,
 } from './types';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+export function getApiUrl(): string {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:4000/api/v1`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+}
+
+export function getApiOrigin(): string {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:4000`;
+  }
+  return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+}
+
+export const API_URL = getApiUrl();
 /** API_URL with the trailing '/api/v1' (and any trailing slash) removed. Uploads and the socket live here. */
-export const API_ORIGIN = API_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+export const API_ORIGIN = getApiOrigin();
 
 /** Fired on `window` after a successful token refresh (socket re-auth hook). */
 export const TOKEN_REFRESHED_EVENT = 'ryadom:token-refreshed';
+/** Fired on `window` when the session is cleared or logged out (socket disconnect hook). */
+export const SESSION_CLEARED_EVENT = 'ryadom:session-cleared';
 
 /**
  * Session model:
@@ -187,6 +203,7 @@ class ApiService {
     } catch {
       /* ignore */
     }
+    window.dispatchEvent(new CustomEvent(SESSION_CLEARED_EVENT));
   }
 
   /** Revokes the cookie refresh token on the server (best effort) and always clears local state. */
@@ -196,10 +213,12 @@ class ApiService {
     this.clearSession();
     if (!hadSession || typeof window === 'undefined') return;
     try {
-      await fetch(`${API_URL}/auth/logout`, {
+      await fetch(`${getApiUrl()}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Auth-Client': 'store',
+          'X-Auth-Transport': 'cookie',
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         credentials: 'include',
@@ -218,21 +237,45 @@ class ApiService {
     }
   }
 
+  private parseJwtRole(token: string): string | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+      return payload.role || null;
+    } catch {
+      return null;
+    }
+  }
+
   // ---------- Refresh (single-flight) ----------
   private refreshTokens(): Promise<boolean> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       try {
         // The refresh token travels only in the httpOnly cookie; the server rotates it.
-        const res = await fetch(`${API_URL}/auth/refresh`, {
+        const res = await fetch(`${getApiUrl()}/auth/refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Client': 'store',
+            'X-Auth-Transport': 'cookie',
+          },
           credentials: 'include',
           body: '{}',
         });
         if (!res.ok) return false;
         const data = (await res.json().catch(() => null)) as { accessToken?: string } | null;
         if (!data?.accessToken) return false;
+
+        const role = this.parseJwtRole(data.accessToken);
+        if (role && role !== 'seller') {
+          // Token belongs to another user role (e.g. admin session clash on localhost)
+          this.expireSession();
+          return false;
+        }
+
         this.setToken(data.accessToken);
         // Let long-lived consumers (the Socket.IO client) re-authenticate with the new token.
         window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
@@ -271,7 +314,7 @@ class ApiService {
 
     let res: Response;
     try {
-      res = await fetch(`${API_URL}${endpoint}`, { ...init, headers });
+      res = await fetch(`${getApiUrl()}${endpoint}`, { ...init, headers });
     } catch {
       throw new ApiError("Server bilan aloqa yo'q. Internet yoki API serverni tekshiring.", 0, 'NETWORK_ERROR');
     }
@@ -292,6 +335,20 @@ class ApiService {
         this.expireSession();
         throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, body?.code);
       }
+
+      if (res.status === 403 && body?.code === 'MUST_CHANGE_PASSWORD' && typeof window !== 'undefined') {
+        const u = this.getUser();
+        if (u) this.saveUser({ ...u, must_change_password: true });
+        if (window.location.pathname !== '/change-password') {
+          window.location.replace('/change-password');
+        }
+      }
+
+      if (res.status === 403 && typeof message === 'string' && message.includes('Current role:')) {
+        this.expireSession();
+        throw new ApiError("Sessiya roli mos kelmadi. Do'kon paneliga qaytadan kiring.", 403, 'ROLE_MISMATCH');
+      }
+
       throw new ApiError(message, res.status, body?.code);
     }
 
@@ -307,7 +364,7 @@ class ApiService {
       body: JSON.stringify({ login, password }),
       auth: false,
       // Ask the API to deliver the refresh token as an httpOnly cookie instead of in the body.
-      headers: { 'X-Auth-Transport': 'cookie' },
+      headers: { 'X-Auth-Transport': 'cookie', 'X-Auth-Client': 'store' },
       credentials: 'include',
     });
     if (!data?.user || data.user.role !== 'seller') {
@@ -326,6 +383,9 @@ class ApiService {
     };
     this.setToken(data.accessToken);
     this.saveUser(user);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
+    }
     return user;
   }
 
@@ -337,7 +397,7 @@ class ApiService {
       {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
-        headers: { 'X-Auth-Transport': 'cookie' },
+        headers: { 'X-Auth-Transport': 'cookie', 'X-Auth-Client': 'store' },
         credentials: 'include',
       },
     );

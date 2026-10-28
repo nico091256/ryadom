@@ -94,7 +94,7 @@ export function ReasonModal({
             disabled={loading}
             onChange={(e) => setText(e.target.value)}
             placeholder="Yoki sababni o'zingiz yozing..."
-            maxLength={500}
+            maxLength={300}
           />
         </Field>
       </div>

@@ -48,6 +48,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final user = ref.read(authControllerProvider).valueOrNull;
     final phone = user?.phone;
     _phoneController = TextEditingController(text: phone == null ? '' : formatUzPhone(phone));
+    final addr = ref.read(addressControllerProvider);
+    _entranceController.text = addr.entrance ?? '';
+    _floorController.text = addr.floor ?? '';
+    _apartmentController.text = addr.apartment ?? '';
+    _doorCodeController.text = addr.doorCode ?? '';
   }
 
   @override
@@ -97,12 +102,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final successMessage = ref.t('checkout.orderPlaced');
 
     try {
+      final entrance = _entranceController.text.trim();
+      final floor = _floorController.text.trim();
+      final apartment = _apartmentController.text.trim();
+      final doorCode = _doorCodeController.text.trim();
+
+      ref.read(addressControllerProvider.notifier).setManual(
+            address.copyWith(
+              entrance: entrance.isEmpty ? null : entrance,
+              floor: floor.isEmpty ? null : floor,
+              apartment: apartment.isEmpty ? null : apartment,
+              doorCode: doorCode.isEmpty ? null : doorCode,
+            ),
+          );
+
       // Courier-facing fragments stay in Uzbek on purpose (read by shopkeepers).
       final parts = <String>[];
-      if (_entranceController.text.isNotEmpty) parts.add("Podyezd: ${_entranceController.text}");
-      if (_floorController.text.isNotEmpty) parts.add("Qavat: ${_floorController.text}");
-      if (_apartmentController.text.isNotEmpty) parts.add("Xonadon: ${_apartmentController.text}");
-      if (_doorCodeController.text.isNotEmpty) parts.add("Domofon: ${_doorCodeController.text}");
+      if (entrance.isNotEmpty) parts.add("Podyezd: $entrance");
+      if (floor.isNotEmpty) parts.add("Qavat: $floor");
+      if (apartment.isNotEmpty) parts.add("Xonadon: $apartment");
+      if (doorCode.isNotEmpty) parts.add("Domofon: $doorCode");
       final fullAddress = _clamp(parts.isEmpty ? address.addressText : '${address.addressText} (${parts.join(', ')})', 300);
 
       var comment = _commentController.text.trim();

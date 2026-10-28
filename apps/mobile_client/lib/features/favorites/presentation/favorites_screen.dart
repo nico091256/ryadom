@@ -34,7 +34,10 @@ class FavoritesScreen extends ConsumerWidget {
               title: ref.t('favorites.emptyTitle'),
               subtitle: ref.t('favorites.emptySubtitle'),
               actionLabel: ref.t('favorites.browse'),
-              onAction: () => context.go('/home'),
+              onAction: () {
+                ref.read(mainTabProvider.notifier).state = 0;
+                context.go('/home');
+              },
             )
           : Center(
               child: ConstrainedBox(

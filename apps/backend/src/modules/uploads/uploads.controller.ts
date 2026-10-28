@@ -18,10 +18,17 @@ import type { OutputInfo } from 'sharp';
 import { UserRole } from '@localshop/shared';
 import { Roles } from '../../common/decorators/roles.decorator';
 
-// sharp ships ESM-style typings (`export default`) but a CommonJS build (`module.exports = sharp`);
-// without esModuleInterop a default import would be `undefined` at runtime, so bind it explicitly.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const sharp: typeof import('sharp').default = require('sharp');
+let cachedSharp: any = undefined;
+function getSharp(): any {
+  if (cachedSharp !== undefined) return cachedSharp;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    cachedSharp = require('sharp');
+  } catch {
+    cachedSharp = null;
+  }
+  return cachedSharp;
+}
 
 /** Real (byte-sniffed) MIME types we accept; the client-declared mimetype is ignored. */
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -86,6 +93,11 @@ export class UploadsController {
 
     // 2. Re-encode: strips EXIF/ICC/XMP and any trailing payload (polyglot files),
     //    normalises orientation and bounds the output size.
+    const sharp = getSharp();
+    if (!sharp) {
+      throw new BadRequestException({ code: 'IMAGE_PROCESSOR_ERROR', message: 'Image processor is currently unavailable' });
+    }
+
     let data: Buffer;
     let info: OutputInfo;
     try {

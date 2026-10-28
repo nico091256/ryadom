@@ -74,48 +74,45 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   Widget build(BuildContext context) {
     final empty = _name.text.trim().isEmpty;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(
+          controller: _name,
+          label: ref.t('profile.nameLabel'),
+          hint: ref.t('auth.namePlaceholder'),
+          icon: LucideIcons.user,
+          error: empty ? ref.t('profile.nameRequired') : null,
+          enabled: !_saving,
+          autofocus: true,
+          showClear: true,
+          maxLength: _kNameMaxLength,
+          keyboardType: TextInputType.name,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _save(),
+        ),
+        if (_phone.text.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
           AppTextField(
-            controller: _name,
-            label: ref.t('profile.nameLabel'),
-            hint: ref.t('auth.namePlaceholder'),
-            icon: LucideIcons.user,
-            error: empty ? ref.t('profile.nameRequired') : null,
-            enabled: !_saving,
-            autofocus: true,
-            showClear: true,
-            maxLength: _kNameMaxLength,
-            keyboardType: TextInputType.name,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) => _save(),
-          ),
-          if (_phone.text.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            AppTextField(
-              controller: _phone,
-              label: ref.t('profile.phoneLabel'),
-              helper: ref.t('profile.phoneLocked'),
-              icon: LucideIcons.phone,
-              suffix: const Icon(LucideIcons.lock, size: 16, color: AppColors.ink300),
-              enabled: false,
-            ),
-          ],
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(
-            label: ref.t('common.save'),
-            icon: LucideIcons.check,
-            loading: _saving,
-            onPressed: _canSave ? _save : null,
+            controller: _phone,
+            label: ref.t('profile.phoneLabel'),
+            helper: ref.t('profile.phoneLocked'),
+            icon: LucideIcons.phone,
+            suffix: const Icon(LucideIcons.lock, size: 16, color: AppColors.ink300),
+            enabled: false,
           ),
         ],
-      ),
+        const SizedBox(height: AppSpacing.xl),
+        AppButton(
+          label: ref.t('common.save'),
+          icon: LucideIcons.check,
+          loading: _saving,
+          onPressed: _canSave ? _save : null,
+        ),
+      ],
     );
   }
 }

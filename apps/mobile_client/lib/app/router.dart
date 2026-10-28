@@ -45,11 +45,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Let the brand intro finish before leaving the splash.
       if (path == '/splash' && !ref.read(splashIntroDoneProvider).hasValue) return null;
 
-      final isAuthenticated = auth.valueOrNull != null;
+      final user = auth.valueOrNull;
+      final isAuthenticated = user != null;
+      final hasName = (user?.name ?? '').trim().isNotEmpty;
       final inAuthFlow = path.startsWith('/welcome') || path.startsWith('/auth');
 
       if (!isAuthenticated && !inAuthFlow) return '/welcome';
-      if (isAuthenticated && (inAuthFlow || path == '/splash')) return '/home';
+      if (isAuthenticated && path == '/auth/name') return hasName ? '/home' : null;
+      if (isAuthenticated && (inAuthFlow || path == '/splash')) {
+        return hasName ? '/home' : '/auth/name';
+      }
       if (!isAuthenticated && path == '/splash') return '/welcome';
       return null;
     },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
@@ -32,7 +33,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
     setState(() => _loading = true);
     try {
       await ref.read(authControllerProvider.notifier).saveName(name);
-      // Router redirect takes over once auth state has a named user.
+      if (mounted) context.go('/home');
     } on AppException catch (e) {
       if (!mounted) return;
       showAppToast(context, ref.errorText(e), tone: ToastTone.error);

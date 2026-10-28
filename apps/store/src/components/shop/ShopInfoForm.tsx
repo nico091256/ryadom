@@ -198,7 +198,7 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
               value={form.address_text}
               onChange={(e) => set('address_text', e.target.value)}
               placeholder="Shahar, ko'cha, uy raqami, mo'ljal"
-              maxLength={500}
+              maxLength={300}
               rows={2}
               className="min-h-[64px]"
               invalid={!!errors.address_text}

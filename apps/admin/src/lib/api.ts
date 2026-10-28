@@ -17,8 +17,33 @@ import type {
   UserDetail,
   UserRow,
 } from './types';
+import { isShopOpenNow } from '@localshop/shared';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+export function getApiUrl(): string {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:4000/api/v1`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+}
+
+export function getApiOrigin(): string {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:4000`;
+  }
+  return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+}
+
+export const API_URL = getApiUrl();
+export const API_ORIGIN = getApiOrigin();
+
+/** Turns a server-relative upload path ('/uploads/x.jpg') or an absolute URL into something an <img> can load. */
+export function resolveMediaUrl(pathOrUrl: string | null | undefined): string | null {
+  if (!pathOrUrl) return null;
+  const v = String(pathOrUrl).trim();
+  if (!v) return null;
+  if (/^(https?:)?\/\//i.test(v) || /^(data|blob):/i.test(v)) return v;
+  return `${getApiOrigin()}${v.startsWith('/') ? '' : '/'}${v}`;
+}
 
 /** Fired on `window` after a successful token refresh. */
 export const TOKEN_REFRESHED_EVENT = 'ryadom:token-refreshed';
@@ -77,14 +102,18 @@ function toPaginated<T>(res: any, page = 1, limit = 20): Paginated<T> {
   };
 }
 
-function normalizeShop<T extends Partial<Shop>>(s: any): T {
+export function normalizeShop<T extends Partial<Shop>>(s: any): T {
+  const status = s.status ?? (s.is_active ? 'active' : 'blocked');
+  const isActive = Boolean(s.is_active) && status === 'active';
+  const computedOpen =
+    isActive && isShopOpenNow(s.open_time || '08:00', s.close_time || '22:00', Boolean(s.is_open));
   return {
     ...s,
-    status: s.status ?? (s.is_active ? 'active' : 'blocked'),
+    status,
     productCount: s.productCount ?? s._count?.products ?? 0,
     orderCount: s.orderCount ?? s._count?.orders ?? 0,
     revenueTiyin: s.revenueTiyin ?? 0,
-    isCurrentlyOpen: s.isCurrentlyOpen ?? (s.is_open && s.is_active),
+    isCurrentlyOpen: isActive ? (s.isCurrentlyOpen ?? computedOpen) : false,
   } as T;
 }
 
@@ -191,10 +220,12 @@ class ApiService {
     this.clearSession();
     if (!hadSession || typeof window === 'undefined') return;
     try {
-      await fetch(`${API_URL}/auth/logout`, {
+      await fetch(`${getApiUrl()}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Auth-Client': 'admin',
+          'X-Auth-Transport': 'cookie',
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         credentials: 'include',
@@ -219,16 +250,22 @@ class ApiService {
     this.refreshPromise = (async () => {
       try {
         // The refresh token travels only in the httpOnly cookie; the server rotates it.
-        const res = await fetch(`${API_URL}/auth/refresh`, {
+        const res = await fetch(`${getApiUrl()}/auth/refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Auth-Client': 'admin',
+            'X-Auth-Transport': 'cookie',
+          },
           credentials: 'include',
           body: '{}',
         });
         if (!res.ok) return false;
-        const data = (await res.json().catch(() => null)) as { accessToken?: string } | null;
+        const data = (await res.json().catch(() => null)) as { accessToken?: string; user?: AdminUser } | null;
         if (!data?.accessToken) return false;
+        if (data.user && data.user.role && data.user.role !== 'admin') return false;
         this.setToken(data.accessToken);
+        if (data.user) this.saveSession(data.accessToken, data.user);
         window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
         return true;
       } catch {
@@ -263,7 +300,7 @@ class ApiService {
 
     let res: Response;
     try {
-      res = await fetch(`${API_URL}${endpoint}`, { ...init, headers });
+      res = await fetch(`${getApiUrl()}${endpoint}`, { ...init, headers });
     } catch {
       throw new ApiError("Server bilan aloqa yo'q. Internet yoki API serverni tekshiring.", 0, 'NETWORK_ERROR');
     }
@@ -284,6 +321,9 @@ class ApiService {
         this.expireSession();
         throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, body?.code);
       }
+      if (res.status === 403 && auth && !isAuthEndpoint && /Current role:/i.test(message)) {
+        this.expireSession();
+      }
       throw new ApiError(message, res.status, body?.code);
     }
 
@@ -299,7 +339,7 @@ class ApiService {
       body: JSON.stringify({ login, password }),
       auth: false,
       // Ask the API to deliver the refresh token as an httpOnly cookie instead of in the body.
-      headers: { 'X-Auth-Transport': 'cookie' },
+      headers: { 'X-Auth-Transport': 'cookie', 'X-Auth-Client': 'admin' },
       credentials: 'include',
     });
     if (!data?.user || data.user.role !== 'admin') {
@@ -361,8 +401,9 @@ class ApiService {
     return this.request<any>('/admin/shops', { method: 'POST', body: JSON.stringify(payload) });
   }
 
-  updateShop(id: string, payload: UpdateShopPayload) {
-    return this.request<Shop>(`/admin/shops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  async updateShop(id: string, payload: UpdateShopPayload) {
+    const res = await this.request<Shop>(`/admin/shops/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return normalizeShop<Shop>(res);
   }
 
   resetShopPassword(id: string) {

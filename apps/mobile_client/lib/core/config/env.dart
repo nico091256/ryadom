@@ -15,7 +15,12 @@ class Env {
     const override = String.fromEnvironment('API_BASE_URL');
     if (override.isNotEmpty) return override;
 
-    if (kIsWeb) return 'http://localhost:4000/api/v1';
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host.isNotEmpty) return 'http://$host:4000/api/v1';
+      return 'http://localhost:4000/api/v1';
+    }
+
     if (Platform.isAndroid) return 'http://10.0.2.2:4000/api/v1';
     return 'http://localhost:4000/api/v1';
   }
@@ -24,6 +29,12 @@ class Env {
   static String get socketUrl {
     const override = String.fromEnvironment('SOCKET_URL');
     if (override.isNotEmpty) return override;
+
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host.isNotEmpty) return 'http://$host:4000';
+      return 'http://localhost:4000';
+    }
 
     final api = apiBaseUrl;
     final idx = api.indexOf('/api');

@@ -251,7 +251,7 @@ export function EditShopModal({
     const errs = validateCommon(f);
     const c = Number(f.commission_rate_percent);
     if (f.commission_rate_percent === '' || !Number.isFinite(c) || c < 0 || c > 100) errs.commission_rate_percent = '0 dan 100 gacha';
-    if (f.logo_url && !/^https?:\/\//i.test(f.logo_url.trim())) errs.logo_url = "URL http(s):// bilan boshlanishi kerak";
+    if (f.logo_url && !/^(https?:\/\/|\/uploads\/)/i.test(f.logo_url.trim())) errs.logo_url = "URL http(s):// yoki /uploads/ bilan boshlanishi kerak";
     setErrors(errs);
     if (Object.keys(errs).length) return;
 

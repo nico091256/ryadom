@@ -83,53 +83,59 @@ async function main() {
   console.log(`Customer address seeded: ${customerAddress.title} (${customerAddress.address_text})`);
 
   // 6. Seed Demo Shop ("Chilonzor Oziq-Ovqat")
-  await prisma.shop.deleteMany({ where: { owner_id: seller.id } });
-  const shop = await prisma.shop.create({
-    data: {
-      owner_id: seller.id,
-      city_id: tashkent.id,
-      name: 'Chilonzor Oziq-Ovqat',
-      logo_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80',
-      phone: '+998909876543',
-      address_text: 'Toshkent sh., Chilonzor ko\'chasi, 28-do\'kon',
-      lat: 41.2825,
-      lng: 69.2150,
-      open_time: '08:00',
-      close_time: '23:00',
-      is_open: true,
-      is_active: true,
-      commission_rate_percent: 0,
-    },
-  });
+  const demoShopData = {
+    owner_id: seller.id,
+    city_id: tashkent.id,
+    name: 'Chilonzor Oziq-Ovqat',
+    logo_url: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=400&q=80',
+    phone: '+998909876543',
+    address_text: 'Toshkent sh., Chilonzor ko\'chasi, 28-do\'kon',
+    lat: 41.2825,
+    lng: 69.2150,
+    open_time: '08:00',
+    close_time: '23:00',
+    is_open: true,
+    is_active: true,
+    commission_rate_percent: 0,
+  };
+  const existingDemoShop = await prisma.shop.findFirst({ where: { owner_id: seller.id } });
+  const shop = existingDemoShop
+    ? await prisma.shop.update({ where: { id: existingDemoShop.id }, data: demoShopData })
+    : await prisma.shop.create({ data: demoShopData });
   console.log(`Shop seeded: ${shop.name}`);
 
   // 7. Seed Global Categories
   const categoriesData = [
     {
+      id: '00000000-0000-0000-0000-000000000101',
       name_uz: 'Non va pishiriqlar',
       name_ru: 'Хлеб и выпечка',
       name_en: 'Bakery & Bread',
       icon_url: 'bread-slice',
     },
     {
+      id: '00000000-0000-0000-0000-000000000102',
       name_uz: 'Sut va sut mahsulotlari',
       name_ru: 'Молочные продукты',
       name_en: 'Dairy Products',
       icon_url: 'glass-whiskey',
     },
     {
+      id: '00000000-0000-0000-0000-000000000103',
       name_uz: 'Ichimliklar va sharbatlar',
       name_ru: 'Напитки и соки',
       name_en: 'Beverages & Juices',
       icon_url: 'wine-bottle',
     },
     {
+      id: '00000000-0000-0000-0000-000000000104',
       name_uz: 'Meva va sabzavotlar',
       name_ru: 'Овощи и фрукты',
       name_en: 'Fruits & Vegetables',
       icon_url: 'apple-alt',
     },
     {
+      id: '00000000-0000-0000-0000-000000000105',
       name_uz: 'Shirinliklar va gazaklar',
       name_ru: 'Сладости и снеки',
       name_en: 'Sweets & Snacks',
@@ -139,9 +145,14 @@ async function main() {
 
   const categories = [];
   for (const catData of categoriesData) {
-    const cat = await prisma.category.create({
-      data: catData,
-    });
+    const existingByName = await prisma.category.findFirst({ where: { name_uz: catData.name_uz } });
+    const cat = existingByName
+      ? await prisma.category.update({ where: { id: existingByName.id }, data: { name_ru: catData.name_ru, name_en: catData.name_en, icon_url: catData.icon_url } })
+      : await prisma.category.upsert({
+          where: { id: catData.id },
+          update: { name_uz: catData.name_uz, name_ru: catData.name_ru, name_en: catData.name_en, icon_url: catData.icon_url },
+          create: catData,
+        });
     categories.push(cat);
   }
   console.log(`Categories seeded: ${categories.length}`);
@@ -264,9 +275,14 @@ async function main() {
   ];
 
   for (const prodData of productsData) {
-    await prisma.product.create({
-      data: prodData,
+    const existingProd = await prisma.product.findFirst({
+      where: { shop_id: shop.id, name_uz: prodData.name_uz },
     });
+    if (existingProd) {
+      await prisma.product.update({ where: { id: existingProd.id }, data: prodData });
+    } else {
+      await prisma.product.create({ data: prodData });
+    }
   }
   console.log(`Products seeded: ${productsData.length}`);
 
@@ -352,42 +368,49 @@ async function main() {
       },
     });
 
-    await prisma.shop.deleteMany({ where: { owner_id: owner.id } });
-    const extraShop = await prisma.shop.create({
-      data: {
-        owner_id: owner.id,
-        city_id: tashkent.id,
-        name: s.name,
-        logo_url: s.logo,
-        phone: owner.phone!,
-        address_text: s.address,
-        lat: s.lat,
-        lng: s.lng,
-        open_time: s.open,
-        close_time: s.close,
-        is_open: true,
-        is_active: true,
-        commission_rate_percent: 0,
-      },
-    });
+    const extraShopData = {
+      owner_id: owner.id,
+      city_id: tashkent.id,
+      name: s.name,
+      logo_url: s.logo,
+      phone: owner.phone!,
+      address_text: s.address,
+      lat: s.lat,
+      lng: s.lng,
+      open_time: s.open,
+      close_time: s.close,
+      is_open: true,
+      is_active: true,
+      commission_rate_percent: 0,
+    };
+    const existingExtraShop = await prisma.shop.findFirst({ where: { owner_id: owner.id } });
+    const extraShop = existingExtraShop
+      ? await prisma.shop.update({ where: { id: existingExtraShop.id }, data: extraShopData })
+      : await prisma.shop.create({ data: extraShopData });
 
     for (const key of s.items) {
       const [catIdx, uz, ru, en, priceUzs, image] = catalog[key];
       // Small per-shop price variation so shops don't look identical
       const price = Math.round((priceUzs * (0.9 + ((i * 7 + key.length) % 5) * 0.05)) / 500) * 500;
-      await prisma.product.create({
-        data: {
-          shop_id: extraShop.id,
-          category_id: categories[catIdx].id,
-          name_uz: uz,
-          name_ru: ru,
-          name_en: en,
-          price: price * 100, // tiyin
-          stock: 20 + ((i + key.length) % 6) * 10,
-          is_available: true,
-          image_url: image,
-        },
+      const prodPayload = {
+        shop_id: extraShop.id,
+        category_id: categories[catIdx].id,
+        name_uz: uz,
+        name_ru: ru,
+        name_en: en,
+        price: price * 100, // tiyin
+        stock: 20 + ((i + key.length) % 6) * 10,
+        is_available: true,
+        image_url: image,
+      };
+      const existingProd = await prisma.product.findFirst({
+        where: { shop_id: extraShop.id, name_uz: uz },
       });
+      if (existingProd) {
+        await prisma.product.update({ where: { id: existingProd.id }, data: prodPayload });
+      } else {
+        await prisma.product.create({ data: prodPayload });
+      }
       extraProducts++;
     }
   }

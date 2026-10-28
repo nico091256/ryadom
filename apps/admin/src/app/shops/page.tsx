@@ -77,12 +77,14 @@ function ShopsInner() {
 
   const toggleActive = async (shop: Shop, value: boolean) => {
     setToggling(shop.id);
-    patchRow(shop.id, { is_active: value });
+    const prevOpen = shop.isCurrentlyOpen;
+    patchRow(shop.id, { is_active: value, isCurrentlyOpen: value ? prevOpen : false });
     try {
-      await api.updateShop(shop.id, { is_active: value });
+      const updated = await api.updateShop(shop.id, { is_active: value });
+      patchRow(shop.id, updated);
       toast.success(value ? "Do'kon faollashtirildi" : "Do'kon o'chirildi", shop.name);
     } catch (e) {
-      patchRow(shop.id, { is_active: !value });
+      patchRow(shop.id, { is_active: !value, isCurrentlyOpen: prevOpen });
       toast.error("Holatni o'zgartirib bo'lmadi", errorMessage(e));
     } finally {
       setToggling(null);

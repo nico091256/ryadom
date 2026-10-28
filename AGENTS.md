@@ -9,6 +9,7 @@ Ushbu fayl Antigravity / Agent uchun har bir yangi sessiya va kontekstda majburi
 * **Uslub:** Qisqa, aniq, faktlarga asoslangan, ortiqcha lutfbozliksiz ("davom et" va "ruxsat" rejimida to'liq avtonom ishlash).
 * **Intizom:** Biror xatolik yoki muammo bo'lsa, shoshilmasdan butun zanjirni tekshirib, ildiz sababini topish va barcha aloqador modellar bilan birga to'liq hal qilish.
 * **Fayllar tozaligi:** Ortiqcha/keraksiz fayllar yaratmaslik, mavjud toza arxitekturani buzmaslik.
+* **Savol-javob intizomi:** Foydalanuvchi shunchaki savol berganida yoki tushuntirish so'raganida kod va fayllarga aslo o'zboshimchalik bilan o'zgartirish kiritmaslik. Faqat foydalanuvchi aniq tahrirlash, tuzatish yoki yangi funksiya yozish bo'yicha topshiriq bergandagina fayllarni o'zgartirish.
 
 ---
 

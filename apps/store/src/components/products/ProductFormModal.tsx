@@ -290,15 +290,15 @@ export function ProductFormModal({
               onChange={set('name_uz')}
               invalid={!!errors.name_uz}
               placeholder="Masalan: Non, 1 dona"
-              maxLength={200}
+              maxLength={120}
               autoFocus
             />
           </Field>
           <Field label="Nomi (ruscha)" htmlFor="p-name-ru">
-            <Input id="p-name-ru" value={f.name_ru} onChange={set('name_ru')} placeholder="Например: Хлеб, 1 шт" maxLength={200} />
+            <Input id="p-name-ru" value={f.name_ru} onChange={set('name_ru')} placeholder="Например: Хлеб, 1 шт" maxLength={120} />
           </Field>
           <Field label="Nomi (inglizcha)" htmlFor="p-name-en">
-            <Input id="p-name-en" value={f.name_en} onChange={set('name_en')} placeholder="For example: Bread, 1 pc" maxLength={200} />
+            <Input id="p-name-en" value={f.name_en} onChange={set('name_en')} placeholder="For example: Bread, 1 pc" maxLength={120} />
           </Field>
 
           <Field

@@ -93,7 +93,7 @@ class CheckoutPaymentSelector extends ConsumerWidget {
                         ),
                         for (final option in _changeOptions)
                           AppChip(
-                            label: "$option so'm",
+                            label: '$option ${ref.t('common.som')}',
                             selected: changeFrom == option,
                             onTap: () => onChangeFromChanged(option),
                           ),

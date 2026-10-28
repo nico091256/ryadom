@@ -27,17 +27,30 @@ class CartScreen extends ConsumerWidget {
     ref.read(cartControllerProvider.notifier).clear();
   }
 
+  void _goHome(BuildContext context, WidgetRef ref) {
+    ref.read(mainTabProvider.notifier).state = 0;
+    if (GoRouterState.of(context).matchedLocation != '/home') {
+      context.go('/home');
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isEmpty = ref.watch(cartControllerProvider.select((c) => c.isEmpty));
     final shopName = ref.watch(cartControllerProvider.select((c) => c.shopName));
+    final inHomeShell = GoRouterState.of(context).matchedLocation == '/home';
 
     return Scaffold(
       appBar: AppBar(
-        // Opened directly (web refresh / deep link): nothing to pop back to.
-        leading: Navigator.canPop(context)
+        // When shown as a tab inside MainShellScreen (/home), omit the leading back button.
+        automaticallyImplyLeading: !inHomeShell,
+        leading: inHomeShell || Navigator.canPop(context)
             ? null
-            : IconButton(icon: const Icon(LucideIcons.arrowLeft), tooltip: ref.t('common.back'), onPressed: () => context.go('/home')),
+            : IconButton(
+                icon: const Icon(LucideIcons.arrowLeft),
+                tooltip: ref.t('common.back'),
+                onPressed: () => _goHome(context, ref),
+              ),
         title: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,7 +79,7 @@ class CartScreen extends ConsumerWidget {
               title: ref.t('cart.empty'),
               subtitle: ref.t('cart.emptySubtitle'),
               actionLabel: ref.t('cart.startShopping'),
-              onAction: () => context.go('/home'),
+              onAction: () => _goHome(context, ref),
             )
           : const _CartBody(),
       bottomNavigationBar: isEmpty ? null : const _CartBottomBar(),

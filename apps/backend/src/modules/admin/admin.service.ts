@@ -257,9 +257,14 @@ export class AdminService {
   async getShops(query: { q?: string; status?: string; page?: string; limit?: string }) {
     const { page, limit, skip } = parsePagination(query.page, query.limit);
     const where: Prisma.ShopWhereInput = {};
-    if (query.status === 'active') where.is_active = true;
-    else if (query.status === 'inactive') where.is_active = false;
-    else if (query.status === 'pending' || query.status === 'blocked') where.status = query.status as any;
+    if (query.status === 'active') {
+      where.is_active = true;
+      where.status = 'active' as any;
+    } else if (query.status === 'inactive') {
+      where.is_active = false;
+    } else if (query.status === 'pending' || query.status === 'blocked') {
+      where.status = query.status as any;
+    }
     const q = query.q?.trim();
     if (q) {
       where.OR = [
@@ -293,7 +298,10 @@ export class AdminService {
         productCount: _count.products,
         orderCount: _count.orders,
         revenueTiyin: revenue.get(shop.id)?.sum ?? 0,
-        isCurrentlyOpen: shop.is_active && this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
+        isCurrentlyOpen:
+          shop.is_active &&
+          shop.status === ('active' as any) &&
+          this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
       })),
       total,
       page,
@@ -334,7 +342,10 @@ export class AdminService {
       productCount: _count.products,
       orderCount: _count.orders,
       revenueTiyin: revenueAll.get(shopId)?.sum ?? 0,
-      isCurrentlyOpen: shop.is_active && this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
+      isCurrentlyOpen:
+        shop.is_active &&
+        shop.status === ('active' as any) &&
+        this.shopsService.isShopOpen(shop.open_time, shop.close_time, shop.is_open),
       stats: {
         ordersToday,
         orders30d,
@@ -384,7 +395,13 @@ export class AdminService {
         ip: actor.ip,
       });
     }
-    return updated;
+    return {
+      ...updated,
+      isCurrentlyOpen:
+        updated.is_active &&
+        updated.status === ('active' as any) &&
+        this.shopsService.isShopOpen(updated.open_time, updated.close_time, updated.is_open),
+    };
   }
 
   /** Shared implementation of approve / block / unblock: status transition + audit entry. */

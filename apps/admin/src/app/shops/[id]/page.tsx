@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Banknote, Check, Clock, MapPin, Package, Pencil, Phone, ShieldOff, ShoppingBag, Trash2, User } from 'lucide-react';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Product, ShopDetail } from '@/lib/types';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import { SHOP_STATUS_META } from '@/lib/constants';
@@ -102,13 +102,15 @@ export default function ShopDetailPage() {
 
   const toggleShop = async (v: boolean) => {
     if (!shop) return;
+    const prevOpen = shop.isCurrentlyOpen;
     setTogglingShop(true);
-    setShop({ ...shop, is_active: v });
+    setShop({ ...shop, is_active: v, isCurrentlyOpen: v ? prevOpen : false });
     try {
-      await api.updateShop(shop.id, { is_active: v });
+      const updated = await api.updateShop(shop.id, { is_active: v });
+      setShop((s) => (s ? { ...s, ...updated } : s));
       toast.success(v ? "Do'kon faollashtirildi" : "Do'kon o'chirildi");
     } catch (e) {
-      setShop((s) => (s ? { ...s, is_active: !v } : s));
+      setShop((s) => (s ? { ...s, is_active: !v, isCurrentlyOpen: prevOpen } : s));
       toast.error("Holatni o'zgartirib bo'lmadi", errorMessage(e));
     } finally {
       setTogglingShop(false);
@@ -355,9 +357,9 @@ export default function ShopDetailPage() {
                   <TR key={p.id}>
                     <TD>
                       <div className="flex items-center gap-3">
-                        {p.image_url ? (
+                        {resolveMediaUrl(p.image_url) ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image_url} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
+                          <img src={resolveMediaUrl(p.image_url)!} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
                         ) : (
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
                             <Package className="h-4 w-4" />

@@ -97,15 +97,8 @@ class _ShopToolbarState extends ConsumerState<_ShopToolbar> {
 
   void _onChanged(String value) => ref.read(productSearchQueryProvider.notifier).state = value;
 
-  void _clear() {
-    _search.clear();
-    _onChanged('');
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hasQuery = ref.watch(productSearchQueryProvider.select((q) => q.isNotEmpty));
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -116,17 +109,6 @@ class _ShopToolbarState extends ConsumerState<_ShopToolbar> {
             hint: ref.t('shop.searchPlaceholder'),
             controller: _search,
             onChanged: _onChanged,
-            trailing: hasQuery
-                ? Pressable(
-                    onTap: _clear,
-                    scale: 0.9,
-                    child: const SizedBox(
-                      width: 44,
-                      height: _kSearchHeight,
-                      child: Center(child: Icon(LucideIcons.xCircle, size: 18, color: AppColors.ink400)),
-                    ),
-                  )
-                : null,
           ),
         ),
         if (widget.hasCategories) ...[

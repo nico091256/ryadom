@@ -10,6 +10,9 @@ out/
 .expo/
 *.tsbuildinfo
 
+# Build archives (release bundles — regenerate, do not commit)
+*.tar.gz
+
 # Environment variables
 .env
 .env.local

@@ -5,9 +5,8 @@ import { join } from 'path';
 import { fromBuffer } from 'file-type';
 import { UploadsController } from './uploads.controller';
 
-// See uploads.controller.ts: sharp is CJS at runtime but typed as an ESM default export.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const sharp: typeof import('sharp').default = require('sharp');
+const sharp: any = require('sharp');
 
 function asMulterFile(buffer: Buffer, originalname: string, mimetype: string): Express.Multer.File {
   return { buffer, originalname, mimetype, size: buffer.length, fieldname: 'file' } as Express.Multer.File;

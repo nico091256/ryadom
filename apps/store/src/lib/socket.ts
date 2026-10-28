@@ -1,7 +1,7 @@
 'use client';
 
 import { io, type Socket } from 'socket.io-client';
-import { API_ORIGIN, TOKEN_REFRESHED_EVENT, api } from './api';
+import { API_ORIGIN, SESSION_CLEARED_EVENT, TOKEN_REFRESHED_EVENT, api } from './api';
 
 export const SOCKET_EVENTS = {
   ORDER_NEW: 'order:new',
@@ -63,6 +63,9 @@ export function getSocket(): Socket {
     refreshListenerBound = true;
     window.addEventListener(TOKEN_REFRESHED_EVENT, () => {
       if (socket?.connected) reconnect();
+    });
+    window.addEventListener(SESSION_CLEARED_EVENT, () => {
+      disconnectSocket();
     });
   }
   return socket;

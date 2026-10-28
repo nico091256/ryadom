@@ -74,36 +74,26 @@ export class CartService {
       where: { id: dto.shop_id },
     });
 
-    if (!shop || !shop.is_active) {
+    if (!shop || !shop.is_active || (shop.status && shop.status !== ('active' as any))) {
       throw new BadRequestException({
         code: 'SHOP_INACTIVE',
         message: 'The selected shop is currently inactive or unavailable.',
       });
     }
 
-    // Upsert or clear existing cart
-    let cart = existingCart;
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: {
-          user_id: userId,
-          shop_id: dto.shop_id,
-        },
-      });
-    } else if (cart.shop_id !== dto.shop_id) {
-      await this.prisma.cartItem.deleteMany({ where: { cart_id: cart.id } });
-      cart = await this.prisma.cart.update({
-        where: { id: cart.id },
-        data: { shop_id: dto.shop_id },
-      });
+    // Merge duplicate product_ids so stock validation and unique constraint (cart_id, product_id) stay consistent
+    const mergedQuantities = new Map<string, number>();
+    for (const item of dto.items) {
+      mergedQuantities.set(item.product_id, (mergedQuantities.get(item.product_id) ?? 0) + item.quantity);
     }
+    const normalizedItems = Array.from(mergedQuantities.entries()).map(([product_id, quantity]) => ({
+      product_id,
+      quantity,
+    }));
 
-    // Replace items
-    await this.prisma.cartItem.deleteMany({ where: { cart_id: cart.id } });
-
-    if (dto.items.length > 0) {
-      // Validate all products belong to shop and have stock
-      const productIds = dto.items.map((i) => i.product_id);
+    // Validate all products belong to shop and have stock BEFORE deleting existing cart items
+    if (normalizedItems.length > 0) {
+      const productIds = normalizedItems.map((i) => i.product_id);
       const products = await this.prisma.product.findMany({
         where: {
           id: { in: productIds },
@@ -114,7 +104,7 @@ export class CartService {
 
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      for (const item of dto.items) {
+      for (const item of normalizedItems) {
         const prod = productMap.get(item.product_id);
         if (!prod) {
           throw new BadRequestException(`Product ${item.product_id} not found in this shop.`);
@@ -126,15 +116,37 @@ export class CartService {
           });
         }
       }
-
-      await this.prisma.cartItem.createMany({
-        data: dto.items.map((item) => ({
-          cart_id: cart.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-        })),
-      });
     }
+
+    // Upsert cart and replace items atomically
+    await this.prisma.$transaction(async (tx) => {
+      let cart = existingCart;
+      if (!cart) {
+        cart = await tx.cart.create({
+          data: {
+            user_id: userId,
+            shop_id: dto.shop_id,
+          },
+        });
+      } else if (cart.shop_id !== dto.shop_id) {
+        cart = await tx.cart.update({
+          where: { id: cart.id },
+          data: { shop_id: dto.shop_id },
+        });
+      }
+
+      await tx.cartItem.deleteMany({ where: { cart_id: cart.id } });
+
+      if (normalizedItems.length > 0) {
+        await tx.cartItem.createMany({
+          data: normalizedItems.map((item) => ({
+            cart_id: cart!.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+          })),
+        });
+      }
+    });
 
     return this.getCart(userId);
   }

@@ -177,11 +177,14 @@ export class SellerService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Cannot delete product belonging to another shop' });
     }
 
-    // Soft delete via deleted_at (Section 5)
-    await this.prisma.product.update({
-      where: { id: productId },
-      data: { deleted_at: new Date() },
-    });
+    // Soft delete via deleted_at (Section 5) and remove from any active customer carts
+    await this.prisma.$transaction([
+      this.prisma.product.update({
+        where: { id: productId },
+        data: { deleted_at: new Date(), is_available: false },
+      }),
+      this.prisma.cartItem.deleteMany({ where: { product_id: productId } }),
+    ]);
 
     await this.invalidateShopCache(shop.id);
     return { success: true, message: 'Product soft deleted successfully' };
@@ -193,23 +196,30 @@ export class SellerService {
   async getStats(ownerId: string) {
     const shop = await this.getSellerShop(ownerId);
 
-    const now = new Date();
-    // Start of today (00:00)
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Compute day/week/month boundaries in Uzbekistan local time (UTC+5, no DST)
+    const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const localNow = new Date(Date.now() + TZ_OFFSET_MS);
+    const year = localNow.getUTCFullYear();
+    const month = localNow.getUTCMonth();
+    const date = localNow.getUTCDate();
+    const day = localNow.getUTCDay();
 
-    // Start of this week (Monday 00:00) — computed without mutating `now`
-    const day = now.getDay();
+    // Start of today (00:00 Asia/Tashkent expressed as UTC Date)
+    const startOfToday = new Date(Date.UTC(year, month, date) - TZ_OFFSET_MS);
+
+    // Start of this week (Monday 00:00 Asia/Tashkent)
     const daysSinceMonday = day === 0 ? 6 : day - 1;
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+    const startOfWeek = new Date(startOfToday.getTime() - daysSinceMonday * DAY_MS);
 
-    // Start of this month (1st)
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Start of this month (1st 00:00 Asia/Tashkent)
+    const startOfMonth = new Date(Date.UTC(year, month, 1) - TZ_OFFSET_MS);
 
     // One aggregate per window, grouped by status, so the DB does the summing:
     //  - orderCount  = orders created in the window that were not cancelled (what the
     //    store panel labels "ta buyurtma");
     //  - revenueTiyin = delivered orders only — money actually collected, matching the
-    //    admin panel's revenue definition (an accepted-but-not-delivered order is not revenue).
+    //    admin panel's revenue definition (an accepted-but-delivered order is not revenue).
     const [today, thisWeek, thisMonth] = await Promise.all(
       [startOfToday, startOfWeek, startOfMonth].map((since) => this.windowStats(shop.id, since)),
     );

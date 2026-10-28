@@ -150,7 +150,12 @@ class _OrderListState extends ConsumerState<_OrderList> {
         illustration: AppIllustration.noOrders,
         title: ref.t(widget.isHistory ? 'orders.emptyHistory' : 'orders.emptyActive'),
         actionLabel: ref.t('cart.startShopping'),
-        onAction: () => context.go('/home'),
+        onAction: () {
+          ref.read(mainTabProvider.notifier).state = 0;
+          if (GoRouterState.of(context).matchedLocation != '/home') {
+            context.go('/home');
+          }
+        },
       );
     }
 

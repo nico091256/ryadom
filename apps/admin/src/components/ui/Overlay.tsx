@@ -208,7 +208,7 @@ export function ConfirmDialog({
                 invalid={touched && invalid}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={reason.placeholder}
-                maxLength={500}
+                maxLength={300}
               />
             </Field>
           )}

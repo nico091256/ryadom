@@ -36,7 +36,7 @@ describe('NotificationsGateway handshake authentication', () => {
     );
     gateway = new NotificationsGateway(
       jwt,
-      new ConfigService({ JWT_ACCESS_SECRET: TEST_JWT_SECRET }),
+      { get: (k: string) => (k === 'JWT_ACCESS_SECRET' ? TEST_JWT_SECRET : undefined) } as unknown as ConfigService,
       prisma as unknown as PrismaService,
     );
   });
