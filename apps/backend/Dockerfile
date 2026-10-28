@@ -32,4 +32,4 @@ COPY --from=dependencies /app/apps/backend/prisma ./apps/backend/prisma
 
 EXPOSE 4000
 WORKDIR /app/apps/backend
-CMD ["node", "dist/src/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]

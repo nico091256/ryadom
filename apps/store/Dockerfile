@@ -15,6 +15,8 @@ RUN pnpm --filter @localshop/shared build
 COPY apps/store ./apps/store
 WORKDIR /app/apps/store
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm build
 
 FROM base AS runner
@@ -33,4 +35,5 @@ COPY --from=dependencies /app/apps/store/public ./apps/store/public
 
 EXPOSE 3001
 WORKDIR /app/apps/store
-CMD ["node_modules/.bin/next", "start", "-p", "3001"]
+CMD ["sh", "-c", "node_modules/.bin/next start -p ${PORT:-3001}"]
+
