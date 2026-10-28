@@ -237,8 +237,8 @@ CREATE INDEX "orders_customer_id_created_at_idx" ON "orders"("customer_id", "cre
 CREATE INDEX "sms_codes_phone_idx" ON "sms_codes"("phone");
 
 -- Create Spatial Index on shops and addresses for PostGIS ST_DWithin performance
-CREATE INDEX IF NOT EXISTS "shops_geo_gist_idx" ON "shops" USING GIST (ST_SetSRID(ST_MakePoint("lng", "lat"), 4326)::geography);
-CREATE INDEX IF NOT EXISTS "addresses_geo_gist_idx" ON "addresses" USING GIST (ST_SetSRID(ST_MakePoint("lng", "lat"), 4326)::geography);
+CREATE INDEX IF NOT EXISTS "shops_geo_gist_idx" ON "shops" USING GIST ((ST_SetSRID(ST_MakePoint("lng", "lat"), 4326)::geography));
+CREATE INDEX IF NOT EXISTS "addresses_geo_gist_idx" ON "addresses" USING GIST ((ST_SetSRID(ST_MakePoint("lng", "lat"), 4326)::geography));
 
 -- AddForeignKey
 ALTER TABLE "addresses" ADD CONSTRAINT "addresses_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
