@@ -25,13 +25,13 @@
 | 3 | api: Variables kiritildi (DATABASE_URL porti to'g'rilandi) | ✅ |
 | 4 | `sharp` build va `openssl` alpine tuzatildi | ✅ |
 | 5 | api build muvaffaqiyatli (image push) | ✅ |
-| 6 | api: migratsiya + start muvaffaqiyatli (PostgreSQL + Redis connected) | ✅ |
-| 7 | api: domen + `/api/v1/health` tekshirildi (status: ok) | ✅ |
-| 8 | admin servisi yaratildi va ishga tushdi | ✅ |
-| 9 | store servisi yaratildi va ishga tushdi | ✅ |
+| 6 | api: migratsiya + seed muvaffaqiyatli (PostgreSQL + Redis connected) | ✅ |
+| 7 | api: domen + `/api/v1/health` tekshirildi (status: ok, db: up, redis: up) | ✅ |
+| 8 | admin servisi yaratildi, build bo'ldi va ishga tushdi | ✅ |
+| 9 | store servisi yaratildi, build bo'ldi va ishga tushdi | ✅ |
 | 10 | api: CORS_ORIGINS to'ldirildi | ✅ |
-| 11 | custom domenlar qo'shildi (`ryadom.uz` DNS yozuvlari olindi) | 🔄 DNS kutilmoqda |
-| 12 | Flutter web (mobile_client) | ⬜ |
+| 11 | custom domenlar qo'shildi (`ryadom.uz` CNAME yozuvlari olindi) | 🔄 DNS kutilmoqda |
+| 12 | Flutter web (client) Nginx orqali Railway'da ishga tushirildi | ✅ |
 
 ---
 
@@ -145,14 +145,22 @@ CORS_ORIGINS=https://<admin-domen>,https://<store-domen>
 
 ---
 
-## ⬜ QADAM 11 — Custom domen (foydalanuvchida domen bor)
+## 🔄 QADAM 11 — Custom domen (Webname.uz CNAME yozuvlari)
 
-Subdomenlar (domen: **ryadom.uz**):
-- `api.ryadom.uz` → api · `admin.ryadom.uz` → admin · `store.ryadom.uz` → store · `app.ryadom.uz` → Flutter web
+`ryadom.uz` NS serverlari: `ns1.build.webname.uz`, `ns2.build.webname.uz`.
+Webname.uz shaxsiy kabinetida (`https://webname.uz/domains/560021`) kiritiladigan aniq yozuvlar:
 
-Har servisda: **Settings → Networking → Custom Domain** → subdomen yoz → Railway bergan
-**CNAME target**ni DNS (Cloudflare/registrator)ga qo'sh. SSL avtomatik.
-So'ng QADAM 10'dagi `NEXT_PUBLIC_API_URL` va `CORS_ORIGINS` ni custom domenlarga yangila.
+| Host (Nom) | Tip | Qiymat (Target) | TTL | Servis |
+| :--- | :---: | :--- | :---: | :--- |
+| `api` | CNAME | `x7bo6eap.up.railway.app` | Auto / 3600 | Backend API (`api.ryadom.uz`) |
+| `admin` | CNAME | `uf77qk93.up.railway.app` | Auto / 3600 | Platform Admin (`admin.ryadom.uz`) |
+| `store` | CNAME | `bstdj5pn.up.railway.app` | Auto / 3600 | Do'konchi paneli (`store.ryadom.uz`) |
+| `client` | CNAME | `3qt64fos.up.railway.app` | Auto / 3600 | Mijozlar veb-ilovasi (`client.ryadom.uz`) |
+
+**Qoidalar:**
+- Host = faqat prefiks (`api`, `admin`, `store`, `client`) — webname.uz o'zi `.ryadom.uz` qo'shadi.
+- Qiymat = Railway target, oxirida nuqta yo'q, `https://` yo'q — faqat `xxxx.up.railway.app`.
+- Saqlang → Railway o'zi SSL (HTTPS) sertifikat chiqaradi.
 
 ---
 
