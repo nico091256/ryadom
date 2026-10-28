@@ -20,18 +20,25 @@ import type {
 import { isShopOpenNow } from '@localshop/shared';
 
 export function getApiUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
   if (typeof window !== 'undefined' && window.location.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:4000/api/v1`;
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  return 'http://localhost:4000/api/v1';
 }
 
 export function getApiOrigin(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+  }
   if (typeof window !== 'undefined' && window.location.hostname) {
     return `${window.location.protocol}//${window.location.hostname}:4000`;
   }
-  return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+  return 'http://localhost:4000';
 }
+
 
 export const API_URL = getApiUrl();
 export const API_ORIGIN = getApiOrigin();
