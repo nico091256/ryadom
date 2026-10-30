@@ -66,7 +66,7 @@ export function TelegramNotificationsCard() {
   }
 
   const isLinked = status?.is_linked;
-  const botUsername = status?.bot_username || 'DiscoverBPM_bot';
+  const botUsername = status?.bot_username || 'ryadomuz_bot';
   const linkUrl = status?.link_url || `https://t.me/${botUsername}`;
 
   return (
