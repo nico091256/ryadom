@@ -8,6 +8,7 @@ import { Button, Card, EmptyState, ErrorState, PageHeader, Skeleton, useToast } 
 import { ShopStatusCard } from '@/components/shop/ShopStatusCard';
 import { ShopInfoForm } from '@/components/shop/ShopInfoForm';
 import { ShopMetaCard } from '@/components/shop/ShopMetaCard';
+import { TelegramNotificationsCard } from '@/components/shop/TelegramNotificationsCard';
 
 function ShopPageSkeleton() {
   return (
@@ -176,7 +177,8 @@ export default function ShopPage() {
           <div className="xl:col-span-2">
             <ShopInfoForm shop={shop} onSaved={setShop} />
           </div>
-          <div className="xl:self-start">
+          <div className="xl:self-start space-y-6">
+            <TelegramNotificationsCard />
             <ShopMetaCard shop={shop} />
           </div>
         </div>

@@ -7,6 +7,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -17,6 +18,7 @@ import { REDIS_CLIENT } from '../../common/redis/redis.constants';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { PaymentsService } from '../payments/payments.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
 import { ORDER_AUTO_CANCEL_JOB, ORDER_AUTO_CANCEL_QUEUE } from './orders.constants';
 import {
@@ -71,6 +73,7 @@ export class OrdersService {
     @Optional() private metrics?: MetricsService,
     // Shared ioredis client, used only to know whether Redis is reachable right now.
     @Optional() @Inject(REDIS_CLIENT) private redis?: Redis,
+    @Optional() @Inject(forwardRef(() => TelegramService)) private telegramService?: TelegramService,
   ) {}
 
   private warnedQueueOffline = false;
@@ -220,7 +223,7 @@ ${promoLine}` : promoLine;
         include: {
           items: true,
           shop: {
-            select: { id: true, name: true, phone: true, owner_id: true },
+            select: { id: true, name: true, phone: true, owner_id: true, telegram_chat_id: true },
           },
           customer: {
             select: { id: true, name: true, phone: true },
@@ -257,6 +260,13 @@ ${promoLine}` : promoLine;
     // 8. Dispatch High-Priority Push Notification to Seller
     const formattedTotal = formatPrice(order.total_amount);
     this.pushNotificationService.sendNewOrderSellerPush(shop.owner_id, order.id, formattedTotal);
+
+    // 8b. Dispatch Telegram notification to Seller
+    if (this.telegramService) {
+      this.telegramService.sendOrderNotification(order, shop).catch((err) => {
+        this.logger.error(`Failed to send telegram order notification: ${err.message}`);
+      });
+    }
 
     // 9. Schedule the hard auto-cancel job (10-minute acceptance window)
     await this.scheduleAutoCancel(order.id);

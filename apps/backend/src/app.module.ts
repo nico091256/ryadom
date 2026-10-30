@@ -26,6 +26,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -74,6 +75,7 @@ import { AppController } from './app.controller';
     PaymentsModule,
     NotificationsModule,
     UploadsModule,
+    TelegramModule,
   ],
   providers: [
     {

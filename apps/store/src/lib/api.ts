@@ -490,6 +490,23 @@ class ApiService {
   updateOrderStatus(id: string, status: 'on_the_way' | 'delivered') {
     return this.request<Order>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
   }
+
+  // ---------- Telegram Bot ----------
+  getTelegramStatus() {
+    return this.request<{
+      is_linked: boolean;
+      telegram_chat_id: string | null;
+      bot_username: string | null;
+      link_url: string | null;
+      shop_id: string;
+    }>('/telegram/seller/bot-status');
+  }
+
+  unlinkTelegram() {
+    return this.request<{ success: boolean; message: string }>('/telegram/seller/unlink', {
+      method: 'POST',
+    });
+  }
 }
 
 export const api = new ApiService();
