@@ -1,17 +1,61 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, KeyRound, RefreshCw } from 'lucide-react';
+import { CheckCircle2, KeyRound, MapPin, RefreshCw } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Shop } from '@/lib/types';
 import { generatePassword } from '@/lib/format';
-import { Button, Field, Input, Modal, SecretRow, Switch, useToast } from '@/components/ui';
+import {
+  Button,
+  Field,
+  Input,
+  LocationPickerModal,
+  Modal,
+  SecretRow,
+  Switch,
+  useToast,
+  type LocationPickerResult,
+} from '@/components/ui';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const PHONE_RE = /^\+998\d{9}$/;
 const TASHKENT = { lat: 41.2995, lng: 69.2401 };
 
 type Errors = Record<string, string>;
+
+/** Xarita pickeri uchun boshlang'ich nuqta: forma qiymatlari yaroqli bo'lsa, aks holda null (Toshkent markazi). */
+function pickerInitial(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  const a = Number(lat);
+  const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && !(a === 0 && b === 0) ? { lat: a, lng: b } : null;
+}
+
+/** Xaritadan tanlangan nuqtani forma holatiga yozadi (lat/lng 6 xonali; manzil topilsa u ham). */
+function withPickedLocation<T extends Record<string, any>>(prev: T, r: LocationPickerResult): T {
+  return { ...prev, lat: String(r.lat), lng: String(r.lng), address_text: r.address || prev.address_text };
+}
+
+function clearLocationErrors(prev: Errors): Errors {
+  const next = { ...prev };
+  delete next.lat;
+  delete next.lng;
+  delete next.address_text;
+  return next;
+}
+
+/** "Xaritadan belgilash 📍" tugmasi + izoh — Create va Edit formalarida bir xil. */
+function MapPickButton({ onClick, hint }: { onClick: () => void; hint?: string }) {
+  return (
+    <div className="sm:col-span-2">
+      <Button type="button" variant="secondary" size="sm" icon={<MapPin className="h-3.5 w-3.5" />} onClick={onClick}>
+        Xaritadan belgilash 📍
+      </Button>
+      <p className="mt-1.5 text-xs text-slate-500">
+        Xaritada nuqta tanlansa koordinata (6 xonali) va manzil avtomatik to'ldiriladi.{hint ? ` ${hint}` : ''}
+      </p>
+    </div>
+  );
+}
 
 function validateCommon(f: Record<string, any>): Errors {
   const e: Errors = {};
@@ -86,16 +130,24 @@ export function CreateShopModal({
   const [f, setF] = useState(blank);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
       setF(blank());
       setErrors({});
+      setPickerOpen(false);
     }
   }, [open]);
 
   const set = (k: keyof ReturnType<typeof blank>) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
+
+  const applyLocation = (r: LocationPickerResult) => {
+    setF((p) => withPickedLocation(p, r));
+    setErrors(clearLocationErrors);
+    setPickerOpen(false);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,9 +224,10 @@ export function CreateShopModal({
           <Field label="Kenglik (lat)" required error={errors.lat}>
             <Input type="number" step="0.000001" value={f.lat} onChange={set('lat')} invalid={!!errors.lat} />
           </Field>
-          <Field label="Uzunlik (lng)" required error={errors.lng} hint="Xaridorlar do'konni 3 km radiusda ko'radi">
+          <Field label="Uzunlik (lng)" required error={errors.lng}>
             <Input type="number" step="0.000001" value={f.lng} onChange={set('lng')} invalid={!!errors.lng} />
           </Field>
+          <MapPickButton onClick={() => setPickerOpen(true)} hint="Xaridorlar do'konni 3 km radiusda ko'radi." />
         </fieldset>
 
         <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -206,6 +259,12 @@ export function CreateShopModal({
           </Field>
         </fieldset>
       </form>
+      <LocationPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        initial={pickerInitial(f.lat, f.lng)}
+        onConfirm={applyLocation}
+      />
     </Modal>
   );
 }
@@ -223,9 +282,17 @@ export function EditShopModal({
   const [f, setF] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const applyLocation = (r: LocationPickerResult) => {
+    setF((p) => withPickedLocation(p, r));
+    setErrors(clearLocationErrors);
+    setPickerOpen(false);
+  };
 
   useEffect(() => {
     if (shop) {
+      setPickerOpen(false);
       setF({
         name: shop.name,
         phone: shop.phone,
@@ -324,6 +391,7 @@ export function EditShopModal({
         <Field label="Uzunlik (lng)" required error={errors.lng}>
           <Input type="number" step="0.000001" value={f.lng ?? ''} onChange={set('lng')} invalid={!!errors.lng} />
         </Field>
+        <MapPickButton onClick={() => setPickerOpen(true)} />
         <Field label="Ochiladi" required error={errors.open_time}>
           <Input type="time" value={f.open_time ?? ''} onChange={set('open_time')} invalid={!!errors.open_time} />
         </Field>
@@ -348,6 +416,12 @@ export function EditShopModal({
           <Switch checked={!!f.is_open} onChange={(v) => setF((p) => ({ ...p, is_open: v }))} label="Ochiq" />
         </div>
       </form>
+      <LocationPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        initial={pickerInitial(f.lat, f.lng)}
+        onConfirm={applyLocation}
+      />
     </Modal>
   );
 }

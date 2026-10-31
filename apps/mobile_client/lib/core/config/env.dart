@@ -5,15 +5,21 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:4000/api/v1
 ///
 /// Falls back to sensible dev defaults (Android emulator's host alias,
-/// localhost for web/iOS simulator) when not provided — mirrors the RN app's
-/// dev convenience, but as an explicit, overridable default instead of a
-/// hardcoded LAN IP.
+/// localhost for web/iOS simulator) when not provided.
+///
+/// The socket/media root is DERIVED from API_BASE_URL unless SOCKET_URL is set
+/// explicitly: a production web build served from client.ryadom.uz with
+/// API_BASE_URL=https://api.ryadom.uz/api/v1 must load images and the
+/// realtime socket from api.ryadom.uz — not from "client.ryadom.uz:4000",
+/// which is what the old page-host fallback produced.
 class Env {
   Env._();
 
+  static const _apiOverride = String.fromEnvironment('API_BASE_URL');
+  static const _socketOverride = String.fromEnvironment('SOCKET_URL');
+
   static String get apiBaseUrl {
-    const override = String.fromEnvironment('API_BASE_URL');
-    if (override.isNotEmpty) return override;
+    if (_apiOverride.isNotEmpty) return _apiOverride;
 
     if (kIsWeb) {
       final host = Uri.base.host;
@@ -27,28 +33,31 @@ class Env {
 
   /// Socket.IO server root (no /api/v1 suffix — the gateway is mounted at /).
   static String get socketUrl {
-    const override = String.fromEnvironment('SOCKET_URL');
-    if (override.isNotEmpty) return override;
-
-    if (kIsWeb) {
-      final host = Uri.base.host;
-      if (host.isNotEmpty) return 'http://$host:4000';
-      return 'http://localhost:4000';
-    }
-
-    final api = apiBaseUrl;
-    final idx = api.indexOf('/api');
-    return idx == -1 ? api : api.substring(0, idx);
+    if (_socketOverride.isNotEmpty) return _stripTrailingSlash(_socketOverride);
+    return apiOrigin;
   }
+
+  /// The API host without the `/api/v1` prefix — where static `/uploads/*` and
+  /// the socket live. Always consistent with [apiBaseUrl].
+  static String get apiOrigin => _stripApiPrefix(apiBaseUrl);
 
   /// Root for server-relative media paths like "/uploads/abc.webp" — static
   /// files are served from the API host without the /api/v1 prefix.
-  static String get mediaBaseUrl => socketUrl;
+  static String get mediaBaseUrl => apiOrigin;
 
   /// Resolves a server-relative path (or passes through an already-absolute
   /// url) to something an Image widget can load directly.
   static String resolveMediaUrl(String pathOrUrl) {
-    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl;
-    return '$mediaBaseUrl$pathOrUrl';
+    final v = pathOrUrl.trim();
+    if (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('data:') || v.startsWith('blob:')) return v;
+    if (v.startsWith('//')) return '${Uri.parse(apiBaseUrl).scheme}:$v';
+    return v.startsWith('/') ? '$mediaBaseUrl$v' : '$mediaBaseUrl/$v';
   }
+
+  static String _stripApiPrefix(String api) {
+    final idx = api.indexOf('/api');
+    return _stripTrailingSlash(idx == -1 ? api : api.substring(0, idx));
+  }
+
+  static String _stripTrailingSlash(String s) => s.endsWith('/') ? s.substring(0, s.length - 1) : s;
 }

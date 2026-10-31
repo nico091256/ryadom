@@ -6,8 +6,10 @@ import { api, errorMessage } from '@/lib/api';
 import type { Shop } from '@/lib/types';
 import { Button, Card, EmptyState, ErrorState, PageHeader, Skeleton, useToast } from '@/components/ui';
 import { ShopStatusCard } from '@/components/shop/ShopStatusCard';
+import { ShopBannerUploader } from '@/components/shop/ShopBannerUploader';
 import { ShopInfoForm } from '@/components/shop/ShopInfoForm';
 import { ShopMetaCard } from '@/components/shop/ShopMetaCard';
+import { PosIntegrationCard } from '@/components/shop/PosIntegrationCard';
 
 function ShopPageSkeleton() {
   return (
@@ -173,13 +175,16 @@ export default function ShopPage() {
         <ShopStatusCard shop={shop} toggling={toggling} onToggleOpen={toggleOpen} onUpdated={setShop} />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+          <div className="space-y-6 xl:col-span-2">
+            <ShopBannerUploader shop={shop} onUpdated={setShop} />
             <ShopInfoForm shop={shop} onSaved={setShop} />
           </div>
           <div className="xl:self-start">
             <ShopMetaCard shop={shop} />
           </div>
         </div>
+
+        <PosIntegrationCard shop={shop} onUpdated={setShop} />
       </div>
     </>
   );

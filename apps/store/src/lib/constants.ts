@@ -1,4 +1,14 @@
-import type { OrderStatus, PaymentMethod, PaymentStatus, ShopStatus, UserRole } from './types';
+import type { OrderStatus, PaymentMethod, PaymentStatus, PosType, ShopStatus, UserRole } from './types';
+
+/** Kassa tizimlari (backend modules/pos/pos.constants.ts bilan bir xil ro'yxat). */
+export const POS_TYPES: { value: PosType; label: string }[] = [
+  { value: 'custom', label: "Boshqa / o'z integratsiyam (API)" },
+  { value: '1c', label: '1C' },
+  { value: 'jowi', label: 'Jowi' },
+  { value: 'iiko', label: 'iiko' },
+  { value: 'billz', label: 'Billz' },
+  { value: 'poster', label: 'Poster' },
+];
 
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'accepted', 'on_the_way', 'delivered', 'cancelled'];
 

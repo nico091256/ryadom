@@ -5,6 +5,7 @@ import { ExternalLink, MapPin, Phone, RotateCcw, Save } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Shop, UpdateShopPayload } from '@/lib/types';
 import { Button, Card, CardHeader, Field, Input, Textarea, useToast } from '@/components/ui';
+import { MapLocationModal, type MapLocationResult } from './MapLocationModal';
 
 const PHONE_RE = /^\+998\d{9}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -15,6 +16,17 @@ interface FormState {
   address_text: string;
   open_time: string;
   close_time: string;
+  lat: number;
+  lng: number;
+}
+
+function toCoord(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function hasValidCoords(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
@@ -32,6 +44,8 @@ function fromShop(shop: Shop): FormState {
     address_text: shop.address_text ?? '',
     open_time: normalizeTime(shop.open_time ?? ''),
     close_time: normalizeTime(shop.close_time ?? ''),
+    lat: toCoord(shop.lat),
+    lng: toCoord(shop.lng),
   };
 }
 
@@ -55,13 +69,14 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
 
   // Keep the form in sync when the shop changes from outside (logo upload, is_open toggle, refetch).
   // Editable fields are only re-seeded when the user has no unsaved edits.
   useEffect(() => {
     if (!touched) setForm(fromShop(shop));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shop.id, shop.name, shop.phone, shop.address_text, shop.open_time, shop.close_time]);
+  }, [shop.id, shop.name, shop.phone, shop.address_text, shop.open_time, shop.close_time, shop.lat, shop.lng]);
 
   const initial = useMemo(() => fromShop(shop), [shop]);
 
@@ -77,6 +92,11 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
     if (address !== initial.address_text) p.address_text = address;
     if (open !== initial.open_time) p.open_time = open;
     if (close !== initial.close_time) p.close_time = close;
+    // Koordinata xaritada o'zgartirilsa lat/lng birga yuboriladi.
+    if (form.lat !== initial.lat || form.lng !== initial.lng) {
+      p.lat = form.lat;
+      p.lng = form.lng;
+    }
     return p;
   }, [form, initial]);
 
@@ -92,6 +112,19 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
     setForm(fromShop(shop));
     setErrors({});
     setTouched(false);
+  };
+
+  // Xaritadan tanlangan koordinata va manzilni formaga yozadi (saqlash tugmasi orqali saqlanadi).
+  const applyMapLocation = (loc: MapLocationResult) => {
+    setTouched(true);
+    setForm((f) => ({
+      ...f,
+      lat: loc.lat,
+      lng: loc.lng,
+      address_text: loc.address.trim() || f.address_text,
+    }));
+    setErrors((e) => ({ ...e, address_text: undefined }));
+    setMapOpen(false);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -122,10 +155,11 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
     }
   };
 
-  const hasCoords = Number.isFinite(Number(shop.lat)) && Number.isFinite(Number(shop.lng)) && !(Number(shop.lat) === 0 && Number(shop.lng) === 0);
-  const mapHref = hasCoords ? `https://yandex.uz/maps/?text=${shop.lat},${shop.lng}` : null;
+  const hasCoords = hasValidCoords(form.lat, form.lng);
+  const mapHref = hasCoords ? `https://yandex.uz/maps/?text=${form.lat},${form.lng}` : null;
 
   return (
+    <>
     <Card>
       <CardHeader
         title="Do'kon ma'lumotlari"
@@ -208,7 +242,7 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
 
           <Field
             label="Joylashuv (xaritada)"
-            hint="Joylashuv administrator tomonidan o'zgartiriladi. Noto'g'ri bo'lsa, administratorga murojaat qiling."
+            hint="Xaritadan aniq joyni tanlang — koordinata va manzil shu bo'yicha saqlanadi."
             className="sm:col-span-2"
           >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -216,23 +250,35 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
                 <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
                 {hasCoords ? (
                   <span className="font-mono text-slate-700 tabular-nums">
-                    {Number(shop.lat).toFixed(6)}, {Number(shop.lng).toFixed(6)}
+                    {form.lat.toFixed(6)}, {form.lng.toFixed(6)}
                   </span>
                 ) : (
                   <span className="text-slate-500">Koordinatalar belgilanmagan</span>
                 )}
               </div>
-              {mapHref && (
-                <a
-                  href={mapHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline"
+              <div className="flex items-center gap-3">
+                {mapHref && (
+                  <a
+                    href={mapHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                  >
+                    Ko'rish
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={<MapPin className="h-3.5 w-3.5" />}
+                  onClick={() => setMapOpen(true)}
+                  disabled={saving}
                 >
-                  Yandex xaritada ko'rish
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
+                  Xaritadan tanlash
+                </Button>
+              </div>
             </div>
           </Field>
         </div>
@@ -245,5 +291,13 @@ export function ShopInfoForm({ shop, onSaved }: { shop: Shop; onSaved: (shop: Sh
         </div>
       </form>
     </Card>
+
+    <MapLocationModal
+      open={mapOpen}
+      onClose={() => setMapOpen(false)}
+      initial={hasValidCoords(form.lat, form.lng) ? { lat: form.lat, lng: form.lng } : null}
+      onConfirm={applyMapLocation}
+    />
+    </>
   );
 }

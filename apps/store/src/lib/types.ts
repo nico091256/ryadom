@@ -38,6 +38,8 @@ export interface Shop {
   city_id: string;
   name: string;
   logo_url: string | null;
+  /** Wide 16:9 cover shown in the customer app. */
+  banner_url: string | null;
   phone: string;
   address_text: string;
   lat: number;
@@ -50,19 +52,33 @@ export interface Shop {
   is_active: boolean;
   status: ShopStatus;
   commission_rate_percent: number;
+  /** POS (kassa) integratsiyasi — kalit faqat do'kon egasiga qaytadi. */
+  pos_api_key: string | null;
+  pos_type: PosType;
+  pos_webhook_url: string | null;
   created_at: string;
   updated_at: string;
   city?: City | null;
+}
+
+export type PosType = 'custom' | '1c' | 'jowi' | 'iiko' | 'billz' | 'poster';
+
+export interface PosSettingsPayload {
+  pos_type: PosType;
+  pos_webhook_url: string | null;
 }
 
 export interface UpdateShopPayload {
   name?: string;
   phone?: string;
   logo_url?: string | null;
+  banner_url?: string | null;
   address_text?: string;
   open_time?: string;
   close_time?: string;
   is_open?: boolean;
+  lat?: number;
+  lng?: number;
 }
 
 export interface Category {
@@ -87,6 +103,10 @@ export interface Product {
   /** Integer tiyin. */
   price: number;
   image_url: string | null;
+  /** Shtrix-kod (EAN/UPC yoki ichki kod) — do'kon ichida unikal. */
+  barcode: string | null;
+  /** Artikul / SKU. */
+  sku: string | null;
   stock: number;
   is_available: boolean;
   deleted_at: string | null;
@@ -107,6 +127,9 @@ export interface ProductPayload {
   /** Integer tiyin >= 0. */
   price: number;
   image_url?: string | null;
+  /** `null` clears the code on update. */
+  barcode?: string | null;
+  sku?: string | null;
   stock: number;
   is_available?: boolean;
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/providers.dart';
 import '../data/geocoding_api.dart';
 import '../domain/selected_address.dart';
 
@@ -13,7 +14,7 @@ class LocationException implements Exception {
   final LocationFailureReason reason;
 }
 
-final geocodingApiProvider = Provider<GeocodingApi>((ref) => GeocodingApi());
+final geocodingApiProvider = Provider<GeocodingApi>((ref) => GeocodingApi(ref.read(apiClientProvider)));
 
 final addressControllerProvider = NotifierProvider<AddressController, SelectedAddress>(AddressController.new);
 
