@@ -15,7 +15,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@localshop/shared';
-import { CreateProductDto, SellerProductsQueryDto, UpdateProductDto, UpdateShopProfileDto } from './seller.dto';
+import {
+  CreateProductDto,
+  SellerProductsQueryDto,
+  UpdatePosSettingsDto,
+  UpdateProductDto,
+  UpdateShopProfileDto,
+} from './seller.dto';
 
 @ApiTags('Seller')
 @ApiBearerAuth()
@@ -38,6 +44,26 @@ export class SellerController {
     @Body() dto: UpdateShopProfileDto,
   ) {
     return this.sellerService.updateShopProfile(sellerId, dto);
+  }
+
+  // ---------- POS (cash register) integration ----------
+
+  @Post('pos/api-key')
+  @ApiOperation({ summary: 'Generate (or rotate) the shop POS API key; the previous key stops working at once' })
+  async generatePosApiKey(@CurrentUser('id') sellerId: string) {
+    return this.sellerService.generatePosApiKey(sellerId);
+  }
+
+  @Delete('pos/api-key')
+  @ApiOperation({ summary: 'Revoke the shop POS API key (disables the cash-register integration)' })
+  async revokePosApiKey(@CurrentUser('id') sellerId: string) {
+    return this.sellerService.revokePosApiKey(sellerId);
+  }
+
+  @Put('pos')
+  @ApiOperation({ summary: 'Set the POS vendor type and the new-order webhook URL' })
+  async updatePosSettings(@CurrentUser('id') sellerId: string, @Body() dto: UpdatePosSettingsDto) {
+    return this.sellerService.updatePosSettings(sellerId, dto);
   }
 
   @Get('products')

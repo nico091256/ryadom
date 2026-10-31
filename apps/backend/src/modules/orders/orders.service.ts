@@ -16,6 +16,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.constants';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
+import { PosWebhookService } from '../pos/pos-webhook.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
 import { ORDER_AUTO_CANCEL_JOB, ORDER_AUTO_CANCEL_QUEUE } from './orders.constants';
@@ -71,6 +72,8 @@ export class OrdersService {
     @Optional() private metrics?: MetricsService,
     // Shared ioredis client, used only to know whether Redis is reachable right now.
     @Optional() @Inject(REDIS_CLIENT) private redis?: Redis,
+    // Cash-register webhook; optional so unit tests and the auto-cancel processor can omit it.
+    @Optional() private posWebhook?: PosWebhookService,
   ) {}
 
   private warnedQueueOffline = false;
@@ -257,6 +260,9 @@ ${promoLine}` : promoLine;
     // 8. Dispatch High-Priority Push Notification to Seller
     const formattedTotal = formatPrice(order.total_amount);
     this.pushNotificationService.sendNewOrderSellerPush(shop.owner_id, order.id, formattedTotal);
+
+    // 8b. Cash-register (POS) webhook — fire-and-forget, never delays or fails checkout.
+    this.posWebhook?.dispatchNewOrder(shop.id, order);
 
     // 9. Schedule the hard auto-cancel job (10-minute acceptance window)
     await this.scheduleAutoCancel(order.id);

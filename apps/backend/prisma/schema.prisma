@@ -155,6 +155,8 @@ model Shop {
   city_id                 String
   name                    String
   logo_url                String?
+  /// Wide (16:9) cover photo shown in the customer app; logo_url stays the round brand mark. 11_shop_banner_url.
+  banner_url              String?
   phone                   String
   address_text            String
   lat                     Float
@@ -165,6 +167,11 @@ model Shop {
   is_active               Boolean   @default(true)
   status                  ShopStatus @default(active)
   commission_rate_percent Float     @default(0)
+  /// POS (1C / Jowi / iiko / Billz / Poster / custom) integration — see modules/pos. 13_shop_pos_integration.
+  /// pos_api_key authenticates the shop's cash-register software on /pos/*; null = integration off.
+  pos_api_key             String?   @unique
+  pos_type                String    @default("custom")
+  pos_webhook_url         String?
   created_at              DateTime  @default(now())
   updated_at              DateTime  @updatedAt
 
@@ -210,6 +217,10 @@ model Product {
   description_en String?
   price          Int         // stored in tiyin (1 UZS = 100 tiyin)
   image_url      String?
+  /// Scanner / POS identifiers (12_product_barcode_sku). The barcode is unique per shop, not globally:
+  /// the same EAN (e.g. a Coca-Cola bottle) is legitimately sold by many shops.
+  barcode        String?
+  sku            String?
   stock          Int         @default(0)
   is_available   Boolean     @default(true)
   deleted_at     DateTime?   // soft delete
@@ -221,6 +232,7 @@ model Product {
   cart_items     CartItem[]
   order_items    OrderItem[]
 
+  @@unique([shop_id, barcode])
   @@index([shop_id, is_available, deleted_at])
   @@index([category_id])
   @@map("products")

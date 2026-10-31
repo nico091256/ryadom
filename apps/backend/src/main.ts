@@ -79,11 +79,15 @@ async function bootstrap() {
   // Serve uploaded images (avatars, product photos, shop logos) from the same
   // directory the uploads controller writes to (UPLOAD_DIR). Names are random
   // UUIDs, so the files never change and can be cached for good.
-  app.useStaticAssets(uploadDir(), {
+  const uploadsPath = uploadDir();
+  app.useStaticAssets(uploadsPath, {
     prefix: '/uploads/',
     maxAge: '30d',
     immutable: true,
   });
+  // The absolute path is logged so a wrong UPLOAD_DIR / WORKDIR in a container is
+  // visible at boot instead of surfacing as 404s on product and shop images.
+  logger.log(`Serving uploads from ${uploadsPath} at /uploads/`);
 
   // Global request validation pipeline
   app.useGlobalPipes(

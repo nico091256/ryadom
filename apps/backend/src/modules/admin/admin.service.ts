@@ -372,6 +372,7 @@ export class AdminService {
       'is_active',
       'commission_rate_percent',
       'logo_url',
+      'banner_url',
     ] as const;
     const data: Prisma.ShopUpdateInput = {};
     for (const f of fields) {
