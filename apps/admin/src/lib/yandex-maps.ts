@@ -75,6 +75,9 @@ export function loadYandexMaps(): Promise<YMaps> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Yandex Maps faqat brauzerda yuklanadi'));
   }
+  if (window.ymaps) {
+    return new Promise((resolve) => window.ymaps!.ready(() => resolve(window.ymaps!)));
+  }
   if (loaderPromise) return loaderPromise;
 
   const apiKey =
@@ -84,21 +87,9 @@ export function loadYandexMaps(): Promise<YMaps> {
   }
 
   loaderPromise = new Promise<YMaps>((resolve, reject) => {
-    if (window.ymaps) {
-      window.ymaps.ready(() => resolve(window.ymaps as YMaps));
-      return;
-    }
-
     const existing = document.getElementById('yandex-maps-script') as HTMLScriptElement | null;
-    const onReady = () => {
-      if (window.ymaps) window.ymaps.ready(() => resolve(window.ymaps as YMaps));
-      else reject(new Error('Yandex Maps yuklanmadi'));
-    };
-
     if (existing) {
-      existing.addEventListener('load', onReady);
-      existing.addEventListener('error', () => reject(new Error('Yandex Maps skripti yuklanmadi')));
-      return;
+      existing.remove();
     }
 
     const script = document.createElement('script');
@@ -106,12 +97,22 @@ export function loadYandexMaps(): Promise<YMaps> {
     // lang=ru_RU — Yandex Maps 2.1 uz_UZ ni qo'llamaydi.
     script.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
     script.async = true;
-    script.addEventListener('load', onReady);
-    script.addEventListener('error', () => {
-      loaderPromise = null; // keyingi urinishda qayta yuklashga imkon ber
+    script.onload = () => {
+      if (window.ymaps) {
+        window.ymaps.ready(() => resolve(window.ymaps as YMaps));
+      } else {
+        loaderPromise = null;
+        reject(new Error('Yandex Maps yuklanmadi'));
+      }
+    };
+    script.onerror = () => {
+      loaderPromise = null;
       reject(new Error('Yandex Maps skripti yuklanmadi'));
-    });
+    };
     document.head.appendChild(script);
+  }).catch((err) => {
+    loaderPromise = null;
+    throw err;
   });
 
   return loaderPromise;
