@@ -3,6 +3,7 @@ import type {
   Order,
   OrderStatus,
   Paginated,
+  PosSettingsPayload,
   Product,
   ProductPayload,
   SellerStats,
@@ -420,6 +421,20 @@ class ApiService {
 
   updateShop(payload: UpdateShopPayload) {
     return this.request<Shop>('/seller/shop', { method: 'PUT', body: JSON.stringify(payload) });
+  }
+
+  // ---------- Seller: POS (kassa) integration ----------
+  /** Issues a new key; the previous one stops working immediately. */
+  generatePosApiKey() {
+    return this.request<{ pos_api_key: string }>('/seller/pos/api-key', { method: 'POST' });
+  }
+
+  revokePosApiKey() {
+    return this.request<Shop>('/seller/pos/api-key', { method: 'DELETE' });
+  }
+
+  updatePosSettings(payload: PosSettingsPayload) {
+    return this.request<Shop>('/seller/pos', { method: 'PUT', body: JSON.stringify(payload) });
   }
 
   // ---------- Seller: products ----------

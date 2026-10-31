@@ -28,10 +28,11 @@ import {
 import { ProductImage } from '@/components/products/ProductImage';
 import { ProductFormModal } from '@/components/products/ProductFormModal';
 
+/** Name in any language, barcode or SKU — a scanner typing a barcode + Enter lands on exactly one row. */
 function matches(p: Product, q: string): boolean {
   if (!q) return true;
   const needle = q.toLowerCase();
-  return [p.name_uz, p.name_ru, p.name_en].some((n) => (n ?? '').toLowerCase().includes(needle));
+  return [p.name_uz, p.name_ru, p.name_en, p.barcode, p.sku].some((n) => (n ?? '').toLowerCase().includes(needle));
 }
 
 export default function ProductsPage() {
@@ -144,7 +145,7 @@ export default function ProductsPage() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <SearchInput value={q} onChange={setQ} placeholder="Mahsulot nomi bo'yicha qidirish" className="sm:w-80" />
+          <SearchInput value={q} onChange={setQ} placeholder="Nomi, shtrix-kod yoki SKU bo'yicha qidirish" className="sm:w-80" />
           {isSearching && products && (
             <p className="text-sm text-slate-500">
               <span className="font-medium text-slate-700">{formatNumber(rows.length)}</span> / {formatNumber(total)} ta topildi
@@ -205,6 +206,11 @@ export default function ProductsPage() {
                               {p.name_uz}
                             </p>
                             {p.name_ru && <p className="max-w-[280px] truncate text-xs text-slate-400">{p.name_ru}</p>}
+                            {(p.barcode || p.sku) && (
+                              <p className="max-w-[280px] truncate font-mono text-[11px] text-slate-400" title="Shtrix-kod · SKU">
+                                {[p.barcode, p.sku].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </TD>

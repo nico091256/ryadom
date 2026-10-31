@@ -1,4 +1,12 @@
-import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/redis/cache.service';
 import {
@@ -6,10 +14,31 @@ import {
   SELLER_PRODUCTS_DEFAULT_LIMIT,
   SELLER_PRODUCTS_MAX_LIMIT,
   SELLER_PRODUCTS_UNPAGED_CAP,
+  UpdatePosSettingsDto,
   UpdateProductDto,
   UpdateShopProfileDto,
 } from './seller.dto';
 import { OrderStatus } from '@localshop/shared';
+import { POS_API_KEY_PREFIX } from '../pos/pos.constants';
+import { isSafeWebhookUrl } from '../pos/pos-webhook.service';
+
+/** '' and whitespace become null so an empty form field clears the code instead of storing ''. */
+function normalizeCode(value: string | null | undefined): string | null {
+  const s = (value ?? '').trim();
+  return s ? s : null;
+}
+
+/** Prisma unique-constraint violation (products_shop_id_barcode_key). */
+function isUniqueViolation(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { code?: string }).code === 'P2002';
+}
+
+function barcodeTaken(): ConflictException {
+  return new ConflictException({
+    code: 'BARCODE_TAKEN',
+    message: 'Another product in this shop already uses this barcode.',
+  });
+}
 
 @Injectable()
 export class SellerService {
@@ -48,22 +77,70 @@ export class SellerService {
   async updateShopProfile(ownerId: string, dto: UpdateShopProfileDto) {
     const shop = await this.getSellerShop(ownerId);
 
+    // lat/lng xaritadan birga keladi; biri kelib ikkinchisi kelmasa — noto'g'ri so'rov.
+    if ((dto.lat === undefined) !== (dto.lng === undefined)) {
+      throw new BadRequestException({
+        code: 'INVALID_COORDINATES',
+        message: 'lat and lng must be provided together',
+      });
+    }
+
     const updated = await this.prisma.shop.update({
       where: { id: shop.id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
         ...(dto.logo_url !== undefined ? { logo_url: dto.logo_url } : {}),
+        ...(dto.banner_url !== undefined ? { banner_url: dto.banner_url } : {}),
         ...(dto.address_text !== undefined ? { address_text: dto.address_text } : {}),
         ...(dto.open_time !== undefined ? { open_time: dto.open_time } : {}),
         ...(dto.close_time !== undefined ? { close_time: dto.close_time } : {}),
         ...(dto.is_open !== undefined ? { is_open: dto.is_open } : {}),
+        // Nearby qidiruvi lat/lng dan ST_MakePoint bilan hisoblaydi (alohida geo ustun yo'q).
+        ...(dto.lat !== undefined ? { lat: dto.lat } : {}),
+        ...(dto.lng !== undefined ? { lng: dto.lng } : {}),
       },
       include: { city: true },
     });
 
     await this.invalidateShopCache(shop.id);
     return updated;
+  }
+
+  // ---------- POS (cash register) integration ----------
+
+  /** Issues a fresh key; any previous key stops authenticating immediately. The key is returned once here. */
+  async generatePosApiKey(ownerId: string) {
+    const shop = await this.getSellerShop(ownerId);
+    const key = `${POS_API_KEY_PREFIX}${randomBytes(24).toString('base64url')}`;
+    await this.prisma.shop.update({ where: { id: shop.id }, data: { pos_api_key: key } });
+    return { pos_api_key: key };
+  }
+
+  async revokePosApiKey(ownerId: string) {
+    const shop = await this.getSellerShop(ownerId);
+    return this.prisma.shop.update({
+      where: { id: shop.id },
+      data: { pos_api_key: null },
+      include: { city: true },
+    });
+  }
+
+  async updatePosSettings(ownerId: string, dto: UpdatePosSettingsDto) {
+    const shop = await this.getSellerShop(ownerId);
+    const url = dto.pos_webhook_url?.trim() || null;
+    // The dispatcher refuses private targets anyway; failing here tells the seller why nothing arrives.
+    if (url && !isSafeWebhookUrl(url)) {
+      throw new BadRequestException({
+        code: 'WEBHOOK_URL_NOT_ALLOWED',
+        message: 'pos_webhook_url must be a public http(s) address (no localhost / private networks).',
+      });
+    }
+    return this.prisma.shop.update({
+      where: { id: shop.id },
+      data: { pos_type: dto.pos_type, pos_webhook_url: url },
+      include: { city: true },
+    });
   }
 
   /**
@@ -109,23 +186,31 @@ export class SellerService {
     const nameRu = dto.name_ru || primaryName;
     const nameEn = dto.name_en || primaryName;
 
-    const created = await this.prisma.product.create({
-      data: {
-        shop_id: shop.id,
-        category_id: dto.category_id,
-        name_uz: nameUz,
-        name_ru: nameRu,
-        name_en: nameEn,
-        description_uz: dto.description_uz || null,
-        description_ru: dto.description_ru || dto.description_uz || null,
-        description_en: dto.description_en || dto.description_uz || null,
-        price: dto.price,
-        image_url: dto.image_url || null,
-        stock: dto.stock,
-        is_available: dto.is_available !== undefined ? dto.is_available : true,
-      },
-      include: { category: true },
-    });
+    let created;
+    try {
+      created = await this.prisma.product.create({
+        data: {
+          shop_id: shop.id,
+          category_id: dto.category_id,
+          name_uz: nameUz,
+          name_ru: nameRu,
+          name_en: nameEn,
+          description_uz: dto.description_uz || null,
+          description_ru: dto.description_ru || dto.description_uz || null,
+          description_en: dto.description_en || dto.description_uz || null,
+          price: dto.price,
+          image_url: dto.image_url || null,
+          barcode: normalizeCode(dto.barcode),
+          sku: normalizeCode(dto.sku),
+          stock: dto.stock,
+          is_available: dto.is_available !== undefined ? dto.is_available : true,
+        },
+        include: { category: true },
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw barcodeTaken();
+      throw err;
+    }
 
     await this.invalidateShopCache(shop.id);
     return created;
@@ -143,23 +228,31 @@ export class SellerService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Cannot edit product belonging to another shop' });
     }
 
-    const updated = await this.prisma.product.update({
-      where: { id: productId },
-      data: {
-        ...(dto.name_uz !== undefined ? { name_uz: dto.name_uz } : {}),
-        ...(dto.name_ru !== undefined ? { name_ru: dto.name_ru } : {}),
-        ...(dto.name_en !== undefined ? { name_en: dto.name_en } : {}),
-        ...(dto.category_id !== undefined ? { category_id: dto.category_id } : {}),
-        ...(dto.description_uz !== undefined ? { description_uz: dto.description_uz } : {}),
-        ...(dto.description_ru !== undefined ? { description_ru: dto.description_ru } : {}),
-        ...(dto.description_en !== undefined ? { description_en: dto.description_en } : {}),
-        ...(dto.price !== undefined ? { price: dto.price } : {}),
-        ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
-        ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
-        ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
-      },
-      include: { category: true },
-    });
+    let updated;
+    try {
+      updated = await this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          ...(dto.name_uz !== undefined ? { name_uz: dto.name_uz } : {}),
+          ...(dto.name_ru !== undefined ? { name_ru: dto.name_ru } : {}),
+          ...(dto.name_en !== undefined ? { name_en: dto.name_en } : {}),
+          ...(dto.category_id !== undefined ? { category_id: dto.category_id } : {}),
+          ...(dto.description_uz !== undefined ? { description_uz: dto.description_uz } : {}),
+          ...(dto.description_ru !== undefined ? { description_ru: dto.description_ru } : {}),
+          ...(dto.description_en !== undefined ? { description_en: dto.description_en } : {}),
+          ...(dto.price !== undefined ? { price: dto.price } : {}),
+          ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
+          ...(dto.barcode !== undefined ? { barcode: normalizeCode(dto.barcode) } : {}),
+          ...(dto.sku !== undefined ? { sku: normalizeCode(dto.sku) } : {}),
+          ...(dto.stock !== undefined ? { stock: dto.stock } : {}),
+          ...(dto.is_available !== undefined ? { is_available: dto.is_available } : {}),
+        },
+        include: { category: true },
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw barcodeTaken();
+      throw err;
+    }
 
     await this.invalidateShopCache(shop.id);
     return updated;

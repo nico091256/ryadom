@@ -46,7 +46,7 @@
 
 ## QARORLAR (foydalanuvchi tasdiqladi)
 
-- **Domen:** `ryadom.uz` → `api.ryadom.uz`, `admin.ryadom.uz`, `store.ryadom.uz`, `app.ryadom.uz`
+- **Domen:** `ryadom.uz` → `api.ryadom.uz`, `admin.ryadom.uz`, `store.ryadom.uz`, `client.ryadom.uz`
 - **Rejim:** TEST — `NODE_ENV=development` + `SMS_PROVIDER=mock` (eskiz hali yo'q; OTP = `123456`).
   Eskiz olingach: `NODE_ENV=production` + `SMS_PROVIDER=eskiz` + `ESKIZ_EMAIL/PASSWORD` + `CORS_ORIGINS`.
 
@@ -62,8 +62,9 @@ REDIS_PASSWORD=${{Redis.REDISPASSWORD}}
 JWT_ACCESS_SECRET=db4a0cb3f0c93d46faf678b206deaac8e65c077c9bb5d573e7c6034ea3c3fa0a
 TRUST_PROXY=true
 SMS_PROVIDER=mock
-CORS_ORIGINS=https://admin.ryadom.uz,https://store.ryadom.uz,https://app.ryadom.uz
+CORS_ORIGINS=https://admin.ryadom.uz,https://store.ryadom.uz,https://client.ryadom.uz
 ```
+> ⚠️ Flutter web prefiksi = `client` (eski `app` emas). `CORS_ORIGINS`da `client.ryadom.uz` turishi shart.
 > `development`da `CORS_ORIGINS`/`eskiz` majburiy emas → boot o'tadi. `DATABASE_URL` baribir
 > haqiqiy PostGIS'ga ulanadi (ilova avval real Postgres'ga urinadi; ulanmasa xotiraga tushadi).
 > **Save bosilganini va to'g'ri environment (`e9979114`) ekanini tekshir** — aks holda konteyner "X is required" bilan yiqiladi.
@@ -164,15 +165,13 @@ Webname.uz shaxsiy kabinetida (`https://webname.uz/domains/560021`) kiritiladiga
 
 ---
 
-## ⬜ QADAM 12 — Flutter web (mobile_client)
+## ✅ QADAM 12 — Flutter web (client) — Railway'da Nginx orqali ONLAYN
 
-Railway statik fayl xizmat qilmaydi. Lokal build + statik hosting (Cloudflare Pages / Netlify / Vercel):
-```
-cd apps/mobile_client
-flutter build web --release --dart-define=API_BASE_URL=https://api.ryadom.uz/api/v1
-# build/web/ ni hosting'ga yukla
-```
-Domenni `CORS_ORIGINS` ga ham qo'sh.
+Flutter web `apps/mobile_client` Docker + Nginx bilan Railway'da ishga tushirilgan.
+- Railway domeni: `https://client-production-8b95.up.railway.app`
+- Custom domen: `client.ryadom.uz` (CNAME → `3qt64fos.up.railway.app`)
+- Build: `--dart-define=API_BASE_URL=https://api.ryadom.uz/api/v1`
+- `client.ryadom.uz` api `CORS_ORIGINS` ga qo'shilishi shart (QARORLAR blokiga qara).
 
 ---
 

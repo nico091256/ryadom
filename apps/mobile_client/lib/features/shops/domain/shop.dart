@@ -3,6 +3,7 @@ class Shop {
     required this.id,
     required this.name,
     this.logoUrl,
+    this.bannerUrl,
     required this.phone,
     required this.addressText,
     required this.lat,
@@ -17,7 +18,10 @@ class Shop {
 
   final String id;
   final String name;
+  /// Round brand mark (avatar in lists / the header card).
   final String? logoUrl;
+  /// Wide 16:9 cover photo; see [coverUrl] for the display fallback.
+  final String? bannerUrl;
   final String phone;
   final String addressText;
   final double lat;
@@ -29,10 +33,19 @@ class Shop {
   final double distanceMeters;
   final int productCount;
 
+  /// What the cover surfaces (Home card, shop page app bar) show: the banner
+  /// when the shop uploaded one, else the logo, else the brand gradient.
+  String? get coverUrl {
+    final b = bannerUrl?.trim();
+    if (b != null && b.isNotEmpty) return b;
+    return logoUrl;
+  }
+
   factory Shop.fromJson(Map<String, dynamic> json) => Shop(
         id: json['id'] as String,
         name: json['name'] as String,
         logoUrl: json['logo_url'] as String?,
+        bannerUrl: json['banner_url'] as String?,
         phone: json['phone'] as String? ?? '',
         addressText: json['address_text'] as String? ?? '',
         lat: (json['lat'] as num).toDouble(),

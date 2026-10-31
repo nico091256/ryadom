@@ -17,6 +17,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.constants';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { PushNotificationService } from '../notifications/push-notification.service';
+import { PosWebhookService } from '../pos/pos-webhook.service';
 import { PaymentsService } from '../payments/payments.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto, RejectOrderDto, CancelOrderDto, UpdateOrderStatusDto, ReviewOrderDto } from './orders.dto';
@@ -74,6 +75,8 @@ export class OrdersService {
     // Shared ioredis client, used only to know whether Redis is reachable right now.
     @Optional() @Inject(REDIS_CLIENT) private redis?: Redis,
     @Optional() @Inject(forwardRef(() => TelegramService)) private telegramService?: TelegramService,
+    // Cash-register webhook; optional so unit tests and the auto-cancel processor can omit it.
+    @Optional() private posWebhook?: PosWebhookService,
   ) {}
 
   private warnedQueueOffline = false;
@@ -267,6 +270,9 @@ ${promoLine}` : promoLine;
         this.logger.error(`Failed to send telegram order notification: ${err.message}`);
       });
     }
+
+    // 8c. Cash-register (POS) webhook — fire-and-forget, never delays or fails checkout.
+    this.posWebhook?.dispatchNewOrder(shop.id, order);
 
     // 9. Schedule the hard auto-cancel job (10-minute acceptance window)
     await this.scheduleAutoCancel(order.id);

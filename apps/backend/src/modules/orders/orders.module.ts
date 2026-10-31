@@ -9,6 +9,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { PosWebhookModule } from '../pos/pos-webhook.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { TelegramModule } from '../telegram/telegram.module';
     PaymentsModule,
     IdempotencyModule,
     forwardRef(() => TelegramModule),
+    PosWebhookModule,
     BullModule.registerQueue({ name: ORDER_AUTO_CANCEL_QUEUE }),
   ],
   controllers: [OrdersController],

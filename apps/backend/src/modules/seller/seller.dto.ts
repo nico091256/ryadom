@@ -1,11 +1,16 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MAX_PRODUCT_PRICE_TIYIN, MAX_PRODUCT_STOCK } from '@localshop/shared';
 import { UZ_PHONE_MESSAGE, UZ_PHONE_REGEX } from '../auth/auth.dto';
+import { POS_TYPES, PosType } from '../pos/pos.constants';
 
 const TIME_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const URL_MAX = 2048;
+
+/** Barcode / SKU characters accepted from scanners and ERP exports (EAN digits, internal alnum codes). */
+export const PRODUCT_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,63}$/;
+export const PRODUCT_CODE_MESSAGE = 'must be 1-64 letters, digits or . _ - /';
 
 export const SELLER_PRODUCTS_DEFAULT_LIMIT = 50;
 export const SELLER_PRODUCTS_MAX_LIMIT = 100;
@@ -52,6 +57,18 @@ export class UpdateShopProfileDto {
   @MaxLength(URL_MAX)
   logo_url?: string | null;
 
+  @ApiProperty({
+    example: '/uploads/banner.webp',
+    required: false,
+    nullable: true,
+    maxLength: URL_MAX,
+    description: '16:9 cover photo for the customer app; null removes it',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(URL_MAX)
+  banner_url?: string | null;
+
   @ApiProperty({ example: 'Toshkent sh., Chilonzor ko\'chasi, 28-do\'kon', required: false, maxLength: 300 })
   @IsOptional()
   @IsString()
@@ -74,6 +91,22 @@ export class UpdateShopProfileDto {
   @IsOptional()
   @IsBoolean()
   is_open?: boolean;
+
+  @ApiProperty({ example: 41.2825, required: false, minimum: -90, maximum: 90, description: 'Latitude (map picker)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @ApiProperty({ example: 69.215, required: false, minimum: -180, maximum: 180, description: 'Longitude (map picker)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
 }
 
 export class CreateProductDto {
@@ -130,6 +163,18 @@ export class CreateProductDto {
   @IsString()
   @MaxLength(URL_MAX)
   image_url?: string | null;
+
+  @ApiProperty({ example: '4780000000012', required: false, nullable: true, description: 'EAN/UPC or internal barcode; unique within the shop' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `barcode ${PRODUCT_CODE_MESSAGE}` })
+  barcode?: string | null;
+
+  @ApiProperty({ example: 'MLK-32-1L', required: false, nullable: true, description: 'Article / SKU' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `sku ${PRODUCT_CODE_MESSAGE}` })
+  sku?: string | null;
 
   @ApiProperty({ example: 50, maximum: MAX_PRODUCT_STOCK, description: 'Stock quantity' })
   @IsInt()
@@ -199,6 +244,18 @@ export class UpdateProductDto {
   @MaxLength(URL_MAX)
   image_url?: string | null;
 
+  @ApiProperty({ example: '4780000000012', required: false, nullable: true, description: 'null clears the barcode' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `barcode ${PRODUCT_CODE_MESSAGE}` })
+  barcode?: string | null;
+
+  @ApiProperty({ example: 'MLK-32-1L', required: false, nullable: true, description: 'null clears the SKU' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `sku ${PRODUCT_CODE_MESSAGE}` })
+  sku?: string | null;
+
   @ApiProperty({ example: 45, required: false, maximum: MAX_PRODUCT_STOCK })
   @IsOptional()
   @IsInt()
@@ -210,4 +267,24 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   is_available?: boolean;
+}
+
+/** PUT /seller/pos — which cash-register system is attached and where to push new orders. */
+export class UpdatePosSettingsDto {
+  @ApiProperty({ enum: POS_TYPES, example: '1c' })
+  @IsIn(POS_TYPES as unknown as string[])
+  pos_type: PosType;
+
+  @ApiProperty({
+    example: 'https://kassa.example.uz/ryadom/webhook',
+    required: false,
+    nullable: true,
+    maxLength: URL_MAX,
+    description: 'Public http(s) endpoint that receives order.created events; null disables the webhook',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(URL_MAX)
+  @Matches(/^https?:\/\/\S+$/i, { message: 'pos_webhook_url must be an http(s) URL' })
+  pos_webhook_url?: string | null;
 }

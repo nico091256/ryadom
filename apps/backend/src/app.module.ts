@@ -18,6 +18,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { ShopsModule } from './modules/shops/shops.module';
+import { GeocodeModule } from './modules/geocode/geocode.module';
+import { PosModule } from './modules/pos/pos.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -67,10 +69,12 @@ import { AppController } from './app.controller';
     UsersModule,
     DevicesModule,
     ShopsModule,
+    GeocodeModule,
     CategoriesModule,
     CartModule,
     OrdersModule,
     SellerModule,
+    PosModule,
     AdminModule,
     PaymentsModule,
     NotificationsModule,

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Loader2, RefreshCw, Trash2 } from 'lucide-react';
-import { api, errorMessage, resolveMediaUrl } from '@/lib/api';
+import { ApiError, api, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Category, Product, ProductPayload } from '@/lib/types';
 import { somToTiyin, tiyinToSom } from '@/lib/format';
 import { cropToSquare } from '@/lib/crop-image';
@@ -24,7 +24,15 @@ interface FormState {
   is_available: boolean;
   /** Server-relative upload path or absolute URL. */
   image_url: string;
+  /** Shtrix-kod (EAN/UPC yoki ichki kod); do'kon ichida unikal. */
+  barcode: string;
+  /** Artikul / SKU. */
+  sku: string;
 }
+
+/** Backend `PRODUCT_CODE_REGEX` bilan bir xil: 1–64 ta harf, raqam yoki . _ - / */
+const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,63}$/;
+const CODE_ERROR = 'Faqat harf, raqam va . _ - / belgilari (64 tagacha)';
 
 type Errors = Partial<Record<keyof FormState, string>>;
 
@@ -38,6 +46,8 @@ const blank = (): FormState => ({
   stock: '0',
   is_available: true,
   image_url: '',
+  barcode: '',
+  sku: '',
 });
 
 const fromProduct = (p: Product): FormState => ({
@@ -50,6 +60,8 @@ const fromProduct = (p: Product): FormState => ({
   stock: String(p.stock ?? 0),
   is_available: !!p.is_available,
   image_url: p.image_url ?? '',
+  barcode: p.barcode ?? '',
+  sku: p.sku ?? '',
 });
 
 function validate(f: FormState): Errors {
@@ -63,6 +75,11 @@ function validate(f: FormState): Errors {
 
   const stockRaw = f.stock.replace(/\s/g, '');
   if (!/^\d+$/.test(stockRaw)) e.stock = "Qoldiq 0 yoki undan katta butun son bo'lishi kerak";
+
+  const barcode = f.barcode.trim();
+  if (barcode && !CODE_RE.test(barcode)) e.barcode = CODE_ERROR;
+  const sku = f.sku.trim();
+  if (sku && !CODE_RE.test(sku)) e.sku = CODE_ERROR;
   return e;
 }
 
@@ -202,6 +219,8 @@ export function ProductFormModal({
       stock: Number(f.stock.replace(/\s/g, '')),
       is_available: f.is_available,
       image_url: f.image_url.trim() || null,
+      barcode: f.barcode.trim() || null,
+      sku: f.sku.trim() || null,
     };
 
     setSaving(true);
@@ -213,6 +232,9 @@ export function ProductFormModal({
       toast.success(isEdit ? "O'zgarishlar saqlandi" : "Mahsulot qo'shildi", merged.name_uz);
       onSaved(merged, isEdit ? 'edit' : 'create');
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'BARCODE_TAKEN') {
+        setErrors((p) => ({ ...p, barcode: "Bu shtrix-kod do'koningizda boshqa mahsulotga biriktirilgan" }));
+      }
       toast.error(isEdit ? "Saqlab bo'lmadi" : "Mahsulotni qo'shib bo'lmadi", errorMessage(err));
     } finally {
       setSaving(false);
@@ -361,6 +383,44 @@ export function ProductFormModal({
               invalid={!!errors.stock}
               inputMode="numeric"
               placeholder="0"
+            />
+          </Field>
+
+          <Field
+            label="Shtrix-kod (Barcode)"
+            error={errors.barcode}
+            htmlFor="p-barcode"
+            hint={!errors.barcode ? "Kassa skaneri bilan to'g'ridan-to'g'ri o'qiting" : undefined}
+          >
+            <Input
+              id="p-barcode"
+              value={f.barcode}
+              onChange={set('barcode')}
+              invalid={!!errors.barcode}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="4780000000012"
+              maxLength={64}
+              className="font-mono"
+              // Skanerlar kod oxirida Enter yuboradi: formani yubormasdan keyingi maydonga o'tamiz.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  document.getElementById('p-sku')?.focus();
+                }
+              }}
+            />
+          </Field>
+          <Field label="Artikul / SKU" error={errors.sku} htmlFor="p-sku" hint={!errors.sku ? 'Ichki kod (ixtiyoriy)' : undefined}>
+            <Input
+              id="p-sku"
+              value={f.sku}
+              onChange={set('sku')}
+              invalid={!!errors.sku}
+              autoComplete="off"
+              placeholder="MLK-32-1L"
+              maxLength={64}
+              className="font-mono"
             />
           </Field>
 

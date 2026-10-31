@@ -49,7 +49,7 @@ class ShopCard extends ConsumerWidget {
                 // (list refresh, "last order" card appearing after checkout) is
                 // aborted by Flutter and leaves this child hidden — the card then
                 // shows only its dark gradient. The slide page transition is enough.
-                ShopCover(url: shop.logoUrl, width: width, height: height),
+                ShopCover(url: shop.coverUrl, width: width, height: height),
                 const Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(

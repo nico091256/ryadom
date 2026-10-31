@@ -7,3 +7,4 @@ export * from './Table';
 export * from './Feedback';
 export * from './Toast';
 export * from './Controls';
+export * from './LocationPickerModal';

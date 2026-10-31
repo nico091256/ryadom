@@ -23,6 +23,12 @@ const REGISTRATION_CONFLICT = {
   message: 'This login or phone number is already registered.',
 };
 
+/** POS credentials belong to the shop owner and its cash register — never part of a public response. */
+function withoutPosSecrets<T extends Record<string, any>>(shop: T): Omit<T, 'pos_api_key' | 'pos_webhook_url'> {
+  const { pos_api_key: _posKey, pos_webhook_url: _posWebhook, ...rest } = shop;
+  return rest;
+}
+
 @Injectable()
 export class ShopsService {
   constructor(
@@ -192,7 +198,7 @@ export class ShopsService {
       // owner_id is deliberately not selected: it is an internal user id, not public data.
       inRange = await this.prisma.$queryRaw`
         SELECT
-          s.id, s.city_id, s.name, s.logo_url, s.phone, s.address_text,
+          s.id, s.city_id, s.name, s.logo_url, s.banner_url, s.phone, s.address_text,
           s.lat, s.lng, s.open_time, s.close_time, s.is_open, s.is_active, s.status, s.commission_rate_percent,
           s.created_at, s.updated_at,
           ROUND(ST_Distance(
@@ -219,7 +225,7 @@ export class ShopsService {
       });
       inRange = activeShops
         .map(({ owner_id: _ownerId, ...shop }) => ({
-          ...shop,
+          ...withoutPosSecrets(shop),
           distanceMeters: this.prisma.calculateDistanceMeters(lat, lng, shop.lat, shop.lng),
         }))
         .filter((shop) => shop.distanceMeters <= radiusMeters)
@@ -265,7 +271,7 @@ export class ShopsService {
       : await fetchShop();
 
     return {
-      ...shop,
+      ...withoutPosSecrets(shop),
       productCount,
       distanceMeters: from ? this.prisma.calculateDistanceMeters(from.lat, from.lng, shop.lat, shop.lng) : null,
       isCurrentlyOpen: this.isShopOpen(shop.open_time, shop.close_time, shop.is_open),

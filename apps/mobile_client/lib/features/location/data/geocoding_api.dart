@@ -1,14 +1,42 @@
 import 'package:dio/dio.dart';
 
-/// Reverse geocoding via the public Nominatim/OpenStreetMap API — the same
-/// fallback the RN app used on web, used here unconditionally for all
-/// platforms to avoid depending on a native geocoding plugin + API key.
-class GeocodingApi {
-  GeocodingApi() : _dio = Dio();
+import '../../../core/network/api_client.dart';
 
+/// Reverse geocoding ikki bosqichli:
+///   1. Backend proxy `GET /geocode/reverse` → Yandex Geocoder (server tomonda;
+///      web'da CORS bo'lmaydi, API kalit brauzerda ochilmaydi, natija keshlanadi).
+///   2. Kalit sozlanmagan yoki Yandex javob bermasa — Nominatim/OSM fallback,
+///      u ham bo'lmasa koordinata matni.
+class GeocodingApi {
+  GeocodingApi(this._client) : _dio = Dio();
+
+  final ApiClient _client;
   final Dio _dio;
 
   Future<String> reverseGeocode(double lat, double lng, {String lang = 'uz'}) async {
+    final viaBackend = await _viaBackend(lat, lng, lang);
+    if (viaBackend != null && viaBackend.isNotEmpty) return viaBackend;
+    return _viaNominatim(lat, lng, lang);
+  }
+
+  /// Yandex Geocoder (backend proxy). Manzil topilmasa/xato bo'lsa — null.
+  Future<String?> _viaBackend(double lat, double lng, String lang) async {
+    try {
+      final data = await _client.get('/geocode/reverse', query: {
+        'lat': lat,
+        'lng': lng,
+        'lang': lang,
+      }) as Map<String, dynamic>;
+      final address = data['address'] as String?;
+      return (address != null && address.trim().isNotEmpty) ? address.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Nominatim/OpenStreetMap fallback — barcha platformalarda CORS'siz ishlaydi,
+  /// API kalit talab qilmaydi.
+  Future<String> _viaNominatim(double lat, double lng, String lang) async {
     try {
       final response = await _dio.get(
         'https://nominatim.openstreetmap.org/reverse',

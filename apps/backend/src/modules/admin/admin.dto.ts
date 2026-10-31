@@ -144,6 +144,13 @@ export class AdminUpdateShopDto {
   @IsString()
   @MaxLength(2048)
   logo_url?: string | null;
+
+  @ApiProperty({ required: false, nullable: true, maxLength: 2048, description: '16:9 cover photo for the customer app' })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(2048)
+  banner_url?: string | null;
 }
 
 export class AdminCategoryDto {

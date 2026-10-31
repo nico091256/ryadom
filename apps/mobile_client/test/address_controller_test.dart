@@ -1,11 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_client/core/network/api_client.dart';
+import 'package:mobile_client/core/storage/token_storage.dart';
 import 'package:mobile_client/features/location/data/geocoding_api.dart';
 import 'package:mobile_client/features/location/domain/selected_address.dart';
 import 'package:mobile_client/features/location/presentation/address_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeGeocoding extends GeocodingApi {
+  // The client is never used: reverseGeocode is overridden, so no request leaves the test.
+  _FakeGeocoding() : super(ApiClient(tokenStorage: TokenStorage(), onSessionExpired: () {}));
+
   @override
   Future<String> reverseGeocode(double lat, double lng, {String lang = 'uz'}) async => 'Toshkent, Chilonzor, Bunyodkor 12';
 }
