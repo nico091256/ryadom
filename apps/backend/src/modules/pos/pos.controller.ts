@@ -30,7 +30,8 @@ export class PosController {
     return this.posService.syncProducts(shop, dto.items);
   }
 
-  @Get('orders/pending')
+  // `incoming` is the alias some integrators expect; both paths serve the same pull.
+  @Get(['orders/incoming', 'orders/pending'])
   @ApiOperation({ summary: 'Pull orders in a lifecycle state (default: new), oldest first' })
   async pendingOrders(@PosShop() shop: PosShopRef, @Query() query: PosPendingOrdersQueryDto) {
     return this.posService.pendingOrders(shop, query);

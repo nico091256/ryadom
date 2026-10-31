@@ -1,5 +1,5 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
 /// Per-environment configuration, set via --dart-define at build/run time:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:4000/api/v1
@@ -20,15 +20,33 @@ class Env {
 
   static String get apiBaseUrl {
     if (_apiOverride.isNotEmpty) return _apiOverride;
-
-    if (kIsWeb) {
-      final host = Uri.base.host;
-      if (host.isNotEmpty) return 'http://$host:4000/api/v1';
-      return 'http://localhost:4000/api/v1';
-    }
-
+    if (kIsWeb) return inferWebApiBase(Uri.base);
     if (Platform.isAndroid) return 'http://10.0.2.2:4000/api/v1';
     return 'http://localhost:4000/api/v1';
+  }
+
+  /// Web fallback when no API_BASE_URL was defined at build time. Local hosts
+  /// (localhost, LAN IPs) keep the dev API on :4000; a deployed domain maps to
+  /// its `api.` sibling over https (client.ryadom.uz → https://api.ryadom.uz),
+  /// so a release build never points at a dead `<page-host>:4000`.
+  @visibleForTesting
+  static String inferWebApiBase(Uri pageUri) {
+    final host = pageUri.host;
+    if (host.isEmpty || _isLocalHost(host)) {
+      return 'http://${host.isEmpty ? 'localhost' : host}:4000/api/v1';
+    }
+    final labels = host.split('.');
+    // client.ryadom.uz → ryadom.uz; ryadom.uz stays as is.
+    final apex = labels.length >= 3 ? labels.sublist(1).join('.') : host;
+    return 'https://api.$apex/api/v1';
+  }
+
+  static bool _isLocalHost(String host) {
+    if (host == 'localhost' || host.endsWith('.localhost') || host == '0.0.0.0' || host == '::1' || host == '[::1]') {
+      return true;
+    }
+    // Bare IPv4 (phone on the LAN) or a single-label host: never a public deployment.
+    return RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) || !host.contains('.');
   }
 
   /// Socket.IO server root (no /api/v1 suffix — the gateway is mounted at /).

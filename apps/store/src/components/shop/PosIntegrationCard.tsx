@@ -186,7 +186,7 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
               <li>
                 POST /pos/products/sync — {'{ items: [{ barcode | sku, price (tiyin), stock, is_available }] }'}
               </li>
-              <li>GET /pos/orders/pending?status=new|accepted|on_the_way&amp;limit=50</li>
+              <li>GET /pos/orders/incoming?status=new|accepted|on_the_way&amp;limit=50 (alias: /pos/orders/pending)</li>
               <li>POST /pos/orders/{'{id}'}/status — {'{ status: accepted|on_the_way|delivered|cancelled, reason? }'}</li>
             </ul>
             <p>
