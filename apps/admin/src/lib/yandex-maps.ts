@@ -77,7 +77,8 @@ export function loadYandexMaps(): Promise<YMaps> {
   }
   if (loaderPromise) return loaderPromise;
 
-  const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_KEY;
+  const apiKey =
+    process.env.NEXT_PUBLIC_YANDEX_MAPS_KEY || '940df956-9edc-4494-a9a8-87e465ce14fe';
   if (!apiKey) {
     return Promise.reject(new Error('NEXT_PUBLIC_YANDEX_MAPS_KEY sozlanmagan'));
   }
