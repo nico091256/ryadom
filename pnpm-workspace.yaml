@@ -1,12 +1,15 @@
 packages:
-  - 'apps/backend'
-  - 'apps/admin'
-  - 'apps/store'
-  - 'packages/shared'
+  - 'apps/*'
+  - 'packages/*'
 
 allowBuilds:
+  '@nestjs/core': true
   '@prisma/client': true
   '@prisma/engines': true
+  '@scarf/scarf': true
   bcrypt: true
   prisma: true
+  '@firebase/util': true
+  msgpackr-extract: true
+  protobufjs: true
   sharp: true
