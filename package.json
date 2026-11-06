@@ -5,6 +5,10 @@
   "description": "Ryadom — monorepo for the NestJS backend API, Next.js web panels (admin, store), and shared TypeScript package (Flutter customer app lives separately in apps/mobile_client)",
   "author": "Elshodbek Turayev",
   "license": "UNLICENSED",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "node tools/start-dev.js",
     "dev:backend": "npm run start:dev --workspace=@localshop/backend",
