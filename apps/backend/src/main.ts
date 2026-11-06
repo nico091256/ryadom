@@ -49,6 +49,9 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Allow larger JSON payloads (up to 2 MB) for bulk POS/REGOS catalog imports.
+  app.useBodyParser('json', { limit: '2mb' });
+  app.useBodyParser('urlencoded', { limit: '2mb', extended: true });
   // Registered here rather than via the create() option: that one is applied at
   // listen(), after the static /uploads handler below, so images went out without
   // Access-Control-Allow-Origin and Flutter web could not load them.

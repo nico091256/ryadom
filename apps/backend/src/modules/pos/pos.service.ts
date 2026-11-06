@@ -5,6 +5,7 @@ import { CacheService } from '../../common/redis/cache.service';
 import { OrdersService } from '../orders/orders.service';
 import { PosOrderStatusDto, PosPendingOrdersQueryDto, PosSyncItemDto } from './pos.dto';
 import { PosWebhookService } from './pos-webhook.service';
+import { CategoryRef, matchCategoryId } from './regos.util';
 
 /** The shop PosApiKeyGuard attached to the request. */
 export interface PosShopRef {
@@ -14,7 +15,8 @@ export interface PosShopRef {
 
 export interface PosSyncResult {
   updated: number;
-  /** Items whose barcode/sku matched no product of this shop — create them in the panel first. */
+  created?: number;
+  /** Items whose barcode/sku matched no product of this shop and had no name to auto-create. */
   not_found: { barcode?: string; sku?: string }[];
   skipped: { barcode?: string; sku?: string; reason: string }[];
 }
@@ -27,7 +29,7 @@ function codeKey(item: PosSyncItemDto): { barcode?: string; sku?: string } {
 }
 
 /**
- * What a cash register may do with its shop: bulk price/stock sync, pulling
+ * What a cash register may do with its shop: bulk price/stock/catalog sync, pulling
  * orders it has not seen yet, and moving orders through the seller lifecycle.
  * Status changes go through OrdersService so the state machine, stock
  * restoration, notifications and audit trail stay in one place.
@@ -42,12 +44,12 @@ export class PosService {
 
   /**
    * Matches each item by barcode first, then by sku (both scoped to the shop,
-   * soft-deleted products excluded) and applies only the fields that were sent.
-   * Unknown codes are reported, never auto-created: a POS export has no
-   * category or names the storefront could show.
+   * soft-deleted products excluded). If the product exists, updates sent fields.
+   * If the code is not found and a product name (`name` or `name_uz`) is provided,
+   * auto-creates the product in the shop and matches its category.
    */
   async syncProducts(shop: PosShopRef, items: PosSyncItemDto[]): Promise<PosSyncResult> {
-    const result: PosSyncResult = { updated: 0, not_found: [], skipped: [] };
+    const result: PosSyncResult = { updated: 0, created: 0, not_found: [], skipped: [] };
 
     const barcodes = [...new Set(items.map((i) => i.barcode?.trim()).filter((v): v is string => !!v))];
     const skus = [...new Set(items.map((i) => i.sku?.trim()).filter((v): v is string => !!v))];
@@ -69,31 +71,97 @@ export class PosService {
     const byBarcode = new Map(products.filter((p) => p.barcode).map((p) => [p.barcode as string, p.id]));
     const bySku = new Map(products.filter((p) => p.sku).map((p) => [p.sku as string, p.id]));
 
+    // Subtract quantities reserved by active NEW orders (not yet accepted/punched at the cash register)
+    // so an absolute stock snapshot from POS does not re-expose already-reserved units.
+    const reservedByProduct = new Map<string, number>();
+    const pendingNewOrders =
+      (await this.prisma.order?.findMany?.({
+        where: { shop_id: shop.id, status: OrderStatus.NEW as any },
+        select: { items: { select: { product_id: true, quantity: true } } },
+      })) ?? [];
+    for (const ord of pendingNewOrders) {
+      for (const oi of ord.items ?? []) {
+        reservedByProduct.set(oi.product_id, (reservedByProduct.get(oi.product_id) ?? 0) + oi.quantity);
+      }
+    }
+
+    let categoriesCache: CategoryRef[] | null = null;
+    const getCategories = async (): Promise<CategoryRef[]> => {
+      if (categoriesCache) return categoriesCache;
+      categoriesCache = (await this.prisma.category?.findMany?.()) ?? [];
+      return categoriesCache;
+    };
+
     for (const item of items) {
       const key = codeKey(item);
       if (!key.barcode && !key.sku) {
         result.skipped.push({ reason: 'barcode or sku is required' });
         continue;
       }
-      const data = {
+      const primaryName = (item.name_uz || item.name || item.name_ru || item.name_en || '').trim();
+      const data: Record<string, any> = {
         ...(item.price !== undefined ? { price: item.price } : {}),
         ...(item.stock !== undefined ? { stock: item.stock } : {}),
         ...(item.is_available !== undefined ? { is_available: item.is_available } : {}),
+        ...(primaryName ? { name_uz: primaryName } : {}),
+        ...(item.name_ru ? { name_ru: item.name_ru.trim() } : {}),
+        ...(item.name_en ? { name_en: item.name_en.trim() } : {}),
+        ...(item.description_uz !== undefined ? { description_uz: item.description_uz } : {}),
+        ...(item.image_url !== undefined ? { image_url: item.image_url } : {}),
       };
       if (Object.keys(data).length === 0) {
         result.skipped.push({ ...key, reason: 'nothing to update (send price, stock or is_available)' });
         continue;
       }
       const id = (key.barcode && byBarcode.get(key.barcode)) || (key.sku && bySku.get(key.sku)) || null;
+      if (id && data.stock !== undefined) {
+        const reserved = reservedByProduct.get(id) ?? 0;
+        data.stock = Math.max(0, Number(data.stock) - reserved);
+      }
+      if (data.price !== undefined && Number(data.price) <= 0) {
+        data.is_available = false;
+      }
       if (!id) {
-        result.not_found.push(key);
+        if (!primaryName) {
+          result.not_found.push(key);
+          continue;
+        }
+        const newPrice = item.price ?? 0;
+        const cats = await getCategories();
+        const fallbackCatId = cats[0]?.id ?? 'c-1';
+        const resolvedCatId =
+          item.category_id && cats.some((c) => c.id === item.category_id)
+            ? item.category_id
+            : matchCategoryId(item.category_name, cats, fallbackCatId);
+
+        const created = await this.prisma.product.create({
+          data: {
+            shop_id: shop.id,
+            category_id: resolvedCatId,
+            name_uz: primaryName,
+            name_ru: item.name_ru?.trim() || primaryName,
+            name_en: item.name_en?.trim() || primaryName,
+            description_uz: item.description_uz ?? null,
+            description_ru: item.description_uz ?? null,
+            description_en: item.description_uz ?? null,
+            price: newPrice,
+            stock: item.stock ?? 0,
+            is_available: newPrice > 0 && (item.is_available ?? (item.stock ?? 0) > 0),
+            barcode: key.barcode ?? null,
+            sku: key.sku ?? null,
+            image_url: item.image_url ?? null,
+          },
+        });
+        if (key.barcode) byBarcode.set(key.barcode, created.id);
+        if (key.sku) bySku.set(key.sku, created.id);
+        result.created = (result.created ?? 0) + 1;
         continue;
       }
       await this.prisma.product.update({ where: { id }, data });
       result.updated++;
     }
 
-    if (result.updated > 0) await this.invalidateShopCache(shop.id);
+    if (result.updated > 0 || (result.created ?? 0) > 0) await this.invalidateShopCache(shop.id);
     return result;
   }
 

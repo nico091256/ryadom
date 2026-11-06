@@ -5,24 +5,25 @@
   "description": "Ryadom — monorepo for the NestJS backend API, Next.js web panels (admin, store), and shared TypeScript package (Flutter customer app lives separately in apps/mobile_client)",
   "author": "Elshodbek Turayev",
   "license": "UNLICENSED",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev:backend": "pnpm --filter @localshop/backend start:dev",
+    "dev": "node tools/start-dev.js",
+    "dev:backend": "npm run start:dev --workspace=@localshop/backend",
     "dev:mock": "node tools/mock-server.js",
-    "dev:admin": "pnpm --filter @localshop/admin dev",
-    "dev:store": "pnpm --filter @localshop/store dev",
-    "build": "pnpm -r build",
-    "test": "pnpm -r --if-present test",
-    "lint": "pnpm -r lint",
+    "dev:admin": "npm run dev --workspace=@localshop/admin",
+    "dev:store": "npm run dev --workspace=@localshop/store",
+    "build": "npm run build --workspace=@localshop/shared && npm run prisma:generate --workspace=@localshop/backend && npm run build --workspace=@localshop/backend && npm run build --workspace=@localshop/admin && npm run build --workspace=@localshop/store",
+    "test": "npm run test --workspace=@localshop/backend",
+    "lint": "npm run lint --workspace=@localshop/shared && npm run lint --workspace=@localshop/admin && npm run lint --workspace=@localshop/store",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
     "prettier": "^3.3.3",
     "typescript": "^5.6.3"
-  },
-  "packageManager": "pnpm@12.11.2"
+  }
 }

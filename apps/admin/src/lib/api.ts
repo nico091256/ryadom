@@ -20,21 +20,39 @@ import type {
 import { isShopOpenNow } from '@localshop/shared';
 
 export function getApiUrl(): string {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.origin &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.endsWith('.run.app'))
+  ) {
+    return `${window.location.origin}/api/v1`;
+  }
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  if (typeof window !== 'undefined' && window.location.hostname) {
-    return `${window.location.protocol}//${window.location.hostname}:4000/api/v1`;
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return `${window.location.origin}/api/v1`;
   }
   return 'http://localhost:4000/api/v1';
 }
 
 export function getApiOrigin(): string {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.origin &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.endsWith('.run.app'))
+  ) {
+    return window.location.origin;
+  }
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
   }
-  if (typeof window !== 'undefined' && window.location.hostname) {
-    return `${window.location.protocol}//${window.location.hostname}:4000`;
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
   }
   return 'http://localhost:4000';
 }
@@ -142,7 +160,7 @@ type RequestOptions = RequestInit & {
 
 class ApiService {
   /** Coalesces concurrent 401s into one refresh round-trip. */
-  private refreshPromise: Promise<boolean> | null = null;
+  private refreshPromise: Promise<'ok' | 'unauthenticated' | 'transient'> | null = null;
   private accessToken: string | null = null;
   private legacyCleaned = false;
 
@@ -155,6 +173,14 @@ class ApiService {
     } catch {
       /* ignore */
     }
+    window.addEventListener('storage', (e) => {
+      if (e.key === ACCESS_KEY) {
+        this.accessToken = e.newValue;
+        if (e.newValue) window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
+      } else if (e.key === USER_KEY && !e.newValue) {
+        this.accessToken = null;
+      }
+    });
   }
 
   getToken(): string | null {
@@ -162,7 +188,7 @@ class ApiService {
     if (typeof window === 'undefined') return null;
     this.cleanupLegacy();
     try {
-      this.accessToken = sessionStorage.getItem(ACCESS_KEY);
+      this.accessToken = sessionStorage.getItem(ACCESS_KEY) || localStorage.getItem(ACCESS_KEY);
     } catch {
       this.accessToken = null;
     }
@@ -173,8 +199,13 @@ class ApiService {
     this.accessToken = token;
     if (typeof window === 'undefined') return;
     try {
-      if (token) sessionStorage.setItem(ACCESS_KEY, token);
-      else sessionStorage.removeItem(ACCESS_KEY);
+      if (token) {
+        sessionStorage.setItem(ACCESS_KEY, token);
+        localStorage.setItem(ACCESS_KEY, token);
+      } else {
+        sessionStorage.removeItem(ACCESS_KEY);
+        localStorage.removeItem(ACCESS_KEY);
+      }
     } catch {
       /* ignore */
     }
@@ -252,9 +283,10 @@ class ApiService {
   }
 
   // ---------- Refresh (single-flight) ----------
-  private refreshTokens(): Promise<boolean> {
+  private refreshTokens(): Promise<'ok' | 'unauthenticated' | 'transient'> {
     if (this.refreshPromise) return this.refreshPromise;
-    this.refreshPromise = (async () => {
+    const prevToken = this.accessToken;
+    this.refreshPromise = (async (): Promise<'ok' | 'unauthenticated' | 'transient'> => {
       try {
         // The refresh token travels only in the httpOnly cookie; the server rotates it.
         const res = await fetch(`${getApiUrl()}/auth/refresh`, {
@@ -267,16 +299,31 @@ class ApiService {
           credentials: 'include',
           body: '{}',
         });
-        if (!res.ok) return false;
+        if (!res.ok) {
+          if (res.status === 429 || res.status >= 500) {
+            return 'transient';
+          }
+          const errBody = (await res.json().catch(() => null)) as { code?: string } | null;
+          if (errBody?.code === 'REFRESH_RACE_CONFLICT') {
+            await new Promise((r) => setTimeout(r, 150));
+            const synced = localStorage.getItem(ACCESS_KEY);
+            if (synced && synced !== prevToken) {
+              this.accessToken = synced;
+              return 'ok';
+            }
+            return 'transient';
+          }
+          return 'unauthenticated';
+        }
         const data = (await res.json().catch(() => null)) as { accessToken?: string; user?: AdminUser } | null;
-        if (!data?.accessToken) return false;
-        if (data.user && data.user.role && data.user.role !== 'admin') return false;
+        if (!data?.accessToken) return 'transient';
+        if (data.user && data.user.role && data.user.role !== 'admin') return 'unauthenticated';
         this.setToken(data.accessToken);
         if (data.user) this.saveSession(data.accessToken, data.user);
         window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
-        return true;
+        return 'ok';
       } catch {
-        return false;
+        return 'transient';
       }
     })().finally(() => {
       this.refreshPromise = null;
@@ -291,11 +338,14 @@ class ApiService {
 
     // New tab / lost in-memory token but a profile exists: resume via the cookie first.
     if (auth && !token && !_retried && typeof window !== 'undefined' && this.getUser()) {
-      if (await this.refreshTokens()) {
+      const outcome = await this.refreshTokens();
+      if (outcome === 'ok') {
         token = this.getToken();
-      } else {
+      } else if (outcome === 'unauthenticated') {
         this.expireSession();
         throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, 'SESSION_EXPIRED');
+      } else {
+        throw new ApiError("Server bilan aloqa yo'q yoki band. Birozdan so'ng qayta urining.", 503, 'REFRESH_TRANSIENT');
       }
     }
 
@@ -320,13 +370,23 @@ class ApiService {
       const isAuthEndpoint = endpoint.startsWith('/auth/');
       if (res.status === 401 && auth && !isAuthEndpoint && typeof window !== 'undefined') {
         if (!_retried) {
-          const refreshed = await this.refreshTokens();
-          if (refreshed) {
+          const outcome = await this.refreshTokens();
+          if (outcome === 'ok') {
             return this.request<T>(endpoint, { ...options, _retried: true });
+          }
+          if (outcome === 'transient') {
+            throw new ApiError("Server vaqtincha band yoki yangilanmoqda.", 503, 'REFRESH_TRANSIENT');
           }
         }
         this.expireSession();
         throw new ApiError('Sessiya tugadi. Qaytadan kiring.', 401, body?.code);
+      }
+      if (res.status === 403 && body?.code === 'MUST_CHANGE_PASSWORD' && typeof window !== 'undefined') {
+        const u = this.getUser();
+        if (u) this.saveSession(this.getToken() || '', { ...u, must_change_password: true });
+        if (window.location.pathname !== '/change-password') {
+          window.location.replace('/change-password');
+        }
       }
       if (res.status === 403 && auth && !isAuthEndpoint && /Current role:/i.test(message)) {
         this.expireSession();
@@ -352,8 +412,27 @@ class ApiService {
     if (!data?.user || data.user.role !== 'admin') {
       throw new ApiError("Kirish taqiqlangan: bu panel faqat administratorlar uchun.", 403, 'NOT_ADMIN');
     }
-    this.saveSession(data.accessToken, data.user);
-    return data.user;
+    const user: AdminUser = {
+      ...data.user,
+      must_change_password: !!data.user.must_change_password,
+    };
+    this.saveSession(data.accessToken, user);
+    return user;
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const data = await this.request<{ success: boolean; message?: string; accessToken?: string }>(
+      '/auth/change-password',
+      {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+        headers: { 'X-Auth-Transport': 'cookie', 'X-Auth-Client': 'admin' },
+        credentials: 'include',
+      },
+    );
+    if (data?.accessToken) this.setToken(data.accessToken);
+    const user = this.getUser();
+    if (user) this.saveSession(data?.accessToken || this.getToken() || '', { ...user, must_change_password: false });
   }
 
   // ---------- Dashboard ----------

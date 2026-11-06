@@ -1,41 +1,32 @@
-FROM node:20-alpine AS base
-RUN npm install -g pnpm@12.11.2
-
-FROM base AS dependencies
+FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
+COPY package.json pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/store/package.json ./apps/store/
 
-RUN pnpm install --frozen-lockfile=false
+RUN corepack enable && pnpm install --no-frozen-lockfile
 
 COPY packages/shared ./packages/shared
-RUN pnpm --filter @localshop/shared build
-
 COPY apps/store ./apps/store
-WORKDIR /app/apps/store
-ENV NEXT_TELEMETRY_DISABLED=1
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_YANDEX_MAPS_KEY
-ENV NEXT_PUBLIC_YANDEX_MAPS_KEY=$NEXT_PUBLIC_YANDEX_MAPS_KEY
-RUN pnpm build
 
-FROM base AS runner
+RUN pnpm --filter @localshop/shared build && \
+    pnpm --filter @localshop/store build
+
+FROM node:20-alpine AS runner
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
+
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME="0.0.0.0"
 
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/packages/shared/dist ./packages/shared/dist
-COPY --from=dependencies /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=dependencies /app/apps/store/node_modules ./apps/store/node_modules
-COPY --from=dependencies /app/apps/store/.next ./apps/store/.next
-COPY --from=dependencies /app/apps/store/package.json ./apps/store/package.json
-COPY --from=dependencies /app/apps/store/public ./apps/store/public
+COPY --from=builder /app/apps/store/.next/standalone ./
+COPY --from=builder /app/apps/store/.next/static ./apps/store/.next/static
 
 EXPOSE 3001
-WORKDIR /app/apps/store
-CMD ["sh", "-c", "node_modules/.bin/next start -p ${PORT:-3001}"]
-
+CMD ["node", "apps/store/server.js"]

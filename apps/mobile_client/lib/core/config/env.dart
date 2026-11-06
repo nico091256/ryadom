@@ -1,11 +1,13 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode, visibleForTesting;
 
 /// Per-environment configuration, set via --dart-define at build/run time:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:4000/api/v1
 ///
 /// Falls back to sensible dev defaults (Android emulator's host alias,
-/// localhost for web/iOS simulator) when not provided.
+/// localhost for web/iOS simulator) in debug/profile builds, and to the
+/// production API (`https://api.ryadom.uz/api/v1`) in release builds when
+/// `API_BASE_URL` is not explicitly provided.
 ///
 /// The socket/media root is DERIVED from API_BASE_URL unless SOCKET_URL is set
 /// explicitly: a production web build served from client.ryadom.uz with
@@ -17,10 +19,12 @@ class Env {
 
   static const _apiOverride = String.fromEnvironment('API_BASE_URL');
   static const _socketOverride = String.fromEnvironment('SOCKET_URL');
+  static const productionApiBaseUrl = 'https://api.ryadom.uz/api/v1';
 
   static String get apiBaseUrl {
     if (_apiOverride.isNotEmpty) return _apiOverride;
     if (kIsWeb) return inferWebApiBase(Uri.base);
+    if (kReleaseMode) return productionApiBaseUrl;
     if (Platform.isAndroid) return 'http://10.0.2.2:4000/api/v1';
     return 'http://localhost:4000/api/v1';
   }
@@ -57,7 +61,7 @@ class Env {
 
   /// The API host without the `/api/v1` prefix — where static `/uploads/*` and
   /// the socket live. Always consistent with [apiBaseUrl].
-  static String get apiOrigin => _stripApiPrefix(apiBaseUrl);
+  static String get apiOrigin => extractOrigin(apiBaseUrl);
 
   /// Root for server-relative media paths like "/uploads/abc.webp" — static
   /// files are served from the API host without the /api/v1 prefix.
@@ -72,9 +76,17 @@ class Env {
     return v.startsWith('/') ? '$mediaBaseUrl$v' : '$mediaBaseUrl/$v';
   }
 
-  static String _stripApiPrefix(String api) {
-    final idx = api.indexOf('/api');
-    return _stripTrailingSlash(idx == -1 ? api : api.substring(0, idx));
+  /// Extracts `scheme://host[:port]` from an API base URL (including hosts whose
+  /// subdomain starts with `api.`, such as `https://api.ryadom.uz/api/v1`).
+  @visibleForTesting
+  static String extractOrigin(String api) {
+    final trimmed = _stripTrailingSlash(api.trim());
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
+      return uri.origin;
+    }
+    final cleaned = trimmed.replaceFirst(RegExp(r'/api(?:/v\d+)?/?$'), '');
+    return _stripTrailingSlash(cleaned);
   }
 
   static String _stripTrailingSlash(String s) => s.endsWith('/') ? s.substring(0, s.length - 1) : s;

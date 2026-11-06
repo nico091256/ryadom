@@ -19,10 +19,17 @@ void main() {
   group('Env media / socket roots', () {
     test('apiOrigin is the API host without the /api/v1 prefix', () {
       expect(Env.apiBaseUrl, endsWith('/api/v1'));
-      expect(Env.apiOrigin, isNot(contains('/api')));
+      expect(Env.apiOrigin, isNot(contains('/api/')));
       expect(Env.apiBaseUrl, startsWith(Env.apiOrigin));
       expect(Env.socketUrl, Env.apiOrigin);
       expect(Env.mediaBaseUrl, Env.apiOrigin);
+    });
+
+    test('extractOrigin preserves https://api.ryadom.uz when host starts with api.', () {
+      expect(Env.extractOrigin('https://api.ryadom.uz/api/v1'), 'https://api.ryadom.uz');
+      expect(Env.extractOrigin('https://api.ryadom.uz/api/v1/'), 'https://api.ryadom.uz');
+      expect(Env.extractOrigin('http://localhost:4000/api/v1'), 'http://localhost:4000');
+      expect(Env.extractOrigin('http://10.0.2.2:4000/api/v1'), 'http://10.0.2.2:4000');
     });
 
     test('resolveMediaUrl joins server-relative paths and passes absolute urls through', () {

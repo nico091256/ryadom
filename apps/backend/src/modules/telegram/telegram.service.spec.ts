@@ -72,13 +72,14 @@ describe('TelegramService', () => {
         id: 'ord-12345678-abcd',
         total_amount: 3500000, // 35 000 so'm
         payment_method: 'cash',
-        delivery_address_text: 'Chilonzor 9-mavze, 12-uy',
+        address_snapshot: { text: 'Chilonzor 9-mavze, 12-uy' },
         delivery_apartment: '45',
+        customer_phone: '+998901234567',
         items: [
-          { product_name: 'Non', quantity: 2, total_price: 600000 },
-          { product_name: 'Sut', quantity: 1, total_price: 1200000 },
+          { product_name: 'Non', quantity: 2, unit_price: 300000 },
+          { product_name: 'Sut', quantity: 1, unit_price: 1200000 },
         ],
-        customer: { name: 'Ali', phone: '+998901234567' },
+        customer: { name: 'Ali', phone: '+998900000000' },
       };
 
       const shop = {
@@ -95,6 +96,7 @@ describe('TelegramService', () => {
         expect.objectContaining({
           chat_id: '123456789',
           parse_mode: 'HTML',
+          text: expect.stringContaining('Chilonzor 9-mavze, 12-uy'),
           reply_markup: expect.objectContaining({
             inline_keyboard: expect.arrayContaining([
               expect.arrayContaining([
@@ -105,21 +107,26 @@ describe('TelegramService', () => {
           }),
         }),
       );
+      const sentText = (service as any).callApi.mock.calls[0][1].text as string;
+      expect(sentText).not.toContain("so'm so‘m");
+      expect(sentText).toContain('+998901234567');
     });
   });
 
-  describe('handleUpdate - /start link_<shopId>', () => {
-    it('links shop to chat_id successfully', async () => {
+  describe('handleUpdate - /start link_<shopId>_<sig>', () => {
+    it('links shop to chat_id when signed payload is valid', async () => {
       prisma.shop.findUnique.mockResolvedValue({
         id: 'shop-abc',
         name: 'Oqtepa Do‘kon',
       });
       prisma.shop.update.mockResolvedValue({});
 
+      const signedPayload = service.signShopLinkPayload('shop-abc');
+
       await service.handleUpdate({
         message: {
           chat: { id: 987654 },
-          text: '/start link_shop-abc',
+          text: `/start ${signedPayload}`,
         },
       });
 
@@ -132,6 +139,24 @@ describe('TelegramService', () => {
         expect.objectContaining({
           chat_id: '987654',
           text: expect.stringContaining('Oqtepa Do‘kon'),
+        }),
+      );
+    });
+
+    it('rejects unsigned or forged link payload', async () => {
+      await service.handleUpdate({
+        message: {
+          chat: { id: 987654 },
+          text: '/start link_shop-abc',
+        },
+      });
+
+      expect(prisma.shop.update).not.toHaveBeenCalled();
+      expect((service as any).callApi).toHaveBeenCalledWith(
+        'sendMessage',
+        expect.objectContaining({
+          chat_id: '987654',
+          text: expect.stringContaining('Havola yaroqsiz'),
         }),
       );
     });

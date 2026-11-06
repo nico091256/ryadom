@@ -1,3 +1,3 @@
 @echo off
-set "PATH=C:\Users\Shukratovich\AppData\Local\Programs\nodejs;%PATH%"
-pnpm dev:admin
+if exist "%LOCALAPPDATA%\Programs\nodejs" set "PATH=%LOCALAPPDATA%\Programs\nodejs;%PATH%"
+npm run dev:admin

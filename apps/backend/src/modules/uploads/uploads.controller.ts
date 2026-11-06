@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  InternalServerErrorException,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -10,7 +11,7 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nes
 import { Throttle } from '@nestjs/throttler';
 import { memoryStorage } from 'multer';
 import { join, resolve } from 'path';
-import { randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { fromBuffer } from 'file-type';
@@ -50,6 +51,88 @@ export function uploadDir(): string {
   return dir;
 }
 
+function sha256Hex(content: Buffer | string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function hmacSha256(key: Buffer | string, data: string): Buffer {
+  return createHmac('sha256', key).update(data).digest();
+}
+
+async function uploadToS3(filename: string, data: Buffer): Promise<string> {
+  const endpointRaw = process.env.S3_ENDPOINT?.replace(/\/+$/, '');
+  const bucket = process.env.S3_BUCKET;
+  const region = process.env.S3_REGION || 'auto';
+  const accessKey = process.env.S3_ACCESS_KEY;
+  const secretKey = process.env.S3_SECRET_KEY;
+
+  if (!endpointRaw || !bucket || !accessKey || !secretKey) {
+    throw new InternalServerErrorException({
+      code: 'S3_CONFIG_MISSING',
+      message: 'UPLOAD_DRIVER=s3 requires S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, and S3_SECRET_KEY.',
+    });
+  }
+
+  const objectKey = `uploads/${filename}`;
+  const targetUrl = new URL(`${endpointRaw}/${bucket}/${objectKey}`);
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256Hex(data);
+
+  const canonicalHeaders =
+    `content-type:image/webp\n` +
+    `host:${targetUrl.host}\n` +
+    `x-amz-content-sha256:${payloadHash}\n` +
+    `x-amz-date:${amzDate}\n`;
+  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    'PUT',
+    targetUrl.pathname,
+    '',
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join('\n');
+
+  const kDate = hmacSha256(`AWS4${secretKey}`, dateStamp);
+  const kRegion = hmacSha256(kDate, region);
+  const kService = hmacSha256(kRegion, 's3');
+  const kSigning = hmacSha256(kService, 'aws4_request');
+  const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const response = await fetch(targetUrl.toString(), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'image/webp',
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+      Authorization: authorization,
+    },
+    body: new Uint8Array(data),
+  });
+
+  if (!response.ok) {
+    throw new InternalServerErrorException({
+      code: 'S3_UPLOAD_FAILED',
+      message: `Failed to upload image to object storage (HTTP ${response.status})`,
+    });
+  }
+
+  const publicBase = process.env.S3_PUBLIC_URL?.replace(/\/+$/, '');
+  return publicBase ? `${publicBase}/${objectKey}` : `${endpointRaw}/${bucket}/${objectKey}`;
+}
+
 function invalidFileType(): BadRequestException {
   return new BadRequestException({ code: 'INVALID_FILE_TYPE', message: 'Only JPEG, PNG or WEBP images are allowed.' });
 }
@@ -64,7 +147,7 @@ export class UploadsController {
   @Throttle(UPLOAD_THROTTLE)
   @ApiOperation({
     summary:
-      'Upload an image (product photo, shop logo/cover). The file is type-checked by its bytes, re-encoded to WEBP (max 1200px, metadata stripped) and returned as a server-relative URL.',
+      'Upload an image (product photo, shop logo/cover). The file is type-checked by its bytes, re-encoded to WEBP (max 1200px, metadata stripped) and returned as a server-relative or CDN URL.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -115,8 +198,14 @@ export class UploadsController {
     }
 
     const filename = `${randomUUID()}.webp`;
+    if (process.env.UPLOAD_DRIVER === 's3') {
+      const url = await uploadToS3(filename, data);
+      return { url, width: info.width, height: info.height, bytes: info.size };
+    }
+
     await writeFile(join(uploadDir(), filename), data);
 
     return { url: `/uploads/${filename}`, width: info.width, height: info.height, bytes: info.size };
   }
 }
+

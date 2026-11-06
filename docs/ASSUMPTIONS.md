@@ -3,8 +3,9 @@
 This document records the assumptions and technical decisions made during the development of the Local Shop Delivery Platform, consistent with Technical Specification v2.
 
 ## 1. Scope & Roles
-- **Single Mobile App**: Both Customers and Shopkeepers share the same Expo mobile application. The authenticated user's role (`customer` vs `seller`) determines the loaded navigation shell and active tabs.
-- **Admin Access**: Administrators access the platform exclusively through the web-based Admin panel (`/apps/admin`), not the mobile application.
+- **Customer App (`apps/mobile_client`)**: Flutter application (Android, iOS, and Web) dedicated to customers (`customer` role).
+- **Shopkeeper Panel (`apps/store`)**: Next.js web panel dedicated to shopkeepers (`seller` role) working at a counter/desk, with POS and Telegram bot integrations.
+- **Admin Panel (`apps/admin`)**: Next.js web panel dedicated to platform administrators (`admin` role).
 - **Courier Role**: Out of scope for Phase 1. The shopkeeper personally fulfills and delivers orders.
 - **Delivery Pricing**: Delivery is always 100% free for customers in Phase 1. There is no minimum order amount.
 
@@ -26,7 +27,7 @@ This document records the assumptions and technical decisions made during the de
 - Shops without coordinates are never returned in search. Inactive or closed shops are displayed with a "Closed" indicator and blocked from checkout.
 
 ## 5. Order State Machine & Realtime
-- 6 immutable states: `new` -> `accepted` -> `preparing` -> `on_the_way` -> `delivered` / `cancelled`.
-- Stock quantities are atomically decremented within the order creation database transaction. If an order is rejected or cancelled, the reserved stock is atomically restored.
-- If an order stays in `new` state for 5 minutes without being accepted by the seller, an automated background task marks `needs_attention = true`, pinning it to the top of the Admin dashboard.
-- Live order status updates broadcast across Socket.IO rooms (`shop:{shopId}` and `order:{orderId}`) and send Expo push notifications.
+- 4 lifecycle states: `new` -> `accepted` -> `on_the_way` -> `delivered` (plus `cancelled`).
+- Stock quantities (and promo code redemptions) are atomically decremented within the order creation database transaction. If an order is rejected or cancelled, the reserved stock and promo usage are atomically restored.
+- If an order stays in `new` state for 10 minutes without being accepted by the seller, a BullMQ delayed job (backed by a per-minute sweep fallback) automatically cancels the order and restores stock.
+- Live order status updates broadcast across authenticated Socket.IO rooms (`shop:{shopId}`, `order:{orderId}`, `user:{userId}`), Telegram seller bot notifications, and Firebase Cloud Messaging (FCM) push notifications.

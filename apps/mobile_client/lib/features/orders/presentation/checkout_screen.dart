@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:localshop_shared/localshop_shared.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
@@ -41,6 +42,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String _changeFrom = 'exact';
   bool _placing = false;
   String? _phoneError;
+  String? _idempotencyKey;
+  String? _idempotencyFingerprint;
 
   @override
   void initState() {
@@ -150,19 +153,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // The backend builds the order from its own cart — push the local one
       // first (it also re-checks stock/shop state and fails early if needed).
-      await ref.read(cartApiProvider).replace(ref.read(cartControllerProvider));
+      final cartState = ref.read(cartControllerProvider);
+      final syncedCart = await ref.read(cartApiProvider).replace(cartState);
+      if (syncedCart != null && syncedCart.totalAmount != cartState.totalAmount) {
+        ref.read(cartControllerProvider.notifier).syncWithServerCart(syncedCart);
+        _idempotencyKey = null;
+        _idempotencyFingerprint = null;
+        if (!mounted) return;
+        showAppToast(
+          context,
+          "Savatchadagi mahsulotlar narxi yangilandi (${formatPrice(syncedCart.totalAmount, SupportedLanguage.uz)}). Iltimos, tasdiqlang.",
+          tone: ToastTone.error,
+        );
+        return;
+      }
 
       final promo = _promoCodeController.text.trim();
-      final order = await ref.read(ordersApiProvider).createOrder(CreateOrderPayload(
-            addressText: fullAddress,
-            lat: address.lat,
-            lng: address.lng,
-            customerPhone: customerPhone,
-            paymentMethod: _paymentMethod.value,
-            comment: comment.isEmpty ? null : _clamp(comment, 500),
-            promoCode: promo.isNotEmpty ? promo : null,
-          ));
+      final payload = CreateOrderPayload(
+        addressText: fullAddress,
+        lat: address.lat,
+        lng: address.lng,
+        customerPhone: customerPhone,
+        paymentMethod: _paymentMethod.value,
+        comment: comment.isEmpty ? null : _clamp(comment, 500),
+        promoCode: promo.isNotEmpty ? promo : null,
+      );
 
+      // Reuse the same Idempotency-Key across retries of the identical checkout attempt
+      // so a network timeout followed by a second tap never creates two orders.
+      final fingerprint =
+          '${cartState.shopId}:${cartState.totalAmount}:$fullAddress:${address.lat}:${address.lng}:$customerPhone:${_paymentMethod.value}:$promo:$comment';
+      if (_idempotencyFingerprint != fingerprint || _idempotencyKey == null) {
+        _idempotencyFingerprint = fingerprint;
+        _idempotencyKey = const Uuid().v4();
+      }
+
+      final order = await ref.read(ordersApiProvider).createOrder(
+            payload,
+            idempotencyKey: _idempotencyKey,
+          );
+
+      _idempotencyKey = null;
+      _idempotencyFingerprint = null;
       ref.read(cartControllerProvider.notifier).clear();
       if (!mounted) return;
       showAppToast(context, successMessage, tone: ToastTone.success);
@@ -184,13 +216,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addressText = ref.watch(addressControllerProvider.select((a) => a.addressText));
     final total = ref.watch(cartControllerProvider.select((c) => c.totalAmount));
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: Navigator.canPop(context)
-            ? null
-            : IconButton(icon: const Icon(LucideIcons.arrowLeft), tooltip: ref.t('common.back'), onPressed: () => context.go('/cart')),
-        title: Text(ref.t('checkout.title')),
-      ),
+    return PopScope(
+      canPop: !_placing,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: Navigator.canPop(context)
+              ? null
+              : IconButton(
+                  icon: const Icon(LucideIcons.arrowLeft),
+                  tooltip: ref.t('common.back'),
+                  onPressed: _placing ? null : () => context.go('/cart'),
+                ),
+          title: Text(ref.t('checkout.title')),
+        ),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -258,6 +296,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         maxWidth: _maxContentWidth,
         loading: _placing,
         onPressed: _placing || total <= 0 ? null : _placeOrder,
+      ),
       ),
     );
   }

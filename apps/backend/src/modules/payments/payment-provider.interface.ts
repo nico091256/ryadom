@@ -6,9 +6,15 @@ export interface PaymentInitializationResult {
   paymentStatus: PaymentStatus;
 }
 
+export type PaymentWebhookAction = 'check' | 'prepare' | 'perform' | 'cancel';
+
 export interface PaymentCallbackResult {
   success: boolean;
-  orderId: string;
+  action: PaymentWebhookAction;
+  orderId?: string;
+  providerTxId?: string;
+  amountTiyin?: number;
+  shouldUpdateStatus: boolean;
   paymentStatus: PaymentStatus;
   rawResponse: Record<string, any>;
 }
@@ -18,5 +24,8 @@ export interface IPaymentProvider {
 
   initializePayment(orderId: string, amountTiyin: number, customerPhone: string): Promise<PaymentInitializationResult>;
 
-  handleWebhook(payload: Record<string, any>): Promise<PaymentCallbackResult>;
+  handleWebhook(
+    payload: Record<string, any>,
+    headers?: Record<string, string | string[] | undefined>,
+  ): Promise<PaymentCallbackResult>;
 }

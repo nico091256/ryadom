@@ -3,11 +3,15 @@ import {
   Get,
   Post,
   Body,
+  Headers,
   UseGuards,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TelegramService } from './telegram.service';
+import { TELEGRAM_WEBHOOK_SECRET_KEY } from './telegram.constants';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -21,12 +25,23 @@ export class TelegramController {
   constructor(
     private readonly telegramService: TelegramService,
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Public()
   @Post('webhook')
   @ApiOperation({ summary: 'Telegram bot webhook update receiver' })
-  async handleWebhook(@Body() update: any) {
+  async handleWebhook(
+    @Body() update: any,
+    @Headers('x-telegram-bot-api-secret-token') secretToken?: string,
+  ) {
+    const expectedSecret = this.configService.get<string>(TELEGRAM_WEBHOOK_SECRET_KEY)?.trim();
+    if (!expectedSecret || !secretToken || secretToken !== expectedSecret) {
+      throw new UnauthorizedException({
+        code: 'INVALID_WEBHOOK_SECRET',
+        message: 'Invalid or unconfigured Telegram webhook secret token',
+      });
+    }
     await this.telegramService.handleUpdate(update);
     return { ok: true };
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, shortId } from '@/lib/format';
 import type { Order } from '@/lib/types';
 
@@ -41,6 +41,22 @@ function playBeepPattern(ctx: AudioContext) {
   }
 }
 
+export interface OrderAlertApi {
+  pending: PendingAlert[];
+  trigger: (order: Order) => void;
+  acknowledge: () => void;
+  acknowledgeOrder: (orderId: string) => void;
+  permission: NotifyPermission;
+  requestPermission: () => Promise<void>;
+}
+
+const OrderAlertContext = createContext<OrderAlertApi | null>(null);
+
+export function OrderAlertProvider({ children }: { children: React.ReactNode }) {
+  const api = useNewOrderAlertInternal();
+  return React.createElement(OrderAlertContext.Provider, { value: api }, children);
+}
+
 /**
  * Loud, multi-channel alert for incoming orders:
  *  - repeating synthesized beep every 4s,
@@ -49,7 +65,13 @@ function playBeepPattern(ctx: AudioContext) {
  *  - `pending` list for the sticky banner.
  * Everything stops on `acknowledge()` (banner click) or when the last pending order is acted on.
  */
-export function useNewOrderAlert() {
+export function useNewOrderAlert(): OrderAlertApi {
+  const ctx = useContext(OrderAlertContext);
+  const fallback = useNewOrderAlertInternal(Boolean(ctx));
+  return ctx ?? fallback;
+}
+
+function useNewOrderAlertInternal(disabled = false): OrderAlertApi {
   const [pending, setPending] = useState<PendingAlert[]>([]);
   const [permission, setPermission] = useState<NotifyPermission>('unsupported');
 
@@ -61,6 +83,7 @@ export function useNewOrderAlert() {
   // Create / resume the AudioContext. Browsers only allow audio after a user gesture, so we also
   // warm it up on the first pointer/key interaction with the page.
   const ensureAudio = useCallback((): AudioContext | null => {
+    if (disabled) return null;
     const Ctor = getAudioContextCtor();
     if (!Ctor) return null;
     try {
@@ -71,10 +94,10 @@ export function useNewOrderAlert() {
     } catch {
       return null;
     }
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (disabled || typeof window === 'undefined') return;
     setPermission(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
     const unlock = () => ensureAudio();
     window.addEventListener('pointerdown', unlock, { passive: true });
@@ -83,7 +106,7 @@ export function useNewOrderAlert() {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
-  }, [ensureAudio]);
+  }, [disabled, ensureAudio]);
 
   const stopBeep = useCallback(() => {
     if (beepTimerRef.current) {

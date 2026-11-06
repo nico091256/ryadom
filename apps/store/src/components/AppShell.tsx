@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BarChart3, ChevronsLeft, ChevronsRight, LogOut, Menu, Package, ShoppingBag, Store, X } from 'lucide-react';
+import { BarChart3, ChevronsLeft, ChevronsRight, KeyRound, LogOut, Menu, Package, ShoppingBag, Store, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { StoreUser } from '@/lib/types';
+import { getSocket, joinShopRoom, SOCKET_EVENTS } from '@/lib/socket';
+import type { Order, StoreUser } from '@/lib/types';
 import { cn } from '@/lib/format';
 import { Spinner } from '@/components/ui';
+import { NewOrderBanner } from '@/components/orders/NewOrderBanner';
+import { OrderAlertProvider, useNewOrderAlert } from '@/components/orders/useNewOrderAlert';
 
 const NAV = [
   {
@@ -52,7 +55,82 @@ function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
 }
 
+function GlobalOrderMonitor({ shopId, active }: { shopId: string | null; active: boolean }) {
+  const router = useRouter();
+  const orderAlert = useNewOrderAlert();
+  const seenIdsRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const s = getSocket();
+    if (shopId) joinShopRoom(shopId);
+
+    const onConnect = () => {
+      if (shopId) joinShopRoom(shopId);
+    };
+    const onNew = (payload: Order | undefined) => {
+      if (payload && typeof payload === 'object' && payload.id) {
+        seenIdsRef.current?.add(payload.id);
+        orderAlert.trigger(payload);
+      }
+    };
+
+    s.on('connect', onConnect);
+    s.on(SOCKET_EVENTS.ORDER_NEW, onNew);
+    return () => {
+      s.off('connect', onConnect);
+      s.off(SOCKET_EVENTS.ORDER_NEW, onNew);
+    };
+  }, [active, shopId, orderAlert]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await api.getOrders({ status: 'new', limit: 20 });
+        if (cancelled) return;
+        const list = res.data || [];
+        if (seenIdsRef.current) {
+          list
+            .filter((o) => o.status === 'new' && !seenIdsRef.current!.has(o.id))
+            .forEach((o) => orderAlert.trigger(o));
+        }
+        seenIdsRef.current = new Set(list.map((o) => o.id));
+      } catch {
+        /* ignore background poll errors */
+      }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [active, orderAlert]);
+
+  if (!active || orderAlert.pending.length === 0) return null;
+
+  return (
+    <NewOrderBanner
+      pending={orderAlert.pending}
+      onClick={() => {
+        orderAlert.acknowledge();
+        router.push('/');
+      }}
+    />
+  );
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <OrderAlertProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </OrderAlertProvider>
+  );
+}
+
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
   const router = useRouter();
   const [user, setUser] = useState<StoreUser | null>(null);
@@ -237,6 +315,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
               {initials}
             </div>
+            <Link
+              href="/change-password"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              title="Parolni o'zgartirish"
+            >
+              <KeyRound className="h-4 w-4" />
+            </Link>
             <button
               onClick={logout}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600"
@@ -248,7 +333,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <GlobalOrderMonitor shopId={user?.shopId ?? null} active={pathname !== '/'} />
+          {children}
+        </main>
       </div>
     </div>
   );

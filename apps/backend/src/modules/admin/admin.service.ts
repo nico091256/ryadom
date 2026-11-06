@@ -242,7 +242,12 @@ export class AdminService {
         ip: actor.ip,
       });
     }
-    return created;
+    return this.sanitizeShop(created);
+  }
+
+  private sanitizeShop<T extends Record<string, any>>(shop: T): Omit<T, 'pos_api_key'> {
+    const { pos_api_key: _posKey, ...rest } = shop;
+    return rest;
   }
 
   private readonly shopOwnerSelect = {
@@ -294,7 +299,7 @@ export class AdminService {
 
     return {
       data: shops.map(({ _count, ...shop }) => ({
-        ...shop,
+        ...this.sanitizeShop(shop),
         productCount: _count.products,
         orderCount: _count.orders,
         revenueTiyin: revenue.get(shop.id)?.sum ?? 0,
@@ -338,7 +343,7 @@ export class AdminService {
 
     const { _count, ...rest } = shop;
     return {
-      ...rest,
+      ...this.sanitizeShop(rest),
       productCount: _count.products,
       orderCount: _count.orders,
       revenueTiyin: revenueAll.get(shopId)?.sum ?? 0,
@@ -397,7 +402,7 @@ export class AdminService {
       });
     }
     return {
-      ...updated,
+      ...this.sanitizeShop(updated),
       isCurrentlyOpen:
         updated.is_active &&
         updated.status === ('active' as any) &&
@@ -430,7 +435,7 @@ export class AdminService {
         ip: actor.ip,
       });
     }
-    return updated;
+    return this.sanitizeShop(updated);
   }
 
   /**
@@ -785,6 +790,19 @@ export class AdminService {
         where: { user_id: userId, revoked_at: null },
         data: { revoked_at: new Date() },
       });
+      if (user.role === ('seller' as any) && this.prisma.shop?.findMany) {
+        const sellerShops = await this.prisma.shop.findMany({
+          where: { owner_id: userId },
+          select: { id: true },
+        });
+        if (sellerShops.length > 0) {
+          await this.prisma.shop.updateMany({
+            where: { owner_id: userId },
+            data: { is_active: false, is_open: false, status: 'blocked' as any },
+          });
+          await Promise.all(sellerShops.map((s) => this.invalidateShopCaches(s.id)));
+        }
+      }
     }
     if (actor) {
       await this.audit.log(actor.id, isBlocked ? 'user.block' : 'user.unblock', {

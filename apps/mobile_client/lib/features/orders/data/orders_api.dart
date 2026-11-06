@@ -38,11 +38,14 @@ class OrdersApi {
 
   /// Idempotency-Key makes a retried submit (double-tap, timeout-retry)
   /// return the original order instead of creating a duplicate.
-  Future<Order> createOrder(CreateOrderPayload payload) async {
+  Future<Order> createOrder(CreateOrderPayload payload, {String? idempotencyKey}) async {
+    final key = (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+        ? idempotencyKey.trim()
+        : const Uuid().v4();
     final data = await _client.post(
       '/orders',
       data: payload.toJson(),
-      headers: {'Idempotency-Key': const Uuid().v4()},
+      headers: {'Idempotency-Key': key},
     ) as Map<String, dynamic>;
     return Order.fromJson(data);
   }

@@ -23,7 +23,7 @@
     "export:openapi": "ts-node -r tsconfig-paths/register scripts/export-openapi.ts"
   },
   "dependencies": {
-    "@localshop/shared": "workspace:*",
+    "@localshop/shared": "*",
     "@nestjs/bullmq": "^10.2.3",
     "@nestjs/common": "^10.4.15",
     "@nestjs/config": "^3.3.0",

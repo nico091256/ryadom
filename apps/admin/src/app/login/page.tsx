@@ -17,8 +17,11 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (api.isAuthenticated()) router.replace('/');
-    else if (params?.get('expired')) setError('Sessiya muddati tugadi. Iltimos, qaytadan kiring.');
+    if (api.isAuthenticated()) {
+      router.replace(api.getUser()?.must_change_password ? '/change-password' : '/');
+    } else if (params?.get('expired')) {
+      setError('Sessiya muddati tugadi. Iltimos, qaytadan kiring.');
+    }
   }, [router, params]);
 
   const submit = async (e: React.FormEvent) => {
@@ -30,8 +33,8 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      await api.login(login.trim(), password);
-      router.replace('/');
+      const user = await api.login(login.trim(), password);
+      router.replace(user.must_change_password ? '/change-password' : '/');
     } catch (err) {
       const msg = errorMessage(err);
       setError(/invalid|incorrect|credential|unauthor|password/i.test(msg) ? "Login yoki parol noto'g'ri." : msg);

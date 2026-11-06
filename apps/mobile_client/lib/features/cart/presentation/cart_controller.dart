@@ -85,6 +85,12 @@ class CartController extends Notifier<CartState> {
     _saveToStorage();
   }
 
+  /// Replaces local cart items with the server-revalidated cart (current prices/stock).
+  void syncWithServerCart(CartState serverCart) {
+    state = serverCart;
+    _saveToStorage();
+  }
+
   void setQuantity(String productId, int quantity) {
     if (quantity <= 0) {
       remove(productId);

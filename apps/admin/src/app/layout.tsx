@@ -15,6 +15,10 @@ const manrope = localFont({
 export const metadata: Metadata = {
   title: 'Ryadom Admin',
   description: "Ryadom — Toshkent bo'ylab mahalliy do'konlardan yetkazib berish platformasi boshqaruv paneli",
+  openGraph: {
+    title: 'Ryadom Admin',
+    description: "Ryadom — Toshkent bo'ylab mahalliy do'konlardan yetkazib berish platformasi boshqaruv paneli",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

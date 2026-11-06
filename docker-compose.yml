@@ -46,7 +46,7 @@ services:
     container_name: localshop-api
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       - NODE_ENV=production
       - PORT=4000
@@ -62,7 +62,16 @@ services:
       - SMS_PROVIDER=${SMS_PROVIDER:?SMS_PROVIDER=eskiz is required for the production container}
       - ESKIZ_EMAIL=${ESKIZ_EMAIL:-}
       - ESKIZ_PASSWORD=${ESKIZ_PASSWORD:-}
-      - ONLINE_PAYMENTS_ENABLED=false
+      - ONLINE_PAYMENTS_ENABLED=${ONLINE_PAYMENTS_ENABLED:-false}
+      - PAYME_MERCHANT_ID=${PAYME_MERCHANT_ID:-}
+      - PAYME_SECRET_KEY=${PAYME_SECRET_KEY:-}
+      - CLICK_SERVICE_ID=${CLICK_SERVICE_ID:-}
+      - CLICK_MERCHANT_ID=${CLICK_MERCHANT_ID:-}
+      - CLICK_SECRET_KEY=${CLICK_SECRET_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
     depends_on:
       postgres:

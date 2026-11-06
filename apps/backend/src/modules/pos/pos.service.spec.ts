@@ -17,6 +17,10 @@ describe('PosService.syncProducts', () => {
           { id: 'p-both', barcode: '111', sku: 'BOTH' },
         ]),
         update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({ id: 'p-created-1' }),
+      },
+      category: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'c-2', name_uz: 'Sut va sut mahsulotlari' }]),
       },
       order: { findMany: jest.fn(), findUnique: jest.fn() },
     };
@@ -44,6 +48,36 @@ describe('PosService.syncProducts', () => {
     expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: 'p-sku' }, data: { stock: 7, is_available: false } });
     expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: 'p-both' }, data: { stock: 1 } });
     expect(prisma.product.update).toHaveBeenCalledTimes(3);
+  });
+
+  it('auto-creates a new product when barcode/sku is unknown and name is provided', async () => {
+    const result = await service.syncProducts(shop, [
+      {
+        barcode: '4780099988877',
+        sku: 'REG-NEW-01',
+        name: 'Lactel Sut 2.5% 1L',
+        category_name: 'Sut va sut mahsulotlari',
+        price: 1450000,
+        stock: 20,
+      },
+    ]);
+
+    expect(result.created).toBe(1);
+    expect(result.not_found).toEqual([]);
+    expect(prisma.product.create).toHaveBeenCalledTimes(1);
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          shop_id: 'shop-1',
+          category_id: 'c-2',
+          name_uz: 'Lactel Sut 2.5% 1L',
+          barcode: '4780099988877',
+          sku: 'REG-NEW-01',
+          price: 1450000,
+          stock: 20,
+        }),
+      }),
+    );
   });
 
   it('scopes the lookup to the shop and excludes soft-deleted products', async () => {

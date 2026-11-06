@@ -11,6 +11,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/redis/cache.service';
 import {
   CreateProductDto,
+  PosBulkImportDto,
+  RegosSyncDto,
   SELLER_PRODUCTS_DEFAULT_LIMIT,
   SELLER_PRODUCTS_MAX_LIMIT,
   SELLER_PRODUCTS_UNPAGED_CAP,
@@ -21,6 +23,13 @@ import {
 import { OrderStatus } from '@localshop/shared';
 import { POS_API_KEY_PREFIX } from '../pos/pos.constants';
 import { isSafeWebhookUrl } from '../pos/pos-webhook.service';
+import {
+  CategoryRef,
+  DEMO_REGOS_ITEMS,
+  matchCategoryId,
+  normalizeRegosItem,
+  resolveRegosGatewayUrl,
+} from '../pos/regos.util';
 
 /** '' and whitespace become null so an empty form field clears the code instead of storing ''. */
 function normalizeCode(value: string | null | undefined): string | null {
@@ -141,6 +150,257 @@ export class SellerService {
       data: { pos_type: dto.pos_type, pos_webhook_url: url },
       include: { city: true },
     });
+  }
+
+  /**
+   * Connects to REGOS.Online Gateway (`POST .../v1/item/getext`) or uses the built-in
+   * REGOS demo catalog when `integration_key === 'demo'`, normalizes prices (so'm -> tiyin)
+   * and stock, matches categories, and upserts all products into the seller's shop.
+   */
+  async syncFromRegos(ownerId: string, dto: RegosSyncDto) {
+    const shop = await this.getSellerShop(ownerId);
+    let gatewayUrl: string;
+    try {
+      gatewayUrl = resolveRegosGatewayUrl(dto.integration_key);
+    } catch (e: any) {
+      throw new BadRequestException({
+        code: 'REGOS_INVALID_KEY',
+        message: e?.message || 'REGOS integratsiya kaliti noto\'g\'ri.',
+      });
+    }
+
+    let rawItems: Record<string, any>[] = [];
+    if (gatewayUrl === 'demo') {
+      rawItems = DEMO_REGOS_ITEMS;
+    } else {
+      rawItems = await this.fetchRegosCatalog(gatewayUrl, {
+        stock_id: dto.stock_id,
+        price_type_id: dto.price_type_id,
+      });
+    }
+
+    if (shop.pos_type !== 'regos') {
+      await this.prisma.shop.update({
+        where: { id: shop.id },
+        data: { pos_type: 'regos' },
+      });
+    }
+
+    const stats = await this.upsertPosCatalog(shop.id, rawItems, {
+      defaultCategoryId: dto.default_category_id,
+      priceInSom: true,
+    });
+
+    return {
+      source: gatewayUrl === 'demo' ? 'regos_demo' : 'regos_api',
+      ...stats,
+    };
+  }
+
+  /**
+   * Bulk imports/upserts products from a REGOS CSV or JSON export uploaded in the store panel.
+   */
+  async bulkImportPosItems(ownerId: string, dto: PosBulkImportDto) {
+    const shop = await this.getSellerShop(ownerId);
+    const stats = await this.upsertPosCatalog(shop.id, dto.items, {
+      defaultCategoryId: dto.default_category_id,
+      priceInSom: dto.price_in_som ?? true,
+    });
+    return {
+      source: 'file_import',
+      ...stats,
+    };
+  }
+
+  private async fetchRegosCatalog(
+    gatewayUrl: string,
+    opts: { stock_id?: number; price_type_id?: number },
+  ): Promise<Record<string, any>[]> {
+    const filters: { Field: string; Operator: string; Value: number }[] = [];
+    if (opts.stock_id) filters.push({ Field: 'stock_id', Operator: 'Equal', Value: opts.stock_id });
+    if (opts.price_type_id) filters.push({ Field: 'price_type_id', Operator: 'Equal', Value: opts.price_type_id });
+
+    const payload: Record<string, any> = {
+      limit: 500,
+      offset: 0,
+      ...(opts.stock_id ? { stock_id: opts.stock_id } : {}),
+      ...(opts.price_type_id ? { price_type_id: opts.price_type_id } : {}),
+      ...(filters.length > 0 ? { filters } : {}),
+    };
+
+    const callMethod = async (methodPath: string) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const res = await fetch(`${gatewayUrl}/${methodPath}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status} (${res.statusText})`);
+        }
+        return (await res.json()) as { ok?: boolean; result?: any; description?: string };
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    let body: { ok?: boolean; result?: any; description?: string };
+    try {
+      body = await callMethod('item/getext');
+      if (body && body.ok === false) {
+        body = await callMethod('item/get');
+      }
+    } catch (err: any) {
+      throw new BadRequestException({
+        code: 'REGOS_CONNECTION_FAILED',
+        message: `REGOS serveriga ulanib bo'lmadi (${err?.message || 'tarmoq xatosi'}). Integratsiya kalitini tekshiring yoki "demo" rejimida sinab ko'ring.`,
+      });
+    }
+
+    if (body?.ok === false) {
+      throw new BadRequestException({
+        code: 'REGOS_API_ERROR',
+        message: `REGOS API xatoligi: ${body.description || 'Noma\'lum xato'}`,
+      });
+    }
+
+    const list = Array.isArray(body?.result)
+      ? body.result
+      : Array.isArray(body)
+        ? body
+        : [];
+    return list;
+  }
+
+  private async upsertPosCatalog(
+    shopId: string,
+    rawItems: Record<string, any>[],
+    options: { defaultCategoryId?: string; priceInSom: boolean },
+  ) {
+    const categories: CategoryRef[] = (await this.prisma.category.findMany()) ?? [];
+    const fallbackCatId =
+      options.defaultCategoryId && categories.some((c) => c.id === options.defaultCategoryId)
+        ? options.defaultCategoryId
+        : categories[0]?.id ?? 'c-1';
+
+    const existing = await this.prisma.product.findMany({
+      where: { shop_id: shopId, deleted_at: null },
+      select: { id: true, barcode: true, sku: true, name_uz: true, image_url: true, description_uz: true },
+    });
+
+    const reservedByProduct = new Map<string, number>();
+    const pendingNewOrders =
+      (await this.prisma.order?.findMany?.({
+        where: { shop_id: shopId, status: OrderStatus.NEW as any },
+        select: { items: { select: { product_id: true, quantity: true } } },
+      })) ?? [];
+    for (const ord of pendingNewOrders) {
+      for (const oi of ord.items ?? []) {
+        reservedByProduct.set(oi.product_id, (reservedByProduct.get(oi.product_id) ?? 0) + oi.quantity);
+      }
+    }
+
+    const byBarcode = new Map<string, (typeof existing)[number]>();
+    const bySku = new Map<string, (typeof existing)[number]>();
+    const byName = new Map<string, (typeof existing)[number]>();
+
+    for (const prod of existing) {
+      if (prod.barcode) byBarcode.set(prod.barcode, prod);
+      if (prod.sku) bySku.set(prod.sku, prod);
+      if (prod.name_uz) byName.set(prod.name_uz.trim().toLowerCase(), prod);
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const raw of rawItems) {
+      const item = normalizeRegosItem(raw, { priceInSom: options.priceInSom });
+      if (!item) {
+        skipped++;
+        continue;
+      }
+
+      const match =
+        (item.barcode ? byBarcode.get(item.barcode) : undefined) ||
+        (item.sku ? bySku.get(item.sku) : undefined) ||
+        byName.get(item.name_uz.trim().toLowerCase());
+
+      if (match) {
+        const reserved = reservedByProduct.get(match.id) ?? 0;
+        const effectiveStock = Math.max(0, item.stock - reserved);
+        const updateData: Record<string, any> = {
+          price: item.price,
+          stock: effectiveStock,
+          is_available: item.price > 0 && item.is_available && (effectiveStock > 0 || item.stock === 0 ? item.is_available : false),
+          name_uz: item.name_uz,
+        };
+        if (!match.barcode && item.barcode && !byBarcode.has(item.barcode)) {
+          updateData.barcode = item.barcode;
+        }
+        if (!match.sku && item.sku) {
+          updateData.sku = item.sku;
+        }
+        if (!match.image_url && item.image_url) {
+          updateData.image_url = item.image_url;
+        }
+        if (!match.description_uz && item.description_uz) {
+          updateData.description_uz = item.description_uz;
+        }
+
+        const saved = await this.prisma.product.update({
+          where: { id: match.id },
+          data: updateData,
+        });
+        if (saved.barcode) byBarcode.set(saved.barcode, saved);
+        if (saved.sku) bySku.set(saved.sku, saved);
+        byName.set(saved.name_uz.trim().toLowerCase(), saved);
+        updated++;
+      } else {
+        const categoryId =
+          item.category_id && categories.some((c) => c.id === item.category_id)
+            ? item.category_id
+            : matchCategoryId(item.group_name, categories, fallbackCatId);
+
+        const safeBarcode = item.barcode && !byBarcode.has(item.barcode) ? item.barcode : null;
+        const createdProd = await this.prisma.product.create({
+          data: {
+            shop_id: shopId,
+            category_id: categoryId,
+            name_uz: item.name_uz,
+            name_ru: item.name_ru || item.name_uz,
+            name_en: item.name_en || item.name_uz,
+            description_uz: item.description_uz,
+            description_ru: item.description_uz,
+            description_en: item.description_uz,
+            price: item.price,
+            stock: item.stock,
+            is_available: item.is_available,
+            barcode: safeBarcode,
+            sku: item.sku,
+            image_url: item.image_url,
+          },
+        });
+        if (createdProd.barcode) byBarcode.set(createdProd.barcode, createdProd);
+        if (createdProd.sku) bySku.set(createdProd.sku, createdProd);
+        byName.set(createdProd.name_uz.trim().toLowerCase(), createdProd);
+        created++;
+      }
+    }
+
+    if (created > 0 || updated > 0) {
+      await this.invalidateShopCache(shopId);
+    }
+
+    return {
+      created,
+      updated,
+      skipped,
+      total: created + updated + skipped,
+    };
   }
 
   /**

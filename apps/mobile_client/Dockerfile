@@ -1,8 +1,7 @@
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
-COPY apps/mobile_client/web_dist /usr/share/nginx/html
 COPY apps/mobile_client/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/mobile_client/web_dist /usr/share/nginx/html
 
 EXPOSE 80
-
-CMD ["sh", "-c", "sed -i 's/listen       80;/listen       '\"$PORT\"';/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["nginx", "-g", "daemon off;"]

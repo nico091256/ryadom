@@ -51,6 +51,14 @@ describe('AdminService — audit trail', () => {
     expect(audit.log.mock.calls.map((c: any[]) => c[1])).toEqual(['shop.block', 'shop.unblock']);
   });
 
+  it('strips pos_api_key from shop responses', async () => {
+    prisma.shop.findUnique.mockResolvedValue({ ...shop, pos_api_key: 'pos_live_secret' });
+    prisma.shop.update.mockResolvedValue({ ...shop, status: 'active', pos_api_key: 'pos_live_secret' });
+
+    const approved = await service.approveShop('s-1', actor);
+    expect((approved as any).pos_api_key).toBeUndefined();
+  });
+
   it('does not write an audit entry when the shop is missing', async () => {
     prisma.shop.findUnique.mockResolvedValue(null);
     await expect(service.approveShop('nope', actor)).rejects.toBeInstanceOf(NotFoundException);

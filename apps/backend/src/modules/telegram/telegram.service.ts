@@ -7,6 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus, UserRole, formatPrice } from '@localshop/shared';
@@ -72,9 +73,48 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     return this.botUsername;
   }
 
+  private getLinkSecret(): string {
+    return (
+      this.token ||
+      this.configService.get<string>('JWT_ACCESS_SECRET') ||
+      'ryadom-telegram-link-secret'
+    );
+  }
+
+  signShopLinkPayload(shopId: string): string {
+    const sig = createHmac('sha256', this.getLinkSecret())
+      .update(shopId)
+      .digest('hex')
+      .slice(0, 16);
+    return `link_${shopId}_${sig}`;
+  }
+
+  verifyShopLinkPayload(payload: string): string | null {
+    if (!payload.startsWith('link_')) return null;
+    const rest = payload.slice('link_'.length).trim();
+    const lastSep = rest.lastIndexOf('_');
+    if (lastSep <= 0) return null;
+
+    const shopId = rest.slice(0, lastSep);
+    const sig = rest.slice(lastSep + 1);
+    if (!shopId || sig.length !== 16) return null;
+
+    const expectedSig = createHmac('sha256', this.getLinkSecret())
+      .update(shopId)
+      .digest('hex')
+      .slice(0, 16);
+
+    const a = Buffer.from(sig, 'utf8');
+    const b = Buffer.from(expectedSig, 'utf8');
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return null;
+    }
+    return shopId;
+  }
+
   getShopLinkUrl(shopId: string): string | null {
     if (!this.botUsername) return null;
-    return `https://t.me/${this.botUsername}?start=link_${shopId}`;
+    return `https://t.me/${this.botUsername}?start=${this.signShopLinkPayload(shopId)}`;
   }
 
   /**
@@ -94,22 +134,29 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       const orderShortId = order.id.slice(0, 8).toUpperCase();
       const formattedTotal = formatPrice(order.total_amount);
       const paymentText = order.payment_method === 'cash' ? 'Naqd pul 💵' : 'Online to‘lov 💳';
-      
+
       const itemsList = Array.isArray(order.items)
         ? order.items
-            .map((item: any) => `• <b>${escapeHtml(item.product_name)}</b> x ${item.quantity} = ${formatPrice(item.total_price)} so‘m`)
+            .map((item: any) => {
+              const itemTotal =
+                typeof item.total_price === 'number'
+                  ? item.total_price
+                  : (item.unit_price ?? 0) * (item.quantity ?? 1);
+              return `• <b>${escapeHtml(item.product_name)}</b> x ${item.quantity} = ${formatPrice(itemTotal)}`;
+            })
             .join('\n')
         : '';
 
+      const rawAddress = order.address_snapshot?.text || order.delivery_address_text || '';
       const addressDetails = [
-        order.delivery_address_text ? escapeHtml(order.delivery_address_text) : '',
+        rawAddress ? escapeHtml(rawAddress) : '',
         order.delivery_entrance ? `Podyezd: ${order.delivery_entrance}` : '',
         order.delivery_floor ? `Qavat: ${order.delivery_floor}` : '',
         order.delivery_apartment ? `Xonadon: ${order.delivery_apartment}` : '',
       ].filter(Boolean).join(', ');
 
       const customerName = escapeHtml(order.customer?.name || 'Xaridor');
-      const customerPhone = order.customer?.phone || 'Mavjud emas';
+      const customerPhone = order.customer_phone || order.customer?.phone || 'Mavjud emas';
 
       const messageText = [
         `🔔 <b>YANGI BUYURTMA! #${orderShortId}</b>`,
@@ -118,7 +165,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         `🛒 <b>Mahsulotlar:</b>`,
         itemsList,
         '',
-        `💰 <b>Jami summa:</b> <b>${formattedTotal} so‘m</b>`,
+        `💰 <b>Jami summa:</b> <b>${formattedTotal}</b>`,
         `💳 <b>To‘lov:</b> ${paymentText}`,
         `📍 <b>Manzil:</b> ${addressDetails}`,
         `👤 <b>Mijoz:</b> ${customerName} (${customerPhone})`,
@@ -178,7 +225,14 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       const payload = parts[1] || '';
 
       if (payload.startsWith('link_')) {
-        const shopId = payload.replace('link_', '').trim();
+        const shopId = this.verifyShopLinkPayload(payload);
+        if (!shopId) {
+          await this.sendMessage(
+            chatId,
+            `❌ Havola yaroqsiz yoki eskirgan. Iltimos, do‘kon boshqaruv panelidan qaytadan <b>"Telegram botni ulash"</b> tugmasini bosing.`,
+          );
+          return;
+        }
         await this.linkShopToChat(shopId, chatId);
         return;
       }
@@ -246,6 +300,22 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       if (order.shop.telegram_chat_id !== chatId) {
         await this.answerCallback(queryId, 'Sizda bu buyurtmani boshqarish huquqi yo‘q!');
         return;
+      }
+
+      if (order.shop.is_active === false || order.shop.status === 'blocked') {
+        await this.answerCallback(queryId, 'Do‘kon faol emas yoki bloklangan!');
+        return;
+      }
+
+      if (order.shop.owner_id && (this.prisma as any).user?.findUnique) {
+        const owner = await (this.prisma as any).user.findUnique({
+          where: { id: order.shop.owner_id },
+          select: { is_blocked: true },
+        });
+        if (owner?.is_blocked) {
+          await this.answerCallback(queryId, 'Do‘kon egasi hisobi bloklangan!');
+          return;
+        }
       }
 
       if (action === 'accept') {

@@ -2,6 +2,7 @@ import type { OrderStatus, PaymentMethod, PaymentStatus, PosType, ShopStatus, Us
 
 /** Kassa tizimlari (backend modules/pos/pos.constants.ts bilan bir xil ro'yxat). */
 export const POS_TYPES: { value: PosType; label: string }[] = [
+  { value: 'regos', label: 'REGOS (REGOS.Online)' },
   { value: 'custom', label: "Boshqa / o'z integratsiyam (API)" },
   { value: '1c', label: '1C' },
   { value: 'jowi', label: 'Jowi' },

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Send, CheckCircle2, AlertCircle, RefreshCw, Unlink, ExternalLink } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
-import { Button, Card, CardHeader, useToast } from '@/components/ui';
+import { Button, Card, CardHeader, ConfirmDialog, useToast } from '@/components/ui';
 
 interface TelegramStatus {
   is_linked: boolean;
@@ -18,6 +18,7 @@ export function TelegramNotificationsCard() {
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [unlinking, setUnlinking] = useState(false);
+  const [confirmUnlinkOpen, setConfirmUnlinkOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStatus = useCallback(async (silent = false) => {
@@ -27,7 +28,7 @@ export function TelegramNotificationsCard() {
     try {
       const data = await api.getTelegramStatus();
       setStatus(data);
-    } catch (err) {
+    } catch {
       // If error or disabled, status stays null
     } finally {
       setLoading(false);
@@ -40,10 +41,10 @@ export function TelegramNotificationsCard() {
   }, [fetchStatus]);
 
   const handleUnlink = async () => {
-    if (!confirm('Haqiqatan ham Telegram bot ulanishini uzmoqchimisiz?')) return;
     setUnlinking(true);
     try {
       await api.unlinkTelegram();
+      setConfirmUnlinkOpen(false);
       toast.success('Telegram bot uzildi', 'Endi yangi buyurtmalar Telegramga yuborilmaydi');
       await fetchStatus(true);
     } catch (e) {
@@ -106,9 +107,9 @@ export function TelegramNotificationsCard() {
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-slate-500">Boshqa akkauntga ulash uchun uzing</span>
               <Button
-                variant="outline-danger"
+                variant="danger"
                 size="sm"
-                onClick={handleUnlink}
+                onClick={() => setConfirmUnlinkOpen(true)}
                 disabled={unlinking}
               >
                 <Unlink className="h-4 w-4 mr-1.5" />
@@ -147,6 +148,18 @@ export function TelegramNotificationsCard() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmUnlinkOpen}
+        onClose={() => setConfirmUnlinkOpen(false)}
+        onConfirm={handleUnlink}
+        loading={unlinking}
+        tone="danger"
+        title="Telegram bot ulanishini uzish"
+        message="Haqiqatan ham Telegram bot ulanishini uzmoqchimisiz? Endi yangi buyurtmalar haqida Telegram orqali xabar kelmaydi."
+        confirmLabel="Ha, uzish"
+      />
     </Card>
   );
 }
+

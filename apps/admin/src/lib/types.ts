@@ -17,6 +17,7 @@ export interface AdminUser {
   login: string | null;
   phone?: string | null;
   role: UserRole;
+  must_change_password?: boolean;
 }
 
 export interface OrderSummary {

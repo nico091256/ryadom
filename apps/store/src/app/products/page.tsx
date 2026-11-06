@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Package, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CloudDownload, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Product } from '@/lib/types';
 import { cn, formatMoney, formatNumber } from '@/lib/format';
@@ -27,6 +27,7 @@ import {
 } from '@/components/ui';
 import { ProductImage } from '@/components/products/ProductImage';
 import { ProductFormModal } from '@/components/products/ProductFormModal';
+import { PosImportModal } from '@/components/products/PosImportModal';
 
 /** Name in any language, barcode or SKU — a scanner typing a barcode + Enter lands on exactly one row. */
 function matches(p: Product, q: string): boolean {
@@ -47,6 +48,7 @@ export default function ProductsPage() {
 
   const [toggling, setToggling] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [posImportOpen, setPosImportOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -137,9 +139,18 @@ export default function ProductsPage() {
         title="Mahsulotlar"
         description={products ? `${formatNumber(total)} ta mahsulot` : "Do'koningizdagi mahsulotlar, narxlar va qoldiqlar"}
         actions={
-          <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
-            Yangi mahsulot
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={<CloudDownload className="h-4 w-4 text-emerald-600" />}
+              onClick={() => setPosImportOpen(true)}
+            >
+              REGOS / POS dan yuklash
+            </Button>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
+              Yangi mahsulot
+            </Button>
+          </div>
         }
       />
 
@@ -262,6 +273,14 @@ export default function ProductsPage() {
       </Card>
 
       <ProductFormModal open={formOpen} product={editing} onClose={closeForm} onSaved={onSaved} />
+
+      <PosImportModal
+        open={posImportOpen}
+        onClose={() => setPosImportOpen(false)}
+        onImported={() => {
+          void load();
+        }}
+      />
 
       <ConfirmDialog
         open={!!deleting}

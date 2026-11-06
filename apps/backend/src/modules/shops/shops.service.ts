@@ -23,9 +23,17 @@ const REGISTRATION_CONFLICT = {
   message: 'This login or phone number is already registered.',
 };
 
-/** POS credentials belong to the shop owner and its cash register — never part of a public response. */
-function withoutPosSecrets<T extends Record<string, any>>(shop: T): Omit<T, 'pos_api_key' | 'pos_webhook_url'> {
-  const { pos_api_key: _posKey, pos_webhook_url: _posWebhook, ...rest } = shop;
+/** POS credentials, Telegram chat binding, and owner user ID are internal — never part of a public response. */
+function withoutPosSecrets<T extends Record<string, any>>(
+  shop: T,
+): Omit<T, 'pos_api_key' | 'pos_webhook_url' | 'telegram_chat_id' | 'owner_id'> {
+  const {
+    pos_api_key: _posKey,
+    pos_webhook_url: _posWebhook,
+    telegram_chat_id: _tgChatId,
+    owner_id: _ownerId,
+    ...rest
+  } = shop;
   return rest;
 }
 

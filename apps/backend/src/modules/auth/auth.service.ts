@@ -23,6 +23,13 @@ export const SMS_RESEND_COOLDOWN_MS = 30 * 1000;
 export const SMS_HOURLY_WINDOW_MS = 60 * 60 * 1000;
 export const SMS_MAX_PER_PHONE_PER_HOUR = 5;
 
+/**
+ * Grace window for concurrent multi-tab refresh requests: if two browser tabs
+ * send the same cookie within 10s of rotation, the second request is rejected
+ * without burning the entire session family via reuse detection.
+ */
+export const REFRESH_ROTATION_GRACE_MS = 10 * 1000;
+
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -288,9 +295,15 @@ export class AuthService {
     const stored = await this.prisma.refreshToken.findUnique({ where: { token_hash: tokenHash } });
 
     if (stored?.revoked_at) {
+      const revokedAgeMs = Date.now() - stored.revoked_at.getTime();
+      if (revokedAgeMs <= REFRESH_ROTATION_GRACE_MS) {
+        throw new UnauthorizedException({
+          code: 'REFRESH_RACE_CONFLICT',
+          message: 'Refresh token was just rotated by a concurrent request.',
+        });
+      }
       // Reuse detection: a rotated-away (or logged-out) token is being presented
-      // again, so either the legitimate client or a thief holds a stale copy.
-      // Whoever it is, the whole token family is burnt.
+      // again outside the multi-tab grace window, so the whole token family is burnt.
       this.logger.warn(`Refresh token reuse detected for user ${stored.user_id}; revoking all sessions`);
       await this.logoutAll(stored.user_id);
     }

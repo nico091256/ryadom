@@ -105,7 +105,7 @@ Omit `--dart-define` to use the dev defaults (Android emulator alias / localhost
 
 - **Admin Account**:
   - Login: `admin`
-  - Password: `AdminPassword123!`
+  - Password: `ADMIN_INITIAL_PASSWORD` env var (defaults to `AdminPassword123!` in dev seed; forces password reset on first login)
 - **Shopkeeper Account (Demo Shop: "Chilonzor Oziq-Ovqat")**:
   - Login: `seller_chilonzor`
   - Password: `Shopkeeper123!` (Forces password reset on first login)

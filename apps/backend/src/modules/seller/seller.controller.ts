@@ -17,6 +17,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '@localshop/shared';
 import {
   CreateProductDto,
+  PosBulkImportDto,
+  RegosSyncDto,
   SellerProductsQueryDto,
   UpdatePosSettingsDto,
   UpdateProductDto,
@@ -64,6 +66,18 @@ export class SellerController {
   @ApiOperation({ summary: 'Set the POS vendor type and the new-order webhook URL' })
   async updatePosSettings(@CurrentUser('id') sellerId: string, @Body() dto: UpdatePosSettingsDto) {
     return this.sellerService.updatePosSettings(sellerId, dto);
+  }
+
+  @Post('pos/regos/sync')
+  @ApiOperation({ summary: 'Pull full catalog (products, prices, quantities) from REGOS.Online Item/GetExt API and upsert into shop' })
+  async syncFromRegos(@CurrentUser('id') sellerId: string, @Body() dto: RegosSyncDto) {
+    return this.sellerService.syncFromRegos(sellerId, dto);
+  }
+
+  @Post('pos/import')
+  @ApiOperation({ summary: 'Bulk import/upsert products from REGOS CSV or JSON export' })
+  async bulkImportPosItems(@CurrentUser('id') sellerId: string, @Body() dto: PosBulkImportDto) {
+    return this.sellerService.bulkImportPosItems(sellerId, dto);
   }
 
   @Get('products')

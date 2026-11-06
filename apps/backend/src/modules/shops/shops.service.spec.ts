@@ -231,9 +231,13 @@ describe('ShopsService', () => {
       await expect(service.findOne('s1')).rejects.toThrow();
     });
 
-    it('returns an active shop normally', async () => {
+    it('returns an active shop normally without exposing owner_id or telegram_chat_id', async () => {
       prisma.shop.findUnique.mockResolvedValue({
         id: 's1',
+        owner_id: 'owner-1',
+        telegram_chat_id: '999888777',
+        pos_api_key: 'rk_pos_secret',
+        pos_webhook_url: 'https://pos.local/hook',
         is_active: true,
         status: 'active',
         open_time: '00:00',
@@ -245,6 +249,10 @@ describe('ShopsService', () => {
       expect(result.isCurrentlyOpen).toBe(true);
       expect(result.productCount).toBe(5);
       expect(result.distanceMeters).toBeNull();
+      expect(result).not.toHaveProperty('owner_id');
+      expect(result).not.toHaveProperty('telegram_chat_id');
+      expect(result).not.toHaveProperty('pos_api_key');
+      expect(result).not.toHaveProperty('pos_webhook_url');
     });
 
     it('adds the distance from the customer point when lat/lng are given', async () => {

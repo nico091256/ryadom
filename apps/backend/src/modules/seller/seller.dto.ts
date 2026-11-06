@@ -1,4 +1,20 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MAX_PRODUCT_PRICE_TIYIN, MAX_PRODUCT_STOCK } from '@localshop/shared';
@@ -288,3 +304,62 @@ export class UpdatePosSettingsDto {
   @Matches(/^https?:\/\/\S+$/i, { message: 'pos_webhook_url must be an http(s) URL' })
   pos_webhook_url?: string | null;
 }
+
+/** POST /seller/pos/regos/sync — pull products, prices, and stock directly from REGOS.Online API. */
+export class RegosSyncDto {
+  @ApiProperty({
+    example: 'demo',
+    description: 'REGOS Connected Integration Key, full gateway URL, or "demo" for test catalog',
+    maxLength: 512,
+  })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(512)
+  integration_key: string;
+
+  @ApiPropertyOptional({ example: 1, description: 'REGOS warehouse/stock ID (stock_id)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  stock_id?: number;
+
+  @ApiPropertyOptional({ example: 1, description: 'REGOS price type ID (price_type_id)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  price_type_id?: number;
+
+  @ApiPropertyOptional({ example: 'c-1', description: 'Fallback category ID when REGOS group name does not match' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  default_category_id?: string;
+}
+
+/** POST /seller/pos/import — bulk upsert products from REGOS CSV / JSON export. */
+export class PosBulkImportDto {
+  @ApiProperty({ type: [Object], description: 'Raw REGOS / CSV / JSON product rows (max 1000)' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @IsObject({ each: true })
+  items: Record<string, any>[];
+
+  @ApiPropertyOptional({ example: 'c-1', description: 'Fallback category ID for unmatched groups' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  default_category_id?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    default: true,
+    description: 'True when file prices are in UZS (so\'m); false when already in tiyin',
+  })
+  @IsOptional()
+  @IsBoolean()
+  price_in_som?: boolean;
+}
+

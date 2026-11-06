@@ -7,8 +7,11 @@ import { timingSafeEqual } from 'crypto';
  * constant-time so the token cannot be recovered byte by byte from timing.
  */
 export function metricsTokenAccepted(authorization: string | undefined): boolean {
-  const required = process.env.METRICS_TOKEN;
-  if (!required) return true;
+  const required = process.env.METRICS_TOKEN?.trim();
+  if (!required) {
+    // In production, /metrics and /health/details must never be left open when METRICS_TOKEN is unset.
+    return process.env.NODE_ENV !== 'production';
+  }
   if (typeof authorization !== 'string') return false;
 
   const match = /^Bearer\s+(.+)$/i.exec(authorization.trim());

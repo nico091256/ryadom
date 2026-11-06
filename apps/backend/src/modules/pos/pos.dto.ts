@@ -50,6 +50,54 @@ export class PosSyncItemDto {
   @IsOptional()
   @IsBoolean()
   is_available?: boolean;
+
+  @ApiPropertyOptional({ example: 'Lactel Sut 2.5% 1L', maxLength: 120, description: 'Product name (enables auto-creation if barcode/sku is new)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Lactel Sut 2.5% 1L', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name_uz?: string;
+
+  @ApiPropertyOptional({ example: 'Молоко Lactel 2.5% 1л', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name_ru?: string;
+
+  @ApiPropertyOptional({ example: 'Lactel Milk 2.5% 1L', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name_en?: string;
+
+  @ApiPropertyOptional({ maxLength: 2000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description_uz?: string;
+
+  @ApiPropertyOptional({ example: 'c-2', maxLength: 64 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  category_id?: string;
+
+  @ApiPropertyOptional({ example: 'Sut va sut mahsulotlari', maxLength: 120, description: 'REGOS group name (matched to platform category)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  category_name?: string;
+
+  @ApiPropertyOptional({ maxLength: 2048 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  image_url?: string;
 }
 
 export class PosSyncProductsDto {

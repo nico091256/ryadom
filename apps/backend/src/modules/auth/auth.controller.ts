@@ -108,9 +108,13 @@ export class AuthController {
     let result: Awaited<ReturnType<AuthService['refreshToken']>>;
     try {
       result = await this.authService.refreshToken(token);
-    } catch (err) {
-      // A dead cookie would otherwise be replayed on every page load.
-      if (viaCookie) clearRefreshCookie(res, req);
+    } catch (err: any) {
+      const errCode = err?.response?.code ?? err?.getResponse?.()?.code;
+      // A dead cookie would otherwise be replayed on every page load,
+      // unless another tab just rotated the cookie milliseconds ago.
+      if (viaCookie && errCode !== 'REFRESH_RACE_CONFLICT') {
+        clearRefreshCookie(res, req);
+      }
       throw err;
     }
     if (!viaCookie) return result;

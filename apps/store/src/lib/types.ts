@@ -61,11 +61,32 @@ export interface Shop {
   city?: City | null;
 }
 
-export type PosType = 'custom' | '1c' | 'jowi' | 'iiko' | 'billz' | 'poster';
+export type PosType = 'regos' | 'custom' | '1c' | 'jowi' | 'iiko' | 'billz' | 'poster';
 
 export interface PosSettingsPayload {
   pos_type: PosType;
   pos_webhook_url: string | null;
+}
+
+export interface RegosSyncPayload {
+  integration_key: string;
+  stock_id?: number;
+  price_type_id?: number;
+  default_category_id?: string;
+}
+
+export interface PosBulkImportPayload {
+  items: Record<string, unknown>[];
+  default_category_id?: string;
+  price_in_som?: boolean;
+}
+
+export interface PosCatalogSyncResult {
+  source: 'regos_demo' | 'regos_api' | 'file_import';
+  created: number;
+  updated: number;
+  skipped: number;
+  total: number;
 }
 
 export interface UpdateShopPayload {

@@ -36,6 +36,15 @@ export class PosApiKeyGuard implements CanActivate {
     if (!shop.is_active || shop.status !== 'active') {
       throw new ForbiddenException({ code: 'SHOP_INACTIVE', message: 'This shop is not active on the platform.' });
     }
+    if (shop.owner_id && this.prisma.user?.findUnique) {
+      const owner = await this.prisma.user.findUnique({
+        where: { id: shop.owner_id },
+        select: { is_blocked: true },
+      });
+      if (owner?.is_blocked) {
+        throw new ForbiddenException({ code: 'USER_BLOCKED', message: 'Shop owner account is suspended.' });
+      }
+    }
 
     req.posShop = shop;
     return true;

@@ -7,6 +7,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   FolderTree,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -79,11 +80,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isLogin = pathname === '/login';
+  const isBare = pathname === '/login' || pathname === '/change-password';
 
   // Auth guard
   useEffect(() => {
-    if (isLogin) {
+    if (isBare) {
       setReady(true);
       return;
     }
@@ -93,9 +94,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       router.replace('/login');
       return;
     }
-    setUser(api.getUser());
+    const u = api.getUser();
+    if (u?.must_change_password) {
+      setReady(false);
+      router.replace('/change-password');
+      return;
+    }
+    setUser(u);
     setReady(true);
-  }, [isLogin, pathname, router]);
+  }, [isBare, pathname, router]);
 
   useEffect(() => {
     try {
@@ -123,7 +130,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.replace('/login');
   };
 
-  if (isLogin) return <>{children}</>;
+  if (isBare) return <>{children}</>;
 
   if (!ready) {
     return (
@@ -251,6 +258,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
               {initials}
             </div>
+            <Link
+              href="/change-password"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              title="Parolni o'zgartirish"
+            >
+              <KeyRound className="h-4 w-4" />
+            </Link>
             <button
               onClick={logout}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600"
