@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, KeyRound, MapPin, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, ImagePlus, KeyRound, MapPin, RefreshCw } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import type { Shop } from '@/lib/types';
 import { generatePassword } from '@/lib/format';
@@ -130,7 +130,30 @@ export function CreateShopModal({
   const [f, setF] = useState(blank);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const url = await api.uploadImage(file);
+      setF((p) => ({ ...p, logo_url: url }));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.logo_url;
+        return next;
+      });
+      toast.success('Logotip yuklandi');
+    } catch (err) {
+      toast.error('Rasm yuklanmadi', errorMessage(err));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -282,7 +305,30 @@ export function EditShopModal({
   const [f, setF] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const url = await api.uploadImage(file);
+      setF((p) => ({ ...p, logo_url: url }));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.logo_url;
+        return next;
+      });
+      toast.success('Logotip yuklandi');
+    } catch (err) {
+      toast.error('Rasm yuklanmadi', errorMessage(err));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const applyLocation = (r: LocationPickerResult) => {
     setF((p) => withPickedLocation(p, r));
@@ -398,8 +444,22 @@ export function EditShopModal({
         <Field label="Yopiladi" required error={errors.close_time}>
           <Input type="time" value={f.close_time ?? ''} onChange={set('close_time')} invalid={!!errors.close_time} />
         </Field>
-        <Field label="Logo URL" error={errors.logo_url} className="sm:col-span-2">
-          <Input value={f.logo_url ?? ''} onChange={set('logo_url')} invalid={!!errors.logo_url} placeholder="https://..." />
+        <Field label="Logotip (URL yoki rasm yuklash)" error={errors.logo_url} className="sm:col-span-2">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input value={f.logo_url ?? ''} onChange={set('logo_url')} invalid={!!errors.logo_url} placeholder="/uploads/... yoki https://..." />
+            </div>
+            <input ref={logoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLogoFile} />
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<ImagePlus className="h-4 w-4" />}
+              loading={uploadingLogo}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              Yuklash
+            </Button>
+          </div>
         </Field>
         <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5">
           <div>

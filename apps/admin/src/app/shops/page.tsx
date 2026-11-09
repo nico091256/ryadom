@@ -168,7 +168,106 @@ function ShopsInner() {
           <ErrorState message={error} onRetry={load} />
         ) : (
           <>
-            <Table>
+            {/* Mobile Shop Cards (< md) */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {loading && !result ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : rows.length === 0 ? (
+                <EmptyState
+                  icon={<Store className="h-6 w-6" />}
+                  title="Do'konlar topilmadi"
+                  description={q || status !== 'all' ? "Qidiruv yoki filtrni o'zgartiring." : "Birinchi do'konni qo'shing."}
+                  action={
+                    !q && status === 'all' ? (
+                      <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                        Yangi do'kon
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                rows.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => router.push(`/shops/${s.id}`)}
+                    className={`flex cursor-pointer flex-col gap-3 p-3.5 transition-colors hover:bg-slate-50 ${loading ? 'opacity-60' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <ShopLogo shop={s} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900">{s.name}</p>
+                          {s.status === 'active' && (
+                            <Switch
+                              size="sm"
+                              checked={s.is_active}
+                              disabled={toggling === s.id}
+                              onChange={(v) => toggleActive(s, v)}
+                              label={s.is_active ? "O'chirish" : 'Faollashtirish'}
+                            />
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">{s.address_text}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <Badge tone={SHOP_STATUS_META[s.status].tone} dot>
+                            {SHOP_STATUS_META[s.status].label}
+                          </Badge>
+                          {s.status === 'active' && (
+                            <Badge tone={s.isCurrentlyOpen ? 'green' : 'amber'} dot>
+                              {s.isCurrentlyOpen ? 'Ochiq' : 'Yopiq'}
+                            </Badge>
+                          )}
+                          <span className="text-xs text-slate-400">
+                            {s.open_time}–{s.close_time}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-xs">
+                      <div className="flex flex-wrap items-center gap-3 text-slate-600">
+                        <span>
+                          Mahsulot: <b className="text-slate-900">{formatNumber(s.productCount)}</b>
+                        </span>
+                        <span>
+                          Buyurtma: <b className="text-slate-900">{formatNumber(s.orderCount)}</b>
+                        </span>
+                        <span className="font-semibold text-slate-900">{formatMoney(s.revenueTiyin)}</span>
+                      </div>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {s.status === 'pending' && (
+                          <>
+                            <Button size="sm" icon={<Check className="h-3.5 w-3.5" />} loading={toggling === s.id} onClick={() => approve(s)}>
+                              Tasdiqlash
+                            </Button>
+                            <Button variant="secondary" size="sm" icon={<ShieldOff className="h-3.5 w-3.5" />} disabled={toggling === s.id} onClick={() => block(s)}>
+                              Rad etish
+                            </Button>
+                          </>
+                        )}
+                        {s.status === 'blocked' && (
+                          <Button variant="secondary" size="sm" loading={toggling === s.id} onClick={() => unblock(s)}>
+                            Blokdan chiqarish
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" title="Tahrirlash" onClick={() => setEditing(s)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Link href={`/shops/${s.id}`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Batafsil">
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <Table className="hidden md:block">
               <THead>
                 <TH>Do'kon</TH>
                 <TH>Egasi</TH>

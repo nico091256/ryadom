@@ -62,8 +62,28 @@ export class CategoriesService {
    * only the five editable columns can ever reach the database.
    */
   async update(id: string, input: UpdateCategoryInput) {
-    if (input.parent_id !== undefined && input.parent_id !== null && input.parent_id === id) {
-      throw new BadRequestException({ code: 'INVALID_PARENT', message: 'A category cannot be its own parent.' });
+    if (input.parent_id !== undefined && input.parent_id !== null) {
+      if (input.parent_id === id) {
+        throw new BadRequestException({ code: 'INVALID_PARENT', message: 'A category cannot be its own parent.' });
+      }
+      if (this.prisma.category.findUnique) {
+        const visited = new Set<string>([id]);
+        let cursorId: string | null = input.parent_id;
+        while (cursorId) {
+          if (visited.has(cursorId)) {
+            throw new BadRequestException({
+              code: 'INVALID_PARENT',
+              message: 'Category hierarchy cycle detected.',
+            });
+          }
+          visited.add(cursorId);
+          const ancestor = await this.prisma.category.findUnique({
+            where: { id: cursorId },
+            select: { parent_id: true },
+          });
+          cursorId = ancestor?.parent_id ?? null;
+        }
+      }
     }
 
     // Unchecked input on purpose: the scalar `parent_id` (null = detach) is applied

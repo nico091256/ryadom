@@ -222,7 +222,7 @@ export default function ShopDetailPage() {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {shop.status === 'pending' && (
                 <>
                   <Button icon={<Check className="h-4 w-4" />} loading={togglingShop} onClick={approve}>
@@ -257,7 +257,7 @@ export default function ShopDetailPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard loading={!shop} label="Bugungi buyurtmalar" value={formatNumber(shop?.stats.ordersToday)} icon={<ShoppingBag className="h-5 w-5" />} />
         <StatCard
           loading={!shop}
@@ -332,9 +332,47 @@ export default function ShopDetailPage() {
           <CardHeader
             title="Mahsulotlar"
             description="Moderatsiya: sotuvdan olish yoki o'chirish"
-            actions={<SearchInput value={q} onChange={setQ} placeholder="Mahsulot qidirish" className="w-56" />}
+            actions={<SearchInput value={q} onChange={setQ} placeholder="Mahsulot qidirish" className="w-full sm:w-56" />}
           />
-          <Table>
+          <div className="divide-y divide-slate-100 md:hidden">
+            {!shop ? (
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : products.length === 0 ? (
+              <EmptyState icon={<Package className="h-6 w-6" />} title={q ? 'Hech narsa topilmadi' : "Mahsulotlar yo'q"} />
+            ) : (
+              products.map((p) => (
+                <div key={p.id} className="flex items-center justify-between gap-3 p-3.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    {resolveMediaUrl(p.image_url) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={resolveMediaUrl(p.image_url)!} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+                        <Package className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className={`truncate text-sm font-medium ${p.is_available ? 'text-slate-900' : 'text-slate-400'}`}>{p.name_uz}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {formatMoney(p.price)} · <span className={p.stock <= 0 ? 'text-rose-500' : ''}>Qoldiq: {formatNumber(p.stock)}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Switch size="sm" checked={p.is_available} disabled={busy === p.id} onChange={(v) => toggleAvailable(p, v)} label="Sotuvda" />
+                    <Button variant="ghost" size="icon" title="O'chirish" onClick={() => setDeleting(p)} className="hover:bg-rose-50 hover:text-rose-600">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <Table className="hidden md:block">
             <THead>
               <TH>Mahsulot</TH>
               <TH>Kategoriya</TH>
@@ -356,7 +394,7 @@ export default function ShopDetailPage() {
                 products.map((p) => (
                   <TR key={p.id}>
                     <TD>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {resolveMediaUrl(p.image_url) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={resolveMediaUrl(p.image_url)!} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />

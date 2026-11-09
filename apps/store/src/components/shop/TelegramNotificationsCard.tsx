@@ -104,7 +104,7 @@ export function TelegramNotificationsCard() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="text-xs text-slate-500">Boshqa akkauntga ulash uchun uzing</span>
               <Button
                 variant="danger"

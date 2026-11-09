@@ -31,7 +31,7 @@ export const PRODUCT_CODE_MESSAGE = 'must be 1-64 letters, digits or . _ - /';
 export const SELLER_PRODUCTS_DEFAULT_LIMIT = 50;
 export const SELLER_PRODUCTS_MAX_LIMIT = 100;
 /** Hard cap on the legacy (non-paginated) bare-array response. */
-export const SELLER_PRODUCTS_UNPAGED_CAP = 500;
+export const SELLER_PRODUCTS_UNPAGED_CAP = 1000;
 
 /**
  * Query of GET /seller/products. Pagination is opt-in: the store panel parses a
@@ -340,10 +340,10 @@ export class RegosSyncDto {
 
 /** POST /seller/pos/import — bulk upsert products from REGOS CSV / JSON export. */
 export class PosBulkImportDto {
-  @ApiProperty({ type: [Object], description: 'Raw REGOS / CSV / JSON product rows (max 1000)' })
+  @ApiProperty({ type: [Object], description: 'Raw REGOS / CSV / JSON product rows (max 2500)' })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(1000)
+  @ArrayMaxSize(2500)
   @IsObject({ each: true })
   items: Record<string, any>[];
 

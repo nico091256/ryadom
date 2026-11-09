@@ -6,6 +6,7 @@ import { cn, formatDateTime, formatMoney, shortId, timeAgo } from '@/lib/format'
 import { PAYMENT_METHOD_LABEL } from '@/lib/constants';
 import type { Order } from '@/lib/types';
 import { Badge, Button, StatusBadge } from '@/components/ui';
+import { ProductImage } from '@/components/products/ProductImage';
 import { formatCountdown, remainingMs, URGENT_MS } from './countdown';
 
 export type OrderAction = 'accept' | 'reject' | 'on_the_way' | 'cancel' | 'deliver';
@@ -129,11 +130,14 @@ export function OrderCard({ order, now, acting, onAccept, onReject, onStartDeliv
         {/* Items */}
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
           {(order.items ?? []).map((it) => (
-            <li key={it.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
-              <span className="min-w-0 truncate text-slate-800">
-                {it.product_name}
-                <span className="ml-1.5 text-slate-500">× {it.quantity}</span>
-              </span>
+            <li key={it.id} className="flex items-center justify-between gap-2.5 px-3 py-1.5">
+              <div className="flex min-w-0 items-center gap-2">
+                {it.product?.image_url && <ProductImage src={it.product.image_url} alt={it.product_name} size="sm" />}
+                <span className="min-w-0 truncate text-slate-800">
+                  {it.product_name}
+                  <span className="ml-1.5 font-medium text-slate-500">× {it.quantity}</span>
+                </span>
+              </div>
               <span className="shrink-0 tabular-nums text-slate-700">{formatMoney(it.unit_price * it.quantity)}</span>
             </li>
           ))}

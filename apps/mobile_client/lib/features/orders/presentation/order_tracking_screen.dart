@@ -573,11 +573,12 @@ class _ItemRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final icon = _fallbackIcon(item.productName);
+    final hasImage = item.imageUrl != null && item.imageUrl!.trim().isNotEmpty;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 44x44 neutral thumbnail with contextual icon
+        // 44x44 product photo (or contextual icon fallback)
         Container(
           width: 44,
           height: 44,
@@ -585,8 +586,18 @@ class _ItemRow extends ConsumerWidget {
             color: AppColors.background,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
+          clipBehavior: Clip.antiAlias,
           alignment: Alignment.center,
-          child: Icon(icon, size: 20, color: AppColors.textPrimary.withValues(alpha: 0.6)),
+          child: hasImage
+              ? AppImage(
+                  url: item.imageUrl,
+                  width: 44,
+                  height: 44,
+                  radius: BorderRadius.circular(AppRadius.sm),
+                  fallbackIcon: icon,
+                  fallbackColor: AppColors.background,
+                )
+              : Icon(icon, size: 20, color: AppColors.textPrimary.withValues(alpha: 0.6)),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(

@@ -121,3 +121,29 @@ describe('PosService.updateOrderStatus', () => {
     expect(orders.updateStatus).toHaveBeenCalledWith('o-1', 'owner-1', { status: 'on_the_way' });
   });
 });
+
+describe('PosService.recordSale', () => {
+  it('decrements stock by sold quantity (floored at 0) and reports unknown codes', async () => {
+    const prisma: any = {
+      product: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'p-1', barcode: '4780000000012', sku: null, stock: 5 },
+          { id: 'p-2', barcode: null, sku: 'MLK-1L', stock: 2 },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new PosService(prisma, {} as any);
+
+    const res = await service.recordSale(shop, [
+      { barcode: '4780000000012', quantity: 2 },
+      { sku: 'MLK-1L', quantity: 10 },
+      { barcode: 'UNKNOWN-999', quantity: 1 },
+    ]);
+
+    expect(res.updated).toBe(2);
+    expect(res.not_found).toEqual([{ barcode: 'UNKNOWN-999' }]);
+    expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: 'p-1' }, data: { stock: 3 } });
+    expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: 'p-2' }, data: { stock: 0 } });
+  });
+});

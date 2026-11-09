@@ -5,7 +5,7 @@ import { ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/format';
 
 const fieldBase =
-  'block w-full rounded-lg border-0 bg-white text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-600 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500';
+  'block w-full rounded-lg border-0 bg-white text-base sm:text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-600 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500';
 
 const invalidRing = 'ring-rose-400 focus:ring-rose-500';
 
@@ -61,7 +61,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       )}
       <input
         ref={ref}
-        className={cn(fieldBase, 'h-9 px-3', leftIcon && 'pl-9', rightAddon && 'pr-14', invalid && invalidRing, className)}
+        className={cn(fieldBase, 'h-10 sm:h-9 px-3', leftIcon && 'pl-9', rightAddon && 'pr-14', invalid && invalidRing, className)}
         {...props}
       />
       {rightAddon && (
@@ -88,7 +88,7 @@ export const Select = React.forwardRef<
     <div className="relative">
       <select
         ref={ref}
-        className={cn(fieldBase, 'h-9 appearance-none pl-3 pr-9', invalid && invalidRing, className)}
+        className={cn(fieldBase, 'h-10 sm:h-9 appearance-none pl-3 pr-9', invalid && invalidRing, className)}
         {...props}
       >
         {children}
@@ -116,7 +116,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={cn(fieldBase, 'h-9 pl-9 pr-8')}
+        className={cn(fieldBase, 'h-10 sm:h-9 pl-9 pr-8')}
       />
       {value && (
         <button

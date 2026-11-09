@@ -139,3 +139,33 @@ export class PosOrderStatusDto {
   @MaxLength(500)
   reason?: string;
 }
+
+/** One line item sold at the physical POS cash register: decrements stock by quantity. */
+export class PosSaleItemDto {
+  @ApiPropertyOptional({ example: '4780000000012' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `barcode ${PRODUCT_CODE_MESSAGE}` })
+  barcode?: string;
+
+  @ApiPropertyOptional({ example: 'MLK-32-1L' })
+  @IsOptional()
+  @IsString()
+  @Matches(PRODUCT_CODE_REGEX, { message: `sku ${PRODUCT_CODE_MESSAGE}` })
+  sku?: string;
+
+  @ApiProperty({ example: 2, minimum: 1, maximum: MAX_PRODUCT_STOCK, description: 'Quantity sold at the cash register' })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PRODUCT_STOCK)
+  quantity: number;
+}
+
+export class PosRecordSaleDto {
+  @ApiProperty({ type: [PosSaleItemDto], maxItems: POS_SYNC_MAX_ITEMS })
+  @ValidateNested({ each: true })
+  @Type(() => PosSaleItemDto)
+  @ArrayMinSize(1)
+  @ArrayMaxSize(POS_SYNC_MAX_ITEMS)
+  items: PosSaleItemDto[];
+}

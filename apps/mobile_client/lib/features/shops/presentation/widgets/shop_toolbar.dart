@@ -99,16 +99,31 @@ class _ShopToolbarState extends ConsumerState<_ShopToolbar> {
 
   @override
   Widget build(BuildContext context) {
+    final gridMode = ref.watch(productGridModeProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: _kTopPad),
         Padding(
           padding: AppSpacing.pagePadding,
-          child: AppSearchBar(
-            hint: ref.t('shop.searchPlaceholder'),
-            controller: _search,
-            onChanged: _onChanged,
+          child: Row(
+            children: [
+              Expanded(
+                child: AppSearchBar(
+                  hint: ref.t('shop.searchPlaceholder'),
+                  controller: _search,
+                  onChanged: _onChanged,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppIconButton(
+                icon: gridMode ? LucideIcons.list : LucideIcons.layoutGrid,
+                size: _kSearchHeight,
+                iconSize: 20,
+                tooltip: ref.t(gridMode ? 'home.listView' : 'shop.allCategories'),
+                onPressed: () => ref.read(productGridModeProvider.notifier).state = !gridMode,
+              ),
+            ],
           ),
         ),
         if (widget.hasCategories) ...[

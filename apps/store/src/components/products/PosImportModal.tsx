@@ -174,30 +174,15 @@ export function PosImportModal({
     setBusy(true);
     setLastResult(null);
     try {
-      const BATCH_SIZE = 200;
-      const totals: PosCatalogSyncResult = {
-        source: 'file_import',
-        created: 0,
-        updated: 0,
-        skipped: 0,
-        total: 0,
-      };
-      for (let offset = 0; offset < parsedFileRows.length; offset += BATCH_SIZE) {
-        const batch = parsedFileRows.slice(offset, offset + BATCH_SIZE);
-        const res = await api.bulkImportPosItems({
-          items: batch,
-          ...(defaultCategoryId ? { default_category_id: defaultCategoryId } : {}),
-          price_in_som: true,
-        });
-        totals.created += res.created ?? 0;
-        totals.updated += res.updated ?? 0;
-        totals.skipped += res.skipped ?? 0;
-        totals.total += res.total ?? batch.length;
-      }
-      setLastResult(totals);
+      const res = await api.bulkImportPosItems({
+        items: parsedFileRows,
+        ...(defaultCategoryId ? { default_category_id: defaultCategoryId } : {}),
+        price_in_som: true,
+      });
+      setLastResult(res);
       toast.success(
         'Mahsulotlar muvaffaqiyatli yuklandi',
-        `${totals.created} ta yangi yaratildi, ${totals.updated} ta yangilandi`,
+        `${res.created} ta yangi yaratildi, ${res.updated} ta yangilandi`,
       );
       onImported();
     } catch (e) {
@@ -217,7 +202,7 @@ export function PosImportModal({
     >
       <div className="space-y-5">
         {/* Tabs */}
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+        <div className="grid grid-cols-1 gap-1.5 rounded-xl bg-slate-100 p-1 sm:grid-cols-2 sm:gap-2">
           <button
             type="button"
             onClick={() => setTab('regos_api')}
@@ -399,7 +384,7 @@ export function PosImportModal({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Yopish
           </Button>

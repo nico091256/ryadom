@@ -130,35 +130,32 @@ export const DEMO_REGOS_ITEMS: Record<string, any>[] = [
   },
 ];
 
-const ALLOWED_REGOS_HOSTS = new Set(['integration.regos.uz', 'api.regos.uz']);
-
 /**
  * Resolves either a bare REGOS integration key (e.g. `9a8b7c6d...`) or a full
  * gateway URL (`https://integration.regos.uz/gateway/out/9a8b7c6d/v1`) into
  * a normalized base URL without trailing slash. Returns `'demo'` for demo keys.
- * Strictly allowlists `https://integration.regos.uz` and `https://api.regos.uz` to prevent SSRF.
  */
 export function resolveRegosGatewayUrl(keyOrUrl: string): string {
   const raw = (keyOrUrl ?? '').trim();
   if (!raw) throw new Error('REGOS integration key is required');
   if (/^demo(_regos.*)?$/i.test(raw)) return 'demo';
 
-  if (/^https?:\/\//i.test(raw) || raw.includes('://')) {
+  if (/^https?:\/\//i.test(raw)) {
     let parsed: URL;
     try {
       parsed = new URL(raw);
     } catch {
       throw new Error('Invalid REGOS gateway URL');
     }
-    const host = parsed.hostname.toLowerCase();
-    if (parsed.protocol !== 'https:' || !ALLOWED_REGOS_HOSTS.has(host) || parsed.port !== '') {
-      throw new Error('REGOS gateway URL must use https://integration.regos.uz or https://api.regos.uz');
+    if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== 'integration.regos.uz') {
+      throw new Error('Only https://integration.regos.uz gateway URLs are allowed');
     }
-    const match = /\/gateway\/out\/([A-Za-z0-9_\-]+)(?:\/v1)?/i.exec(parsed.pathname);
-    if (!match?.[1]) {
-      throw new Error('Invalid REGOS gateway path (expected /gateway/out/<key>/v1)');
-    }
-    return `https://${host}/gateway/out/${match[1]}/v1`;
+    const cleanedPath = parsed.pathname
+      .replace(/\/+$/, '')
+      .replace(/\/item\/getext$/i, '')
+      .replace(/\/item\/get$/i, '');
+    const normalizedPath = cleanedPath.endsWith('/v1') ? cleanedPath : `${cleanedPath}/v1`;
+    return `https://integration.regos.uz${normalizedPath}`;
   }
 
   const sanitizedKey = raw.replace(/[^A-Za-z0-9_\-]/g, '');
@@ -210,6 +207,39 @@ export function extractRegosSku(item: Record<string, any>): string | null {
   const code = item.code ?? item['Код'] ?? item.id;
   if (code !== undefined && code !== null && String(code).trim() !== '') {
     return sanitizeProductCode(`REG-${String(code).trim()}`);
+  }
+  return null;
+}
+
+/** Extracts a valid http(s) or /uploads/ image URL from common REGOS / CSV / JSON fields. */
+export function extractRegosImageUrl(raw: Record<string, any>): string | null {
+  const candidates: unknown[] = [
+    raw.image_url,
+    raw.image_path,
+    raw.image,
+    raw.photo_url,
+    raw.photo,
+    raw.picture,
+    raw['Фото'],
+    raw['Rasm'],
+  ];
+
+  if (Array.isArray(raw.images) && raw.images.length > 0) {
+    const first = raw.images[0];
+    if (typeof first === 'string') {
+      candidates.push(first);
+    } else if (first && typeof first === 'object') {
+      candidates.push(first.url, first.image_url, first.image_path, first.path);
+    }
+  }
+
+  for (const val of candidates) {
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.length <= 2048 && /^https?:\/\/|^\/uploads\//i.test(trimmed)) {
+        return trimmed;
+      }
+    }
   }
   return null;
 }
@@ -289,8 +319,7 @@ export function normalizeRegosItem(
     : 0;
 
   const isAvailable =
-    priceTiyin > 0 &&
-    (raw.is_available !== undefined ? Boolean(raw.is_available) : stockInt > 0 || raw.quantity === undefined);
+    raw.is_available !== undefined ? Boolean(raw.is_available) : stockInt > 0 || raw.quantity === undefined;
 
   const groupName =
     (raw.group && typeof raw.group === 'object' ? raw.group.name : null) ??
@@ -301,10 +330,7 @@ export function normalizeRegosItem(
     raw['Kategoriya'] ??
     null;
 
-  const imageUrl =
-    typeof raw.image_url === 'string' && /^https?:\/\/|^\/uploads\//i.test(raw.image_url.trim())
-      ? raw.image_url.trim()
-      : null;
+  const imageUrl = extractRegosImageUrl(raw);
 
   return {
     barcode,

@@ -159,7 +159,12 @@ export default function ChangePasswordPage() {
           </form>
         </div>
 
-        <div className="mt-4 text-center">
+        <div className="mt-4 flex items-center justify-center gap-4 text-center">
+          {!forced && (
+            <button type="button" onClick={() => router.push('/')} className="text-sm font-medium text-brand-700 hover:text-brand-800">
+              ← Panelga qaytish
+            </button>
+          )}
           <button type="button" onClick={logout} className="text-sm text-slate-500 hover:text-slate-700">
             Boshqa hisob bilan kirish
           </button>

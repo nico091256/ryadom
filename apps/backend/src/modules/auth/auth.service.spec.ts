@@ -14,11 +14,17 @@ describe('AuthService', () => {
   beforeEach(() => {
     prisma = {
       user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-      refreshToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+      refreshToken: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       smsCode: {
         findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(0),
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue({}),
       },
       // Prisma's array form: the operations are already-built promises, resolve them all.
@@ -210,11 +216,25 @@ describe('AuthService', () => {
 
       const result = await service.refreshToken('some-raw-refresh-token');
 
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-        where: { id: 'rt1' },
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { id: 'rt1', revoked_at: null },
         data: { revoked_at: expect.any(Date) },
       });
       expect(result.accessToken).toBe('signed-access-token');
+    });
+
+    it('rejects a concurrent rotation when updateMany returns count: 0', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        user_id: 'u1',
+        revoked_at: null,
+        expires_at: new Date(Date.now() + 1000 * 60 * 60),
+      });
+      prisma.user.findUnique.mockResolvedValue({ id: 'u1', role: 'customer', is_blocked: false, phone: '+998900000000' });
+      prisma.refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.refreshToken('some-raw-refresh-token')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown, revoked, or expired refresh token', async () => {

@@ -11,6 +11,17 @@ export class DevicesService {
    * (one row per physical device instead of a single overwritten column).
    */
   async register(userId: string, dto: RegisterDeviceDto) {
+    if (this.prisma.deviceToken.findMany) {
+      const existing = await this.prisma.deviceToken.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        select: { id: true },
+      });
+      if (existing.length >= 10) {
+        const staleIds = existing.slice(9).map((t: { id: string }) => t.id);
+        await this.prisma.deviceToken.deleteMany({ where: { id: { in: staleIds } } });
+      }
+    }
     await this.prisma.deviceToken.upsert({
       where: { token: dto.token },
       update: { user_id: userId, platform: dto.platform },

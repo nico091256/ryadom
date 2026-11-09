@@ -6,15 +6,10 @@ export interface PaymentInitializationResult {
   paymentStatus: PaymentStatus;
 }
 
-export type PaymentWebhookAction = 'check' | 'prepare' | 'perform' | 'cancel';
-
 export interface PaymentCallbackResult {
   success: boolean;
-  action: PaymentWebhookAction;
-  orderId?: string;
-  providerTxId?: string;
+  orderId: string;
   amountTiyin?: number;
-  shouldUpdateStatus: boolean;
   paymentStatus: PaymentStatus;
   rawResponse: Record<string, any>;
 }

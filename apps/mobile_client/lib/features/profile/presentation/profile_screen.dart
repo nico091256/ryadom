@@ -5,6 +5,7 @@ import 'package:localshop_shared/localshop_shared.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/providers.dart';
+import '../../../core/utils/launch_url.dart';
 import '../../../ui/ui.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../favorites/presentation/favorites_controller.dart';
@@ -57,11 +58,38 @@ class ProfileScreen extends ConsumerWidget {
   void _showSupport(BuildContext context, WidgetRef ref) {
     showAppSheet<void>(
       context,
-      builder: (_) => EmptyState(
-        compact: true,
-        illustration: AppIllustration.empty,
-        title: ref.t('profile.support'),
-        subtitle: ref.t('profile.supportSoon'),
+      title: ref.t('profile.support'),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(ref.t('profile.supportSoon'), style: AppText.body.secondary),
+          const SizedBox(height: AppSpacing.lg),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ProfileRow(
+                  icon: LucideIcons.send,
+                  iconColor: const Color(0xFF0284C7),
+                  iconBackground: const Color(0xFFE0F2FE),
+                  title: 'Telegram',
+                  subtitle: '@ryadom_support',
+                  onTap: () => launchExternalUrl('https://t.me/ryadom_support'),
+                ),
+                const ProfileRowDivider(indentForIcon: true),
+                ProfileRow(
+                  icon: LucideIcons.phone,
+                  iconColor: AppColors.brand,
+                  iconBackground: AppColors.brandSoft,
+                  title: '+998 71 200 00 00',
+                  subtitle: '08:00 – 23:00',
+                  onTap: () => launchCallerUrl('+998712000000'),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

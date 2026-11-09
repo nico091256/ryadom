@@ -21,8 +21,11 @@ export class UsersService {
       throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
     }
 
-    const { password_hash, ...rest } = user;
-    return rest;
+    const { password_hash, shops, ...rest } = user;
+    return {
+      ...rest,
+      shops: Array.isArray(shops) ? shops.map(({ pos_api_key: _posKey, ...s }: any) => s) : shops,
+    };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {

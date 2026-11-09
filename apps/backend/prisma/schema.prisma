@@ -185,6 +185,7 @@ model Shop {
   @@index([status, is_active, is_open])
   @@index([owner_id])
   @@index([city_id])
+  @@index([telegram_chat_id])
   @@map("shops")
 }
 
@@ -234,6 +235,7 @@ model Product {
   order_items    OrderItem[]
 
   @@unique([shop_id, barcode])
+  @@index([shop_id, sku])
   @@index([shop_id, is_available, deleted_at])
   @@index([category_id])
   @@map("products")
@@ -250,6 +252,7 @@ model Cart {
   shop       Shop       @relation(fields: [shop_id], references: [id], onDelete: Cascade)
   items      CartItem[]
 
+  @@index([shop_id])
   @@map("carts")
 }
 
@@ -265,6 +268,7 @@ model CartItem {
   product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
   @@unique([cart_id, product_id])
+  @@index([product_id])
   @@map("cart_items")
 }
 

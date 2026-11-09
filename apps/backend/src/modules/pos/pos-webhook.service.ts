@@ -20,8 +20,31 @@ export function isSafeWebhookUrl(raw: string): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (!host) return false;
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local')) return false;
-  if (host === '::1' || host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return false;
+  // Single-label hosts (e.g. "localhost", "redis", "postgres") have no dot and are not IPv6
+  if (!host.includes('.') && !host.includes(':')) return false;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.internal') ||
+    host.endsWith('.local') ||
+    host.endsWith('.nip.io') ||
+    host.endsWith('.sslip.io') ||
+    host.endsWith('.localtest.me') ||
+    host.endsWith('.lvh.me')
+  ) {
+    return false;
+  }
+  if (
+    host === '::1' ||
+    host === '::' ||
+    host.startsWith('fe80:') ||
+    host.startsWith('fc') ||
+    host.startsWith('fd') ||
+    host.startsWith('::ffff:') ||
+    host.includes(':ffff:')
+  ) {
+    return false;
+  }
   if (PRIVATE_IPV4.test(host)) return false;
   return true;
 }
@@ -125,7 +148,7 @@ export class PosWebhookService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
+      const res = await fetch(url, { method: 'POST', headers, body, redirect: 'error', signal: controller.signal });
       if (!res.ok) {
         this.logger.warn(`POS webhook for shop ${shopId} answered HTTP ${res.status}`);
       } else {

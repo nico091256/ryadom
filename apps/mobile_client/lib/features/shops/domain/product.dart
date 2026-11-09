@@ -35,6 +35,8 @@ class Product {
     this.nameRu,
     this.nameEn,
     this.descriptionUz,
+    this.descriptionRu,
+    this.descriptionEn,
     required this.price,
     this.imageUrl,
     required this.stock,
@@ -49,6 +51,8 @@ class Product {
   final String? nameRu;
   final String? nameEn;
   final String? descriptionUz;
+  final String? descriptionRu;
+  final String? descriptionEn;
   final int price; // tiyin
   final String? imageUrl;
   final int stock;
@@ -57,6 +61,17 @@ class Product {
 
   /// Name in [lang], falling back to uz (then ru/en) when not translated.
   String localizedName(SupportedLanguage lang) => resolveLocalizedText(uz: nameUz, ru: nameRu, en: nameEn, lang: lang);
+
+  /// Description in [lang], or null when no description is set.
+  String? localizedDescription(SupportedLanguage lang) {
+    final text = resolveLocalizedText(
+      uz: descriptionUz ?? '',
+      ru: descriptionRu,
+      en: descriptionEn,
+      lang: lang,
+    ).trim();
+    return text.isEmpty ? null : text;
+  }
 
   /// Case-insensitive search over every translation, so a query typed in
   /// any of the three languages finds the product.
@@ -70,6 +85,8 @@ class Product {
         nameRu: json['name_ru'] as String?,
         nameEn: json['name_en'] as String?,
         descriptionUz: json['description_uz'] as String?,
+        descriptionRu: json['description_ru'] as String?,
+        descriptionEn: json['description_en'] as String?,
         price: (json['price'] as num).toInt(),
         imageUrl: json['image_url'] as String?,
         stock: (json['stock'] as num).toInt(),
@@ -85,6 +102,8 @@ class Product {
         'name_ru': nameRu,
         'name_en': nameEn,
         'description_uz': descriptionUz,
+        'description_ru': descriptionRu,
+        'description_en': descriptionEn,
         'price': price,
         'image_url': imageUrl,
         'stock': stock,

@@ -169,7 +169,7 @@ export function LocationPickerModal({
       }
     >
       <div className="space-y-3">
-        <div className="relative h-[420px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+        <div className="relative h-[50dvh] min-h-[250px] max-h-[420px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 sm:h-[420px]">
           <div ref={containerRef} className="h-full w-full" />
 
           {status === 'loading' && (

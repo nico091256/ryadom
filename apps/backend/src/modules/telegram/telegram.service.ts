@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { getJwtAccessSecret } from '../../common/config/jwt-secret';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus, UserRole, formatPrice } from '@localshop/shared';
@@ -77,7 +78,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     return (
       this.token ||
       this.configService.get<string>('JWT_ACCESS_SECRET') ||
-      'ryadom-telegram-link-secret'
+      getJwtAccessSecret(this.configService)
     );
   }
 
@@ -300,22 +301,6 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       if (order.shop.telegram_chat_id !== chatId) {
         await this.answerCallback(queryId, 'Sizda bu buyurtmani boshqarish huquqi yo‘q!');
         return;
-      }
-
-      if (order.shop.is_active === false || order.shop.status === 'blocked') {
-        await this.answerCallback(queryId, 'Do‘kon faol emas yoki bloklangan!');
-        return;
-      }
-
-      if (order.shop.owner_id && (this.prisma as any).user?.findUnique) {
-        const owner = await (this.prisma as any).user.findUnique({
-          where: { id: order.shop.owner_id },
-          select: { is_blocked: true },
-        });
-        if (owner?.is_blocked) {
-          await this.answerCallback(queryId, 'Do‘kon egasi hisobi bloklangan!');
-          return;
-        }
       }
 
       if (action === 'accept') {

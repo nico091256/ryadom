@@ -54,7 +54,7 @@ export class SellerService {
   constructor(
     private prisma: PrismaService,
     @Optional() private cache?: CacheService,
-  ) {}
+  ) { }
 
   private async invalidateShopCache(shopId: string) {
     if (!this.cache) return;
@@ -99,8 +99,8 @@ export class SellerService {
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
-        ...(dto.logo_url !== undefined ? { logo_url: dto.logo_url } : {}),
-        ...(dto.banner_url !== undefined ? { banner_url: dto.banner_url } : {}),
+        ...(dto.logo_url !== undefined ? { logo_url: dto.logo_url || null } : {}),
+        ...(dto.banner_url !== undefined ? { banner_url: dto.banner_url || null } : {}),
         ...(dto.address_text !== undefined ? { address_text: dto.address_text } : {}),
         ...(dto.open_time !== undefined ? { open_time: dto.open_time } : {}),
         ...(dto.close_time !== undefined ? { close_time: dto.close_time } : {}),
@@ -220,15 +220,17 @@ export class SellerService {
     if (opts.stock_id) filters.push({ Field: 'stock_id', Operator: 'Equal', Value: opts.stock_id });
     if (opts.price_type_id) filters.push({ Field: 'price_type_id', Operator: 'Equal', Value: opts.price_type_id });
 
-    const payload: Record<string, any> = {
-      limit: 500,
-      offset: 0,
-      ...(opts.stock_id ? { stock_id: opts.stock_id } : {}),
-      ...(opts.price_type_id ? { price_type_id: opts.price_type_id } : {}),
-      ...(filters.length > 0 ? { filters } : {}),
-    };
+    const PAGE_SIZE = 500;
+    const MAX_PAGES = 5; // Up to 2,500 products per sync
 
-    const callMethod = async (methodPath: string) => {
+    const callMethod = async (methodPath: string, offset: number) => {
+      const payload: Record<string, any> = {
+        limit: PAGE_SIZE,
+        offset,
+        ...(opts.stock_id ? { stock_id: opts.stock_id } : {}),
+        ...(opts.price_type_id ? { price_type_id: opts.price_type_id } : {}),
+        ...(filters.length > 0 ? { filters } : {}),
+      };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       try {
@@ -236,6 +238,7 @@ export class SellerService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json; charset=utf-8' },
           body: JSON.stringify(payload),
+          redirect: 'error',
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -247,32 +250,47 @@ export class SellerService {
       }
     };
 
-    let body: { ok?: boolean; result?: any; description?: string };
-    try {
-      body = await callMethod('item/getext');
-      if (body && body.ok === false) {
-        body = await callMethod('item/get');
+    const allItems: Record<string, any>[] = [];
+    let resolvedMethod: 'item/getext' | 'item/get' = 'item/getext';
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      let body: { ok?: boolean; result?: any; description?: string };
+      try {
+        body = await callMethod(resolvedMethod, offset);
+        if (page === 0 && body && body.ok === false) {
+          resolvedMethod = 'item/get';
+          body = await callMethod(resolvedMethod, offset);
+        }
+      } catch (err: any) {
+        if (page > 0 && allItems.length > 0) break;
+        throw new BadRequestException({
+          code: 'REGOS_CONNECTION_FAILED',
+          message: `REGOS serveriga ulanib bo'lmadi (${err?.message || 'tarmoq xatosi'}). Integratsiya kalitini tekshiring yoki "demo" rejimida sinab ko'ring.`,
+        });
       }
-    } catch (err: any) {
-      throw new BadRequestException({
-        code: 'REGOS_CONNECTION_FAILED',
-        message: `REGOS serveriga ulanib bo'lmadi (${err?.message || 'tarmoq xatosi'}). Integratsiya kalitini tekshiring yoki "demo" rejimida sinab ko'ring.`,
-      });
+
+      if (body?.ok === false) {
+        if (page > 0 && allItems.length > 0) break;
+        throw new BadRequestException({
+          code: 'REGOS_API_ERROR',
+          message: `REGOS API xatoligi: ${body.description || 'Noma\'lum xato'}`,
+        });
+      }
+
+      const list = Array.isArray(body?.result)
+        ? body.result
+        : Array.isArray(body)
+          ? body
+          : [];
+      allItems.push(...list);
+
+      if (list.length < PAGE_SIZE) {
+        break;
+      }
     }
 
-    if (body?.ok === false) {
-      throw new BadRequestException({
-        code: 'REGOS_API_ERROR',
-        message: `REGOS API xatoligi: ${body.description || 'Noma\'lum xato'}`,
-      });
-    }
-
-    const list = Array.isArray(body?.result)
-      ? body.result
-      : Array.isArray(body)
-        ? body
-        : [];
-    return list;
+    return allItems;
   }
 
   private async upsertPosCatalog(
@@ -291,21 +309,10 @@ export class SellerService {
       select: { id: true, barcode: true, sku: true, name_uz: true, image_url: true, description_uz: true },
     });
 
-    const reservedByProduct = new Map<string, number>();
-    const pendingNewOrders =
-      (await this.prisma.order?.findMany?.({
-        where: { shop_id: shopId, status: OrderStatus.NEW as any },
-        select: { items: { select: { product_id: true, quantity: true } } },
-      })) ?? [];
-    for (const ord of pendingNewOrders) {
-      for (const oi of ord.items ?? []) {
-        reservedByProduct.set(oi.product_id, (reservedByProduct.get(oi.product_id) ?? 0) + oi.quantity);
-      }
-    }
-
-    const byBarcode = new Map<string, (typeof existing)[number]>();
-    const bySku = new Map<string, (typeof existing)[number]>();
-    const byName = new Map<string, (typeof existing)[number]>();
+    type ExistingEntry = (typeof existing)[number];
+    const byBarcode = new Map<string, ExistingEntry>();
+    const bySku = new Map<string, ExistingEntry>();
+    const byName = new Map<string, ExistingEntry>();
 
     for (const prod of existing) {
       if (prod.barcode) byBarcode.set(prod.barcode, prod);
@@ -317,6 +324,12 @@ export class SellerService {
     let updated = 0;
     let skipped = 0;
 
+    const toCreate: Record<string, any>[] = [];
+    const toUpdate = new Map<string, Record<string, any>>();
+    const pendingCreateByBarcode = new Map<string, Record<string, any>>();
+    const pendingCreateBySku = new Map<string, Record<string, any>>();
+    const pendingCreateByName = new Map<string, Record<string, any>>();
+
     for (const raw of rawItems) {
       const item = normalizeRegosItem(raw, { priceInSom: options.priceInSom });
       if (!item) {
@@ -324,71 +337,128 @@ export class SellerService {
         continue;
       }
 
+      const nameKey = item.name_uz.trim().toLowerCase();
       const match =
         (item.barcode ? byBarcode.get(item.barcode) : undefined) ||
         (item.sku ? bySku.get(item.sku) : undefined) ||
-        byName.get(item.name_uz.trim().toLowerCase());
+        byName.get(nameKey);
 
       if (match) {
-        const reserved = reservedByProduct.get(match.id) ?? 0;
-        const effectiveStock = Math.max(0, item.stock - reserved);
+        const prevUpdate = toUpdate.get(match.id) ?? {};
         const updateData: Record<string, any> = {
+          ...prevUpdate,
           price: item.price,
-          stock: effectiveStock,
-          is_available: item.price > 0 && item.is_available && (effectiveStock > 0 || item.stock === 0 ? item.is_available : false),
+          stock: item.stock,
+          is_available: item.is_available,
           name_uz: item.name_uz,
         };
-        if (!match.barcode && item.barcode && !byBarcode.has(item.barcode)) {
+        if (!match.barcode && item.barcode && !byBarcode.has(item.barcode) && !pendingCreateByBarcode.has(item.barcode)) {
           updateData.barcode = item.barcode;
+          match.barcode = item.barcode;
+          byBarcode.set(item.barcode, match);
         }
         if (!match.sku && item.sku) {
           updateData.sku = item.sku;
+          match.sku = item.sku;
+          bySku.set(item.sku, match);
         }
         if (!match.image_url && item.image_url) {
           updateData.image_url = item.image_url;
+          match.image_url = item.image_url;
         }
         if (!match.description_uz && item.description_uz) {
           updateData.description_uz = item.description_uz;
+          match.description_uz = item.description_uz;
         }
 
-        const saved = await this.prisma.product.update({
-          where: { id: match.id },
-          data: updateData,
-        });
-        if (saved.barcode) byBarcode.set(saved.barcode, saved);
-        if (saved.sku) bySku.set(saved.sku, saved);
-        byName.set(saved.name_uz.trim().toLowerCase(), saved);
-        updated++;
-      } else {
-        const categoryId =
-          item.category_id && categories.some((c) => c.id === item.category_id)
-            ? item.category_id
-            : matchCategoryId(item.group_name, categories, fallbackCatId);
-
-        const safeBarcode = item.barcode && !byBarcode.has(item.barcode) ? item.barcode : null;
-        const createdProd = await this.prisma.product.create({
-          data: {
-            shop_id: shopId,
-            category_id: categoryId,
-            name_uz: item.name_uz,
-            name_ru: item.name_ru || item.name_uz,
-            name_en: item.name_en || item.name_uz,
-            description_uz: item.description_uz,
-            description_ru: item.description_uz,
-            description_en: item.description_uz,
-            price: item.price,
-            stock: item.stock,
-            is_available: item.is_available,
-            barcode: safeBarcode,
-            sku: item.sku,
-            image_url: item.image_url,
-          },
-        });
-        if (createdProd.barcode) byBarcode.set(createdProd.barcode, createdProd);
-        if (createdProd.sku) bySku.set(createdProd.sku, createdProd);
-        byName.set(createdProd.name_uz.trim().toLowerCase(), createdProd);
-        created++;
+        if (!toUpdate.has(match.id)) {
+          updated++;
+        }
+        toUpdate.set(match.id, updateData);
+        byName.set(nameKey, match);
+        continue;
       }
+
+      // Check if an earlier item in the same batch already queued creation for this barcode/sku/name
+      const pending =
+        (item.barcode ? pendingCreateByBarcode.get(item.barcode) : undefined) ||
+        (item.sku ? pendingCreateBySku.get(item.sku) : undefined) ||
+        pendingCreateByName.get(nameKey);
+
+      if (pending) {
+        pending.price = item.price;
+        pending.stock = item.stock;
+        pending.is_available = item.is_available;
+        if (!pending.image_url && item.image_url) pending.image_url = item.image_url;
+        if (!pending.description_uz && item.description_uz) {
+          pending.description_uz = item.description_uz;
+          pending.description_ru = item.description_uz;
+          pending.description_en = item.description_uz;
+        }
+        continue;
+      }
+
+      const categoryId =
+        item.category_id && categories.some((c) => c.id === item.category_id)
+          ? item.category_id
+          : matchCategoryId(item.group_name, categories, fallbackCatId);
+
+      const safeBarcode =
+        item.barcode && !byBarcode.has(item.barcode) && !pendingCreateByBarcode.has(item.barcode)
+          ? item.barcode
+          : null;
+
+      const createRow = {
+        shop_id: shopId,
+        category_id: categoryId,
+        name_uz: item.name_uz,
+        name_ru: item.name_ru || item.name_uz,
+        name_en: item.name_en || item.name_uz,
+        description_uz: item.description_uz,
+        description_ru: item.description_uz,
+        description_en: item.description_uz,
+        price: item.price,
+        stock: item.stock,
+        is_available: item.is_available,
+        barcode: safeBarcode,
+        sku: item.sku,
+        image_url: item.image_url,
+      };
+
+      toCreate.push(createRow);
+      if (safeBarcode) pendingCreateByBarcode.set(safeBarcode, createRow);
+      if (item.sku) pendingCreateBySku.set(item.sku, createRow);
+      pendingCreateByName.set(nameKey, createRow);
+      created++;
+    }
+
+    // Batch insert new products (250 per query via createMany, or concurrent create fallback)
+    const CREATE_BATCH = 250;
+    for (let i = 0; i < toCreate.length; i += CREATE_BATCH) {
+      const chunk = toCreate.slice(i, i + CREATE_BATCH);
+      if (typeof this.prisma.product.createMany === 'function') {
+        await this.prisma.product.createMany({
+          data: chunk as any,
+          skipDuplicates: true,
+        });
+      } else {
+        await Promise.all(chunk.map((data) => this.prisma.product.create({ data: data as any })));
+      }
+    }
+
+    // Batch update existing products in chunks of 50 concurrent queries
+    const updateEntries = Array.from(toUpdate.entries());
+    const UPDATE_BATCH = 50;
+    for (let i = 0; i < updateEntries.length; i += UPDATE_BATCH) {
+      const chunk = updateEntries.slice(i, i + UPDATE_BATCH);
+      await Promise.all(
+        chunk.map(([id, data]) =>
+          this.prisma.product.update({
+            where: { id },
+            data,
+          }),
+        ),
+      );
     }
 
     if (created > 0 || updated > 0) {
@@ -497,9 +567,9 @@ export class SellerService {
           ...(dto.name_ru !== undefined ? { name_ru: dto.name_ru } : {}),
           ...(dto.name_en !== undefined ? { name_en: dto.name_en } : {}),
           ...(dto.category_id !== undefined ? { category_id: dto.category_id } : {}),
-          ...(dto.description_uz !== undefined ? { description_uz: dto.description_uz } : {}),
-          ...(dto.description_ru !== undefined ? { description_ru: dto.description_ru } : {}),
-          ...(dto.description_en !== undefined ? { description_en: dto.description_en } : {}),
+          ...(dto.description_uz !== undefined ? { description_uz: dto.description_uz || null } : {}),
+          ...(dto.description_ru !== undefined ? { description_ru: dto.description_ru || null } : {}),
+          ...(dto.description_en !== undefined ? { description_en: dto.description_en || null } : {}),
           ...(dto.price !== undefined ? { price: dto.price } : {}),
           ...(dto.image_url !== undefined ? { image_url: dto.image_url || null } : {}),
           ...(dto.barcode !== undefined ? { barcode: normalizeCode(dto.barcode) } : {}),

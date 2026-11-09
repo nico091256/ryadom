@@ -255,7 +255,69 @@ export default function PromoCodesPage() {
         {error && !items ? (
           <ErrorState message={error} onRetry={load} />
         ) : (
-          <Table>
+          <>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {!items ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : items.length === 0 ? (
+                <EmptyState
+                  icon={<TicketPercent className="h-6 w-6" />}
+                  title="Promo-kodlar yo'q"
+                  description="Mijozlarni jalb qilish uchun birinchi chegirma kodini yarating."
+                  action={
+                    <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setModal({ open: true, promo: null })}>
+                      Promo-kod yaratish
+                    </Button>
+                  }
+                />
+              ) : (
+                items.map((p) => {
+                  const expired = isExpired(p);
+                  const exhausted = isExhausted(p);
+                  return (
+                    <div key={p.id} className="flex flex-col gap-2.5 p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md bg-slate-100 px-2 py-1 font-mono text-sm font-semibold text-slate-900">{p.code}</span>
+                            <CopyButton value={p.code} />
+                            <span className="text-sm font-bold text-brand-700">−{p.discount_percent}%</span>
+                          </div>
+                          {p.description && <p className="mt-1 truncate text-xs text-slate-500">{p.description}</p>}
+                        </div>
+                        <Switch size="sm" checked={p.is_active} disabled={toggling === p.id} onChange={(v) => toggle(p, v)} label="Faol" />
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-600">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>
+                            Ishlatilgan: <b className="text-slate-900">{formatNumber(p.usage_count)}</b> /{' '}
+                            {p.usage_limit != null ? formatNumber(p.usage_limit) : '∞'}
+                          </span>
+                          {p.expires_at && (
+                            <span className={expired ? 'text-rose-600' : 'text-slate-500'}>· {formatDate(p.expires_at)}</span>
+                          )}
+                          {expired && <Badge tone="red">Muddati o&apos;tgan</Badge>}
+                          {exhausted && <Badge tone="amber">Limit tugagan</Badge>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" title="Tahrirlash" onClick={() => setModal({ open: true, promo: p })}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="O'chirish" onClick={() => setDeleting(p)} className="hover:bg-rose-50 hover:text-rose-600">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <Table className="hidden md:block">
             <THead>
               <TH>Kod</TH>
               <TH align="right">Chegirma</TH>
@@ -351,6 +413,7 @@ export default function PromoCodesPage() {
               )}
             </TBody>
           </Table>
+          </>
         )}
       </Card>
 

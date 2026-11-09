@@ -16,6 +16,8 @@ final shopProductsProvider = FutureProvider.autoDispose.family<List<Product>, St
 
 final productSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 final selectedCategoryIdProvider = StateProvider.autoDispose<String?>((ref) => null);
+/// True = 2-column photo grid (default), False = compact 1-column list.
+final productGridModeProvider = StateProvider.autoDispose<bool>((ref) => true);
 
 final filteredProductsProvider = Provider.autoDispose.family<AsyncValue<List<Product>>, String>((ref, shopId) {
   final query = ref.watch(productSearchQueryProvider).trim().toLowerCase();

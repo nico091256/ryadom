@@ -349,8 +349,9 @@ class ApiService {
       }
     }
 
+    const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
     const headers: Record<string, string> = {
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...((init.headers as Record<string, string>) || {}),
     };
@@ -433,6 +434,15 @@ class ApiService {
     if (data?.accessToken) this.setToken(data.accessToken);
     const user = this.getUser();
     if (user) this.saveSession(data?.accessToken || this.getToken() || '', { ...user, must_change_password: false });
+  }
+
+  // ---------- Uploads ----------
+  async uploadImage(file: File): Promise<string> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await this.request<{ url: string }>('/uploads/image', { method: 'POST', body: form });
+    if (!res?.url) throw new ApiError('Rasm yuklanmadi', 500, 'UPLOAD_FAILED');
+    return res.url;
   }
 
   // ---------- Dashboard ----------

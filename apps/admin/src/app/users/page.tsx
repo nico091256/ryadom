@@ -126,7 +126,79 @@ export default function UsersPage() {
           <ErrorState message={error} onRetry={load} />
         ) : (
           <>
-            <Table>
+            {/* Mobile User Cards (< md) */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {loading && !result ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : rows.length === 0 ? (
+                <EmptyState icon={<Users className="h-6 w-6" />} title="Foydalanuvchilar topilmadi" description="Qidiruv yoki filtrni o'zgartiring." />
+              ) : (
+                rows.map((u) => {
+                  const meta = ROLE_META[u.role];
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => setUserId(u.id)}
+                      className={`flex cursor-pointer flex-col gap-2.5 p-3.5 transition-colors hover:bg-slate-50 ${loading ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                            {(u.name || u.login || u.phone || '?').replace('+', '')[0]?.toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">{u.name || 'Ismsiz'}</p>
+                            <p className="truncate text-xs text-slate-500">
+                              {u.phone || '—'} {u.login ? `· @${u.login}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {meta && <Badge tone={meta.tone}>{meta.label}</Badge>}
+                          {u.is_blocked ? (
+                            <Badge tone="red" dot>
+                              Blok
+                            </Badge>
+                          ) : (
+                            <Badge tone="green" dot>
+                              Faol
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-600">
+                        <div>
+                          <span>
+                            Buyurtma: <b className="text-slate-900">{formatNumber(u.ordersCount)}</b>
+                          </span>
+                          {' · '}
+                          <span className="font-medium text-slate-900">{formatMoney(u.totalSpentTiyin)}</span>
+                        </div>
+                        {u.role !== 'admin' && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              size="sm"
+                              variant={u.is_blocked ? 'secondary' : 'outline-danger'}
+                              icon={u.is_blocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                              onClick={() => setTarget(u)}
+                            >
+                              {u.is_blocked ? 'Ochish' : 'Bloklash'}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <Table className="hidden md:block">
               <THead>
                 <TH>Foydalanuvchi</TH>
                 <TH>Rol</TH>

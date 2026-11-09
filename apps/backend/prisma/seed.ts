@@ -21,8 +21,7 @@ async function main() {
   console.log(`City seeded: ${tashkent.name_uz}`);
 
   // 2. Seed Admin User
-  const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD?.trim() || 'AdminPassword123!';
-  const adminPasswordHash = await bcrypt.hash(initialAdminPassword, 10);
+  const adminPasswordHash = await bcrypt.hash('AdminPassword123!', 10);
   const admin = await prisma.user.upsert({
     where: { login: 'admin' },
     update: {},
@@ -36,7 +35,7 @@ async function main() {
       must_change_password: true,
     },
   });
-  console.log(`Admin user seeded: ${admin.login} (must_change_password: ${admin.must_change_password})`);
+  console.log(`Admin user seeded: ${admin.login}`);
 
   // 3. Seed Demo Shopkeeper User
   const sellerPasswordHash = await bcrypt.hash('Shopkeeper123!', 10);

@@ -5,6 +5,7 @@ import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../cart/presentation/cart_controller.dart';
 import '../../domain/product.dart';
+import 'product_detail_sheet.dart';
 
 const double _kTilePadding = 10;
 const double _kImageRadius = AppRadius.md;
@@ -35,6 +36,14 @@ class ShopProductTile extends ConsumerWidget {
 
     return AppCard(
       padding: const EdgeInsets.all(_kTilePadding),
+      haptic: true,
+      onTap: () => showProductDetailSheet(
+        context,
+        ref,
+        product: product,
+        shopName: shopName,
+        shopIsOpen: shopIsOpen,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

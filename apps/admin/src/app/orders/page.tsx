@@ -150,12 +150,12 @@ function OrdersInner() {
             <option value="cash">{PAYMENT_METHOD_LABEL.cash}</option>
             <option value="online">{PAYMENT_METHOD_LABEL.online}</option>
           </Select>
-          <div className="flex items-center gap-2 lg:col-span-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-center lg:col-span-2">
             <Input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="Sanadan" />
-            <span className="text-slate-400">—</span>
+            <span className="hidden text-slate-400 sm:inline">—</span>
             <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="Sanagacha" />
             {hasFilters && (
-              <Button variant="ghost" size="icon" onClick={clearFilters} title="Filtrlarni tozalash">
+              <Button variant="ghost" size="icon" onClick={clearFilters} title="Filtrlarni tozalash" className="justify-self-end">
                 <FilterX className="h-4 w-4" />
               </Button>
             )}
@@ -166,7 +166,62 @@ function OrdersInner() {
           <ErrorState message={error} onRetry={() => load()} />
         ) : (
           <>
-            <Table>
+            {/* Mobile Order Cards (< md) */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {loading && !result ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : rows.length === 0 ? (
+                <EmptyState
+                  icon={<ShoppingBag className="h-6 w-6" />}
+                  title="Buyurtmalar topilmadi"
+                  description={hasFilters || status !== 'all' ? "Filtrlarni o'zgartirib ko'ring." : "Hali birorta buyurtma yo'q."}
+                  action={
+                    hasFilters ? (
+                      <Button variant="secondary" size="sm" onClick={clearFilters}>
+                        Filtrlarni tozalash
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                rows.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setOrderId(o.id)}
+                    className={`flex w-full flex-col gap-2 p-3.5 text-left transition-colors hover:bg-slate-50 ${loading ? 'opacity-60' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-slate-900">{shortId(o.id)}</span>
+                        <StatusBadge status={o.status} />
+                      </div>
+                      <span className="text-xs text-slate-400">{formatDateTime(o.created_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">
+                          {o.customer?.name || 'Ismsiz'} · <span className="text-slate-500">{o.customer_phone}</span>
+                        </p>
+                        <p className="mt-0.5 truncate text-slate-500">{o.shop?.name ?? '—'}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-bold tabular-nums text-slate-900">{formatMoney(o.total_amount)}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {PAYMENT_METHOD_LABEL[o.payment_method] ?? o.payment_method} · {formatNumber(o.itemsCount ?? 0)} ta
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <Table className="hidden md:block">
               <THead>
                 <TH>Buyurtma</TH>
                 <TH>Mijoz</TH>

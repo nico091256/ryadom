@@ -3,7 +3,7 @@ import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { PosApiKeyGuard, PosShop } from './pos-api-key.guard';
-import { PosOrderStatusDto, PosPendingOrdersQueryDto, PosSyncProductsDto } from './pos.dto';
+import { PosOrderStatusDto, PosPendingOrdersQueryDto, PosRecordSaleDto, PosSyncProductsDto } from './pos.dto';
 import { PosService, PosShopRef } from './pos.service';
 
 /** Cash registers poll and sync often; still bounded per client IP. */
@@ -28,6 +28,13 @@ export class PosController {
   @ApiOperation({ summary: 'Bulk-update price / stock / availability by barcode or sku (max 500 items)' })
   async syncProducts(@PosShop() shop: PosShopRef, @Body() dto: PosSyncProductsDto) {
     return this.posService.syncProducts(shop, dto.items);
+  }
+
+  @Post('sales')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Record in-store POS checkout sales and decrement product stock by quantity' })
+  async recordSale(@PosShop() shop: PosShopRef, @Body() dto: PosRecordSaleDto) {
+    return this.posService.recordSale(shop, dto.items);
   }
 
   // `incoming` is the alias some integrators expect; both paths serve the same pull.

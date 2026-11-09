@@ -297,8 +297,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className={cn('flex min-h-screen flex-col transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
+      <div className={cn('flex min-h-screen min-w-0 flex-col overflow-x-hidden transition-[padding] duration-200', collapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:h-16 sm:px-6">
           <button
             onClick={() => setMobileOpen(true)}
             className="-ml-1 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
@@ -312,19 +312,20 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium leading-tight text-slate-900">{user?.name || "Do'konchi"}</p>
               <p className="text-xs leading-tight text-slate-500">@{user?.login || 'seller'}</p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 sm:h-9 sm:w-9 sm:text-sm">
               {initials}
             </div>
             <Link
               href="/change-password"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:px-2.5 sm:py-2"
               title="Parolni o'zgartirish"
             >
               <KeyRound className="h-4 w-4" />
+              <span className="hidden xl:inline">Parol</span>
             </Link>
             <button
               onClick={logout}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 sm:px-2.5 sm:py-2"
               title="Chiqish"
             >
               <LogOut className="h-4 w-4" />
@@ -333,10 +334,41 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-3.5 pb-24 pt-4 sm:px-6 sm:py-6 lg:px-8 lg:pb-8">
           <GlobalOrderMonitor shopId={user?.shopId ?? null} active={pathname !== '/'} />
           {children}
         </main>
+
+        {/* Mobile bottom navigation */}
+        <nav
+          aria-label="Mobil navigatsiya"
+          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-1 py-1 backdrop-blur lg:hidden"
+        >
+          {NAV.flatMap((g) => g.items).map((item) => {
+            const Icon = item.icon;
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-colors',
+                  active ? 'text-brand-700' : 'text-slate-500 hover:text-slate-900',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-7 w-11 items-center justify-center rounded-full transition-colors',
+                    active && 'bg-brand-50 text-brand-600',
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px]" />
+                </span>
+                <span className="max-w-full truncate px-1">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

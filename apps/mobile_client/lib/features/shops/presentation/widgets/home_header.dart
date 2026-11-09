@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../auth/presentation/auth_controller.dart';
+import '../../../favorites/presentation/favorites_controller.dart';
 import '../../../location/presentation/address_controller.dart';
 
 /// Top section of Home per user spec:
@@ -87,6 +89,8 @@ class HomeHeader extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
+              const _FavoritesQuickButton(),
+              const SizedBox(width: AppSpacing.xs + 2),
               MapToggleButton(
                 mapMode: mapMode,
                 onPressed: onToggleMap,
@@ -432,6 +436,52 @@ class AddressPill extends StatelessWidget {
           const Icon(LucideIcons.pencil, size: 18, color: AppColors.textSecondary),
         ],
       ),
+    );
+  }
+}
+
+/// Quick heart button in the Home top bar that opens `/favorites` and shows
+/// a count badge when the user has saved favourite shops.
+class _FavoritesQuickButton extends ConsumerWidget {
+  const _FavoritesQuickButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favCount = ref.watch(favoriteShopsProvider.select((ids) => ids.length));
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        AppIconButton(
+          icon: LucideIcons.heart,
+          size: 44,
+          iconSize: 20,
+          tooltip: ref.t('favorites.title'),
+          foreground: favCount > 0 ? const Color(0xFFE5484D) : AppColors.textPrimary,
+          onPressed: () {
+            final router = GoRouter.maybeOf(context);
+            if (router != null) router.push('/favorites');
+          },
+        ),
+        if (favCount > 0)
+          Positioned(
+            right: -3,
+            top: -3,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5484D),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: AppColors.surface, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                favCount > 99 ? '99+' : '$favCount',
+                style: AppText.micro.copyWith(color: AppColors.white, fontSize: 9.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

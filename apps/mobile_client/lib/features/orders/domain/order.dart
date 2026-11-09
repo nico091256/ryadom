@@ -6,21 +6,27 @@ class OrderItem {
     required this.productName,
     required this.unitPrice,
     required this.quantity,
+    this.imageUrl,
   });
 
   final String? productId;
   final String productName;
   final int unitPrice;
   final int quantity;
+  final String? imageUrl;
 
   int get subtotal => unitPrice * quantity;
 
-  factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
-        productId: json['product_id'] as String?,
-        productName: json['product_name'] as String,
-        unitPrice: (json['unit_price'] as num).toInt(),
-        quantity: (json['quantity'] as num).toInt(),
-      );
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    final prod = json['product'] is Map<String, dynamic> ? json['product'] as Map<String, dynamic> : null;
+    return OrderItem(
+      productId: json['product_id'] as String?,
+      productName: json['product_name'] as String,
+      unitPrice: (json['unit_price'] as num).toInt(),
+      quantity: (json['quantity'] as num).toInt(),
+      imageUrl: (json['image_url'] as String?) ?? (prod?['image_url'] as String?),
+    );
+  }
 }
 
 class OrderStatusEvent {

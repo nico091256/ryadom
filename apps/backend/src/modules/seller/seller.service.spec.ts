@@ -68,14 +68,14 @@ describe('SellerService.getProducts — opt-in pagination (#33)', () => {
     service = new SellerService(prisma);
   });
 
-  it('returns a bare array capped at 500 when no pagination is requested (store panel shape)', async () => {
+  it('returns a bare array capped at 1000 when no pagination is requested (store panel shape)', async () => {
     const result = await service.getProducts('owner-1', {});
     expect(result).toEqual([{ id: 'p1' }]);
     expect(prisma.product.findMany).toHaveBeenCalledWith({
       where: { shop_id: 'shop-1', deleted_at: null },
       include: { category: true },
       orderBy: { created_at: 'desc' },
-      take: 500,
+      take: 1000,
     });
     expect(prisma.product.count).not.toHaveBeenCalled();
   });
@@ -90,5 +90,44 @@ describe('SellerService.getProducts — opt-in pagination (#33)', () => {
     const result: any = await service.getProducts('owner-1', { page: 3, limit: 999 });
     expect(result).toMatchObject({ page: 3, limit: 100 });
     expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 200, take: 100 }));
+  });
+});
+
+describe('SellerService.bulkImportPosItems — 1000 items with images batching', () => {
+  it('batches 1000 items with image_path / images[] via createMany in chunks of 250', async () => {
+    const prisma: any = {
+      shop: { findFirst: jest.fn().mockResolvedValue({ id: 'shop-1', owner_id: 'owner-1', pos_type: 'regos' }) },
+      category: { findMany: jest.fn().mockResolvedValue([{ id: 'cat-1', name_uz: 'Oziq-ovqat' }]) },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn().mockResolvedValue({ count: 250 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new SellerService(prisma);
+
+    const items = Array.from({ length: 1000 }, (_, i) => ({
+      code: i + 1,
+      barcode: `478000${String(i + 1).padStart(7, '0')}`,
+      name: `Mahsulot #${i + 1}`,
+      price: 12000,
+      quantity: 15,
+      image_path: `https://cdn.regos.uz/items/img-${i + 1}.webp`,
+    }));
+
+    const res = await service.bulkImportPosItems('owner-1', { items, price_in_som: true });
+
+    expect(res).toEqual({
+      source: 'file_import',
+      created: 1000,
+      updated: 0,
+      skipped: 0,
+      total: 1000,
+    });
+    // 1000 items / 250 per batch = 4 createMany queries instead of 1000 individual INSERTs!
+    expect(prisma.product.createMany).toHaveBeenCalledTimes(4);
+    expect(prisma.product.createMany.mock.calls[0][0].data[0].image_url).toBe(
+      'https://cdn.regos.uz/items/img-1.webp',
+    );
   });
 });

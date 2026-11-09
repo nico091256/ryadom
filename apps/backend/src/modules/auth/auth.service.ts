@@ -23,13 +23,6 @@ export const SMS_RESEND_COOLDOWN_MS = 30 * 1000;
 export const SMS_HOURLY_WINDOW_MS = 60 * 60 * 1000;
 export const SMS_MAX_PER_PHONE_PER_HOUR = 5;
 
-/**
- * Grace window for concurrent multi-tab refresh requests: if two browser tabs
- * send the same cookie within 10s of rotation, the second request is rejected
- * without burning the entire session family via reuse detection.
- */
-export const REFRESH_ROTATION_GRACE_MS = 10 * 1000;
-
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -173,20 +166,50 @@ export class AuthService {
       });
     }
 
-    const isMatch = await bcrypt.compare(code, smsRecord.code_hash);
-    if (!isMatch) {
-      await this.prisma.smsCode.update({
-        where: { id: smsRecord.id },
+    // Atomically increment attempts BEFORE the slow bcrypt check to prevent parallel brute-force races
+    if (this.prisma.smsCode.updateMany) {
+      const incremented = await this.prisma.smsCode.updateMany({
+        where: {
+          id: smsRecord.id,
+          attempts: { lt: 5 },
+          expires_at: { gt: new Date() },
+        },
         data: { attempts: { increment: 1 } },
       });
+      if (incremented && typeof incremented.count === 'number' && incremented.count === 0) {
+        throw new BadRequestException({
+          code: 'TOO_MANY_ATTEMPTS',
+          message: 'Too many invalid attempts or expired code. Please request a new verification code.',
+        });
+      }
+    }
+
+    const isMatch = await bcrypt.compare(code, smsRecord.code_hash);
+    if (!isMatch) {
+      if (!this.prisma.smsCode.updateMany && this.prisma.smsCode.update) {
+        await this.prisma.smsCode.update({
+          where: { id: smsRecord.id },
+          data: { attempts: { increment: 1 } },
+        });
+      }
       throw new BadRequestException({
         code: 'INVALID_SMS_CODE',
         message: 'Incorrect verification code entered.',
       });
     }
 
-    // Code is verified, delete the SMS record
-    await this.prisma.smsCode.delete({ where: { id: smsRecord.id } });
+    // Atomically consume the SMS record so two concurrent requests with the right code cannot both win
+    if (this.prisma.smsCode.deleteMany) {
+      const consumed = await this.prisma.smsCode.deleteMany({ where: { id: smsRecord.id } });
+      if (consumed && typeof consumed.count === 'number' && consumed.count === 0) {
+        throw new BadRequestException({
+          code: 'INVALID_SMS_CODE',
+          message: 'Verification code has already been used.',
+        });
+      }
+    } else {
+      await this.prisma.smsCode.delete({ where: { id: smsRecord.id } });
+    }
 
     // Find or create customer
     let user = await this.prisma.user.findUnique({
@@ -295,17 +318,13 @@ export class AuthService {
     const stored = await this.prisma.refreshToken.findUnique({ where: { token_hash: tokenHash } });
 
     if (stored?.revoked_at) {
-      const revokedAgeMs = Date.now() - stored.revoked_at.getTime();
-      if (revokedAgeMs <= REFRESH_ROTATION_GRACE_MS) {
-        throw new UnauthorizedException({
-          code: 'REFRESH_RACE_CONFLICT',
-          message: 'Refresh token was just rotated by a concurrent request.',
-        });
+      const revokedAgoMs = Date.now() - new Date(stored.revoked_at).getTime();
+      // Grace window of 5 seconds avoids wiping all sessions when two browser tabs race on rotation,
+      // while still burning the entire token family on genuine replay of an older rotated token.
+      if (revokedAgoMs > 5_000) {
+        this.logger.warn(`Refresh token reuse detected for user ${stored.user_id}; revoking all sessions`);
+        await this.logoutAll(stored.user_id);
       }
-      // Reuse detection: a rotated-away (or logged-out) token is being presented
-      // again outside the multi-tab grace window, so the whole token family is burnt.
-      this.logger.warn(`Refresh token reuse detected for user ${stored.user_id}; revoking all sessions`);
-      await this.logoutAll(stored.user_id);
     }
 
     if (!stored || stored.revoked_at || stored.expires_at < new Date()) {
@@ -323,10 +342,16 @@ export class AuthService {
       });
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
+    const revoked = await this.prisma.refreshToken.updateMany({
+      where: { id: stored.id, revoked_at: null },
       data: { revoked_at: new Date() },
     });
+    if (revoked && typeof revoked.count === 'number' && revoked.count === 0) {
+      throw new UnauthorizedException({
+        code: 'INVALID_REFRESH_TOKEN',
+        message: 'Refresh token was already rotated by a concurrent request.',
+      });
+    }
 
     return this.generateTokens(user.id, user.role);
   }

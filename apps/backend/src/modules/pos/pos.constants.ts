@@ -9,7 +9,7 @@ export const POS_API_KEY_HEADER = 'x-api-key';
 export const POS_API_KEY_PREFIX = 'rk_pos_';
 
 /** One sync request may carry this many products. */
-export const POS_SYNC_MAX_ITEMS = 500;
+export const POS_SYNC_MAX_ITEMS = 1000;
 
 /** Webhook headers the receiving POS can use to route and verify the event. */
 export const POS_WEBHOOK_EVENT_HEADER = 'x-ryadom-event';

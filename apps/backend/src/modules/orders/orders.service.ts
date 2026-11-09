@@ -135,8 +135,10 @@ export class OrdersService {
       }
 
       // 1. Atomically validate and decrement stock in a single conditional update
+      // Sort items by product_id to acquire row locks in a deterministic order and prevent deadlocks.
+      const sortedItems = [...cart.items].sort((a, b) => a.product_id.localeCompare(b.product_id));
       let totalAmount = 0;
-      for (const item of cart.items) {
+      for (const item of sortedItems) {
         const res = await tx.product.updateMany({
           where: {
             id: item.product_id,
@@ -178,7 +180,7 @@ export class OrdersService {
       let comment = dto.comment?.trim() || '';
       let discountAmount = 0;
       if (promoCode) {
-        const discount = await this.applyPromoCode(tx, promoCode, totalAmount);
+        const discount = await this.applyPromoCode(tx, promoCode, totalAmount, customerId);
         discountAmount = discount;
         totalAmount -= discount;
         const promoLine = `Promokod: ${promoCode} (-${formatPrice(discount)})`;
@@ -277,6 +279,11 @@ ${promoLine}` : promoLine;
     // 9. Schedule the hard auto-cancel job (10-minute acceptance window)
     await this.scheduleAutoCancel(order.id);
 
+    // Strip internal seller Telegram chat ID before returning to the customer
+    if (order.shop && 'telegram_chat_id' in order.shop) {
+      delete (order.shop as any).telegram_chat_id;
+    }
+
     return order;
   }
 
@@ -348,7 +355,7 @@ ${promoLine}` : promoLine;
    * Validates a promo code against the promo_codes table (inside the order transaction),
    * atomically increments its usage_count and returns the discount in tiyin.
    */
-  private async applyPromoCode(tx: any, code: string, basketTotal: number): Promise<number> {
+  private async applyPromoCode(tx: any, code: string, basketTotal: number, customerId?: string): Promise<number> {
     const invalid = (message: string) =>
       new BadRequestException({ code: 'INVALID_PROMO_CODE', message });
 
@@ -369,6 +376,19 @@ ${promoLine}` : promoLine;
       throw invalid(
         `Minimal buyurtma summasi ${formatPrice(promo.min_order_tiyin)} / Minimum order for '${code}' is ${formatPrice(promo.min_order_tiyin)}.`,
       );
+    }
+
+    if (customerId && tx.order?.count) {
+      const alreadyUsed = await tx.order.count({
+        where: {
+          customer_id: customerId,
+          promo_code: code,
+          status: { not: OrderStatus.CANCELLED as any },
+        },
+      });
+      if (alreadyUsed > 0) {
+        throw invalid(`Siz '${code}' promokodidan avval foydalangansiz / You have already used promo code '${code}'.`);
+      }
     }
 
     let discount = Math.round((basketTotal * promo.discount_percent) / 100);

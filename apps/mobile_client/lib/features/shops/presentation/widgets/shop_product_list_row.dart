@@ -5,6 +5,7 @@ import '../../../../core/providers.dart';
 import '../../../../ui/ui.dart';
 import '../../../cart/presentation/cart_controller.dart';
 import '../../domain/product.dart';
+import 'product_detail_sheet.dart';
 
 /// One product as a list row (phone widths): 64px square photo on a neutral
 /// tile, name + price, capsule stepper on the right. Same rules as the grid
@@ -30,6 +31,14 @@ class ShopProductListRow extends ConsumerWidget {
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
+      haptic: true,
+      onTap: () => showProductDetailSheet(
+        context,
+        ref,
+        product: product,
+        shopName: shopName,
+        shopIsOpen: shopIsOpen,
+      ),
       child: Row(
         children: [
           Opacity(

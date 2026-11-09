@@ -1,5 +1,5 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as assert from 'node:assert/strict';
 import {
   DEMO_REGOS_ITEMS,
   matchCategoryId,
@@ -20,6 +20,8 @@ test('resolveRegosGatewayUrl normalizes bare keys, full URLs, and demo keys', ()
     resolveRegosGatewayUrl('https://integration.regos.uz/gateway/out/my-key-99/v1/item/getext'),
     'https://integration.regos.uz/gateway/out/my-key-99/v1',
   );
+  assert.throws(() => resolveRegosGatewayUrl('http://169.254.169.254/latest/meta-data'));
+  assert.throws(() => resolveRegosGatewayUrl('https://evil.example.com/gateway/out/my-key/v1'));
 });
 
 test('sanitizeProductCode cleans barcodes and SKUs to valid format', () => {

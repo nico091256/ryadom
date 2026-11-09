@@ -243,7 +243,7 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
               </Field>
             </div>
 
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
               <div className="w-full sm:w-72">
                 <Field label="Standart kategoriya (yangi mahsulotlar uchun)" htmlFor="shop-regos-cat">
                   <Select
@@ -262,6 +262,7 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
               </div>
               <Button
                 type="button"
+                className="w-full sm:w-auto"
                 icon={<CloudDownload className="h-4 w-4" />}
                 loading={syncingRegos}
                 onClick={() => syncRegosCatalog()}
@@ -331,16 +332,19 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
             <Plug className="h-4 w-4 text-slate-400" />
             Ulanish yo'riqnomasi (REGOS va dasturchilar uchun)
           </summary>
-          <div className="space-y-2 border-t border-slate-200 px-3 py-3 text-xs text-slate-600">
-            <p>
+          <div className="space-y-2 overflow-x-auto border-t border-slate-200 px-3 py-3 text-xs text-slate-600">
+            <p className="break-all sm:break-normal">
               Asosiy manzil: <code className="rounded bg-white px-1.5 py-0.5 font-mono text-slate-800 ring-1 ring-slate-200">{API_URL}</code>
             </p>
             <p>
               Har bir so'rovga sarlavha: <code className="rounded bg-white px-1.5 py-0.5 font-mono text-slate-800 ring-1 ring-slate-200">X-API-Key: &lt;kalit&gt;</code>
             </p>
-            <ul className="list-disc space-y-1 pl-5 font-mono">
+            <ul className="list-disc space-y-1 break-words pl-5 font-mono">
               <li>
                 POST /pos/products/sync — {'{ items: [{ barcode | sku, name, category_name?, price (tiyin), stock, is_available }] }'}
+              </li>
+              <li>
+                POST /pos/sales — {'{ items: [{ barcode | sku, quantity }] }'} (Kassada sotilgan mahsulot qoldig&apos;ini avtomatik kamaytirish)
               </li>
               <li>GET /pos/orders/incoming?status=new|accepted|on_the_way&amp;limit=50 (alias: /pos/orders/pending)</li>
               <li>POST /pos/orders/{'{id}'}/status — {'{ status: accepted|on_the_way|delivered|cancelled, reason? }'}</li>

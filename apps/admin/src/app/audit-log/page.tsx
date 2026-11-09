@@ -186,7 +186,49 @@ export default function AuditLogPage() {
           <ErrorState message={error} onRetry={load} />
         ) : (
           <>
-            <Table>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {loading && !result ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : rows.length === 0 ? (
+                <EmptyState
+                  icon={<ScrollText className="h-6 w-6" />}
+                  title="Yozuvlar topilmadi"
+                  description="Tanlangan filtr bo'yicha hali hech qanday amal bajarilmagan."
+                />
+              ) : (
+                rows.map((row) => {
+                  const actionMeta = AUDIT_ACTION_META[row.action as AuditAction];
+                  const targetMeta = AUDIT_TARGET_META[row.target_type as AuditTargetType];
+                  const clickable = !!row.target_id && ['order', 'user', 'shop'].includes(row.target_type);
+                  return (
+                    <div
+                      key={row.id}
+                      onClick={clickable ? () => openTarget(row) : undefined}
+                      className={cn('flex flex-col gap-2 p-3.5', clickable && 'cursor-pointer hover:bg-slate-50', loading && 'opacity-60')}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={cn('text-sm font-semibold', actionMeta?.destructive ? 'text-rose-700' : 'text-slate-900')}>
+                          {actionMeta?.label ?? row.action}
+                        </span>
+                        <span className="shrink-0 text-xs text-slate-400">{timeAgo(row.created_at)}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        {targetMeta ? <Badge tone={targetMeta.tone}>{targetMeta.label}</Badge> : <Badge>{row.target_type}</Badge>}
+                        {row.target_id && <span className="font-mono text-slate-500">{shortId(row.target_id)}</span>}
+                        <span className="text-slate-400">·</span>
+                        <span>{row.actor?.name || 'Administrator'}</span>
+                      </div>
+                      {row.meta && Object.keys(row.meta).length > 0 && <MetaChips meta={row.meta} />}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <Table className="hidden md:block">
               <THead>
                 <TH>Vaqt</TH>
                 <TH>Administrator</TH>

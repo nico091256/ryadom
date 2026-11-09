@@ -3,7 +3,7 @@ import { OrderStatus, UserRole } from '@localshop/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CacheService } from '../../common/redis/cache.service';
 import { OrdersService } from '../orders/orders.service';
-import { PosOrderStatusDto, PosPendingOrdersQueryDto, PosSyncItemDto } from './pos.dto';
+import { PosOrderStatusDto, PosPendingOrdersQueryDto, PosSaleItemDto, PosSyncItemDto } from './pos.dto';
 import { PosWebhookService } from './pos-webhook.service';
 import { CategoryRef, matchCategoryId } from './regos.util';
 
@@ -71,20 +71,6 @@ export class PosService {
     const byBarcode = new Map(products.filter((p) => p.barcode).map((p) => [p.barcode as string, p.id]));
     const bySku = new Map(products.filter((p) => p.sku).map((p) => [p.sku as string, p.id]));
 
-    // Subtract quantities reserved by active NEW orders (not yet accepted/punched at the cash register)
-    // so an absolute stock snapshot from POS does not re-expose already-reserved units.
-    const reservedByProduct = new Map<string, number>();
-    const pendingNewOrders =
-      (await this.prisma.order?.findMany?.({
-        where: { shop_id: shop.id, status: OrderStatus.NEW as any },
-        select: { items: { select: { product_id: true, quantity: true } } },
-      })) ?? [];
-    for (const ord of pendingNewOrders) {
-      for (const oi of ord.items ?? []) {
-        reservedByProduct.set(oi.product_id, (reservedByProduct.get(oi.product_id) ?? 0) + oi.quantity);
-      }
-    }
-
     let categoriesCache: CategoryRef[] | null = null;
     const getCategories = async (): Promise<CategoryRef[]> => {
       if (categoriesCache) return categoriesCache;
@@ -114,19 +100,11 @@ export class PosService {
         continue;
       }
       const id = (key.barcode && byBarcode.get(key.barcode)) || (key.sku && bySku.get(key.sku)) || null;
-      if (id && data.stock !== undefined) {
-        const reserved = reservedByProduct.get(id) ?? 0;
-        data.stock = Math.max(0, Number(data.stock) - reserved);
-      }
-      if (data.price !== undefined && Number(data.price) <= 0) {
-        data.is_available = false;
-      }
       if (!id) {
         if (!primaryName) {
           result.not_found.push(key);
           continue;
         }
-        const newPrice = item.price ?? 0;
         const cats = await getCategories();
         const fallbackCatId = cats[0]?.id ?? 'c-1';
         const resolvedCatId =
@@ -144,9 +122,9 @@ export class PosService {
             description_uz: item.description_uz ?? null,
             description_ru: item.description_uz ?? null,
             description_en: item.description_uz ?? null,
-            price: newPrice,
+            price: item.price ?? 0,
             stock: item.stock ?? 0,
-            is_available: newPrice > 0 && (item.is_available ?? (item.stock ?? 0) > 0),
+            is_available: item.is_available ?? (item.stock ?? 0) > 0,
             barcode: key.barcode ?? null,
             sku: key.sku ?? null,
             image_url: item.image_url ?? null,
@@ -162,6 +140,61 @@ export class PosService {
     }
 
     if (result.updated > 0 || (result.created ?? 0) > 0) await this.invalidateShopCache(shop.id);
+    return result;
+  }
+
+  /**
+   * Records an in-store POS checkout sale by decrementing each matched product's
+   * stock (floored at 0) so the seller panel and mobile client immediately reflect
+   * remaining inventory.
+   */
+  async recordSale(shop: PosShopRef, items: PosSaleItemDto[]): Promise<PosSyncResult> {
+    const result: PosSyncResult = { updated: 0, not_found: [], skipped: [] };
+
+    const barcodes = [...new Set(items.map((i) => i.barcode?.trim()).filter((v): v is string => !!v))];
+    const skus = [...new Set(items.map((i) => i.sku?.trim()).filter((v): v is string => !!v))];
+
+    const products =
+      barcodes.length || skus.length
+        ? await this.prisma.product.findMany({
+            where: {
+              shop_id: shop.id,
+              deleted_at: null,
+              OR: [
+                ...(barcodes.length ? [{ barcode: { in: barcodes } }] : []),
+                ...(skus.length ? [{ sku: { in: skus } }] : []),
+              ],
+            },
+            select: { id: true, barcode: true, sku: true, stock: true },
+          })
+        : [];
+    const byBarcode = new Map(products.filter((p) => p.barcode).map((p) => [p.barcode as string, p]));
+    const bySku = new Map(products.filter((p) => p.sku).map((p) => [p.sku as string, p]));
+
+    for (const item of items) {
+      const key = {
+        ...(item.barcode ? { barcode: item.barcode.trim() } : {}),
+        ...(item.sku ? { sku: item.sku.trim() } : {}),
+      };
+      if (!key.barcode && !key.sku) {
+        result.skipped.push({ reason: 'barcode or sku is required' });
+        continue;
+      }
+      const prod = (key.barcode && byBarcode.get(key.barcode)) || (key.sku && bySku.get(key.sku)) || null;
+      if (!prod) {
+        result.not_found.push(key);
+        continue;
+      }
+      const nextStock = Math.max(0, prod.stock - item.quantity);
+      prod.stock = nextStock;
+      await this.prisma.product.update({
+        where: { id: prod.id },
+        data: { stock: nextStock },
+      });
+      result.updated++;
+    }
+
+    if (result.updated > 0) await this.invalidateShopCache(shop.id);
     return result;
   }
 

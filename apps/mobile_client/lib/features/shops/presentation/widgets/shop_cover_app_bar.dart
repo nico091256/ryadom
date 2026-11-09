@@ -177,9 +177,7 @@ class _Cover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Same widget as the Home card so the Hero flight is seamless; the shop's
-    // banner (16:9) — or its logo when no banner was uploaded — or the brand fallback.
-    return ShopCover(url: shop.coverUrl, width: width, height: height);
+    return ShopCover(url: shop.bannerUrl, logoUrl: shop.logoUrl, width: width, height: height);
   }
 }
 

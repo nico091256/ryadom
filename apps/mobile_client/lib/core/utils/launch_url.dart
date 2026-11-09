@@ -9,3 +9,8 @@ Future<void> launchMapsUrl(double lat, double lng) async {
   final uri = Uri.parse('https://yandex.uz/maps/?text=$lat,$lng');
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
+
+Future<void> launchExternalUrl(String url) async {
+  final uri = Uri.parse(url);
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}

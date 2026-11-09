@@ -14,14 +14,14 @@ export function ProductImage({
 }: {
   src: string | null | undefined;
   alt?: string;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
   const url = resolveMediaUrl(src);
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [url]);
 
-  const cls = size === 'lg' ? 'h-24 w-24' : 'h-10 w-10';
+  const cls = size === 'lg' ? 'h-24 w-24' : size === 'sm' ? 'h-7 w-7 rounded-md' : 'h-10 w-10';
 
   if (url && !broken) {
     return (

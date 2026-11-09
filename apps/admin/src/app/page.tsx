@@ -98,7 +98,7 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <StatCard
               loading={loading}
               label="Bugungi buyurtmalar"
@@ -268,7 +268,41 @@ export default function DashboardPage() {
                   </Link>
                 }
               />
-              <Table>
+              {/* Mobile Recent Orders (< md) */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {loading ? (
+                  <div className="space-y-3 p-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : !stats?.recentOrders?.length ? (
+                  <EmptyState title="Buyurtmalar yo'q" />
+                ) : (
+                  stats.recentOrders.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setOrderId(o.id)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-slate-900">{shortId(o.id)}</span>
+                          <StatusBadge status={o.status} />
+                          <span className="text-xs text-slate-400">{timeAgo(o.created_at)}</span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-slate-600">
+                          <span className="font-medium text-slate-800">{o.customer?.name || 'Ismsiz'}</span> · {o.shop?.name ?? '—'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatMoney(o.total_amount)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <Table className="hidden md:block">
                 <THead>
                   <TH>Buyurtma</TH>
                   <TH>Mijoz</TH>

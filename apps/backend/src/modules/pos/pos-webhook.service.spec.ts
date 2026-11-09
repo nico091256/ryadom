@@ -24,6 +24,9 @@ describe('isSafeWebhookUrl', () => {
     'http://169.254.169.254/latest/meta-data',
     'http://100.64.0.1/hook',
     'http://[::1]/hook',
+    'http://[::ffff:127.0.0.1]/hook',
+    'http://redis:6379/hook',
+    'http://127.0.0.1.nip.io/hook',
     'http://postgis.railway.internal/hook',
   ])('rejects private / loopback / non-http targets: %s', (url) => {
     expect(isSafeWebhookUrl(url)).toBe(false);

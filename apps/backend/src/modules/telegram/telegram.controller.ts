@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { timingSafeEqual } from 'crypto';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TelegramService } from './telegram.service';
 import { TELEGRAM_WEBHOOK_SECRET_KEY } from './telegram.constants';
@@ -35,11 +36,19 @@ export class TelegramController {
     @Body() update: any,
     @Headers('x-telegram-bot-api-secret-token') secretToken?: string,
   ) {
-    const expectedSecret = this.configService.get<string>(TELEGRAM_WEBHOOK_SECRET_KEY)?.trim();
-    if (!expectedSecret || !secretToken || secretToken !== expectedSecret) {
+    const expectedSecret = this.configService.get<string>(TELEGRAM_WEBHOOK_SECRET_KEY);
+    if (!expectedSecret || !secretToken) {
       throw new UnauthorizedException({
         code: 'INVALID_WEBHOOK_SECRET',
-        message: 'Invalid or unconfigured Telegram webhook secret token',
+        message: 'Telegram webhook secret token is required',
+      });
+    }
+    const a = Buffer.from(secretToken, 'utf8');
+    const b = Buffer.from(expectedSecret, 'utf8');
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      throw new UnauthorizedException({
+        code: 'INVALID_WEBHOOK_SECRET',
+        message: 'Invalid Telegram webhook secret token',
       });
     }
     await this.telegramService.handleUpdate(update);

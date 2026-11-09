@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FolderTree, ImagePlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ApiError, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Category } from '@/lib/types';
 import { formatNumber } from '@/lib/format';
@@ -53,6 +53,24 @@ function CategoryModal({
   const [f, setF] = useState({ name_uz: '', name_ru: '', name_en: '', icon_url: '' });
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const iconFileRef = useRef<HTMLInputElement>(null);
+
+  const handleIconFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingIcon(true);
+    try {
+      const url = await api.uploadImage(file);
+      setF((p) => ({ ...p, icon_url: url }));
+      toast.success('Ikonka rasmi yuklandi');
+    } catch (e2) {
+      toast.error('Rasm yuklanmadi', errorMessage(e2));
+    } finally {
+      setUploadingIcon(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -119,10 +137,21 @@ function CategoryModal({
         <Field label="Nomi (inglizcha)" hint="Bo'sh qolsa o'zbekcha nomi ishlatiladi">
           <Input value={f.name_en} onChange={set('name_en')} placeholder="Fruits & Vegetables" />
         </Field>
-        <Field label="Ikonka" hint="Rasm URL manzili, emoji yoki ikonka nomi">
-          <div className="flex items-center gap-3">
+        <Field label="Ikonka" hint="Rasm yuklang, URL manzil yoki emoji kiriting">
+          <div className="flex items-center gap-2.5">
             <CategoryIcon icon={f.icon_url.trim() || null} />
-            <Input value={f.icon_url} onChange={set('icon_url')} placeholder="https://... yoki apple" className="flex-1" />
+            <Input value={f.icon_url} onChange={set('icon_url')} placeholder="🍎 yoki /uploads/..." className="flex-1" />
+            <input ref={iconFileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleIconFile} />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<ImagePlus className="h-4 w-4" />}
+              loading={uploadingIcon}
+              onClick={() => iconFileRef.current?.click()}
+            >
+              Rasm
+            </Button>
           </div>
         </Field>
       </form>
@@ -194,14 +223,59 @@ export default function CategoriesPage() {
       />
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4">
+        <div className="flex flex-col gap-2 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">{items ? `${formatNumber(items.length)} ta kategoriya` : ' '}</p>
           <SearchInput value={q} onChange={setQ} placeholder="Kategoriya qidirish" className="w-full sm:w-72" />
         </div>
         {error && !items ? (
           <ErrorState message={error} onRetry={load} />
         ) : (
-          <Table>
+          <>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {!items ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  icon={<FolderTree className="h-6 w-6" />}
+                  title={q ? 'Hech narsa topilmadi' : "Kategoriyalar yo'q"}
+                  action={
+                    !q ? (
+                      <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setModal({ open: true, category: null })}>
+                        Kategoriya qo'shish
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                filtered.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3 p-3.5">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <CategoryIcon icon={c.icon_url} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{c.name_uz}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {[c.name_ru, c.name_en].filter(Boolean).join(' · ')}
+                          {c.productCount != null ? ` · ${formatNumber(c.productCount)} ta` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button variant="ghost" size="icon" title="Tahrirlash" onClick={() => setModal({ open: true, category: c })}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" title="O'chirish" onClick={() => setDeleting(c)} className="hover:bg-rose-50 hover:text-rose-600">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <Table className="hidden md:block">
             <THead>
               <TH>Nomi</TH>
               <TH>Ruscha</TH>
@@ -257,6 +331,7 @@ export default function CategoriesPage() {
               )}
             </TBody>
           </Table>
+          </>
         )}
       </Card>
 

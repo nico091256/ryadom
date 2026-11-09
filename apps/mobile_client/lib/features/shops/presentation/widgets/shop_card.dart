@@ -49,7 +49,7 @@ class ShopCard extends ConsumerWidget {
                 // (list refresh, "last order" card appearing after checkout) is
                 // aborted by Flutter and leaves this child hidden — the card then
                 // shows only its dark gradient. The slide page transition is enough.
-                ShopCover(url: shop.coverUrl, width: width, height: height),
+                ShopCover(url: shop.bannerUrl, logoUrl: shop.logoUrl, width: width, height: height),
                 const Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -93,6 +93,17 @@ class ShopCard extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
+                          if (shop.logoUrl != null && shop.logoUrl!.trim().isNotEmpty && shop.bannerUrl != null && shop.bannerUrl!.trim().isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: AppColors.white.withValues(alpha: 0.9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: AppAvatar(url: shop.logoUrl, name: shop.name, size: 32),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                          ],
                           Expanded(
                             child: Text(
                               shop.name,
@@ -154,19 +165,22 @@ class ShopCard extends ConsumerWidget {
   }
 }
 
-/// The shop's cover photo (its uploaded logo/photo) with a brand-gradient
-/// fallback. Shared by the Home card and the shop page app bar so the Hero
-/// flight shows the same pixels.
+/// The shop's cover photo (its uploaded 16:9 banner) with a brand-gradient
+/// fallback that displays the circular [logoUrl] (if any) in a frosted ring
+/// instead of stretching a 1:1 logo across 16:9.
 class ShopCover extends StatelessWidget {
-  const ShopCover({super.key, required this.url, required this.width, required this.height});
+  const ShopCover({super.key, required this.url, this.logoUrl, required this.width, required this.height});
 
   final String? url;
+  final String? logoUrl;
   final double width;
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    if (url == null || url!.isEmpty) {
+    final hasBanner = url != null && url!.trim().isNotEmpty;
+    final hasLogo = logoUrl != null && logoUrl!.trim().isNotEmpty;
+    if (!hasBanner) {
       return Container(
         width: width,
         height: height,
@@ -207,20 +221,29 @@ class ShopCover extends StatelessWidget {
             Container(
               width: 76,
               height: 76,
+              padding: hasLogo ? const EdgeInsets.all(3) : EdgeInsets.zero,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.white.withValues(alpha: 0.12),
-                border: Border.all(color: AppColors.white.withValues(alpha: 0.22), width: 1.2),
-                boxShadow: [
+                color: AppColors.white.withValues(alpha: hasLogo ? 0.92 : 0.12),
+                border: Border.all(color: AppColors.white.withValues(alpha: 0.28), width: 1.2),
+                boxShadow: const [
                   BoxShadow(
-                    color: const Color(0x33000000),
+                    color: Color(0x33000000),
                     blurRadius: 16,
-                    offset: const Offset(0, 6),
+                    offset: Offset(0, 6),
                   ),
                 ],
               ),
               alignment: Alignment.center,
-              child: Icon(LucideIcons.store, size: 36, color: AppColors.white.withValues(alpha: 0.92)),
+              child: hasLogo
+                  ? AppImage(
+                      url: logoUrl,
+                      width: 70,
+                      height: 70,
+                      radius: BorderRadius.circular(35),
+                      fallbackIcon: LucideIcons.store,
+                    )
+                  : Icon(LucideIcons.store, size: 36, color: AppColors.white.withValues(alpha: 0.92)),
             ),
           ],
         ),

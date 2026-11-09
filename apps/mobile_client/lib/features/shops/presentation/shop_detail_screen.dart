@@ -138,6 +138,7 @@ class _ShopProductGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(filteredProductsProvider(shopId));
+    final gridMode = ref.watch(productGridModeProvider);
     final barVisible = ref.watch(cartControllerProvider.select((c) => c.shopId == shopId && c.itemCount > 0));
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final bottomPad = AppSpacing.xxl + bottomInset + (barVisible ? kShopCartBarHeight + AppSpacing.lg : 0);
@@ -160,9 +161,9 @@ class _ShopProductGrid extends ConsumerWidget {
             final side = _sidePadding(constraints.crossAxisExtent);
             final gridWidth = constraints.crossAxisExtent - 2 * side;
 
-            if (constraints.crossAxisExtent <= 600) {
+            if (!gridMode) {
               return SliverPadding(
-                padding: EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.sm, AppSpacing.page, bottomPad),
+                padding: EdgeInsets.fromLTRB(side, AppSpacing.sm, side, bottomPad),
                 sliver: SliverList.separated(
                   itemCount: products.length,
                   separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),

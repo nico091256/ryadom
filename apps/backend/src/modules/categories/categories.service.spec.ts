@@ -39,6 +39,14 @@ describe('CategoriesService.update', () => {
     expect(err.getResponse().code).toBe('INVALID_PARENT');
     expect(prisma.category.update).not.toHaveBeenCalled();
   });
+
+  it('rejects a multi-hop category cycle (c1 -> c2 -> c1) with 400 INVALID_PARENT', async () => {
+    prisma.category.findUnique = jest.fn().mockResolvedValue({ parent_id: 'c1' });
+    const err = await service.update('c1', { parent_id: 'c2' }).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.getResponse().code).toBe('INVALID_PARENT');
+    expect(prisma.category.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('AdminUpdateCategoryDto', () => {

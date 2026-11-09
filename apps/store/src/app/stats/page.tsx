@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, CalendarRange, Info, RefreshCw, Sun } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, ArrowRight, CalendarDays, CalendarRange, Info, Package, RefreshCw, ShoppingBag, Sun, TrendingUp } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
-import type { SellerStats, SellerStatsBucket } from '@/lib/types';
+import type { Order, Product, SellerStats, SellerStatsBucket } from '@/lib/types';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { useInterval } from '@/lib/hooks';
 import { Button, Card, ErrorState, PageHeader, StatCard, useToast } from '@/components/ui';
@@ -17,6 +18,8 @@ function orderCountHint(bucket: SellerStatsBucket | undefined): string {
 export default function StatsPage() {
   const toast = useToast();
   const [stats, setStats] = useState<SellerStats | null>(null);
+  const [products, setProducts] = useState<Product[] | null>(null);
+  const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -25,8 +28,14 @@ export default function StatsPage() {
     async (opts: { silent?: boolean } = {}) => {
       setRefreshing(true);
       try {
-        const s = await api.getStats();
+        const [s, prods, ords] = await Promise.all([
+          api.getStats(),
+          api.getProducts().catch(() => null),
+          api.getOrders({ limit: 100 }).then((r) => r.data).catch(() => null),
+        ]);
         setStats(s);
+        if (prods) setProducts(prods);
+        if (ords) setOrders(ords);
         setError(null);
         setUpdatedAt(new Date());
       } catch (e) {
@@ -48,6 +57,13 @@ export default function StatsPage() {
 
   const loading = !stats && !error;
   const showError = !!error && !stats;
+
+  const totalProducts = products?.length ?? 0;
+  const availableProducts = products?.filter((p) => p.is_available && (p.stock ?? 0) > 0).length ?? 0;
+  const outOfStockProducts = products?.filter((p) => (p.stock ?? 0) <= 0).length ?? 0;
+  const activeOrders = orders?.filter((o) => o.status === 'new' || o.status === 'accepted' || o.status === 'on_the_way').length ?? 0;
+  const monthOrders = stats?.thisMonth?.orderCount ?? 0;
+  const avgOrderTiyin = monthOrders > 0 ? Math.round((stats?.thisMonth?.revenueTiyin ?? 0) / monthOrders) : 0;
 
   return (
     <div>
@@ -105,6 +121,49 @@ export default function StatsPage() {
               hint={orderCountHint(stats?.thisMonth)}
               icon={<CalendarRange className="h-5 w-5" />}
               tone="violet"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            <StatCard
+              loading={loading}
+              label="O'rtacha chek (oylik)"
+              value={formatMoney(avgOrderTiyin)}
+              hint="Shu oydagi buyurtmalar bo'yicha"
+              icon={<TrendingUp className="h-5 w-5" />}
+              tone="amber"
+            />
+            <StatCard
+              loading={loading && !orders}
+              label="Faol buyurtmalar"
+              value={formatNumber(activeOrders)}
+              hint={
+                <Link href="/" className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline">
+                  Buyurtmalarga o&apos;tish <ArrowRight className="h-3 w-3" />
+                </Link>
+              }
+              icon={<ShoppingBag className="h-5 w-5" />}
+              tone="blue"
+            />
+            <StatCard
+              loading={loading && !products}
+              label="Mahsulotlar katalogi"
+              value={formatNumber(totalProducts)}
+              hint={`${formatNumber(availableProducts)} ta sotuvda`}
+              icon={<Package className="h-5 w-5" />}
+              tone="slate"
+            />
+            <StatCard
+              loading={loading && !products}
+              label="Tugagan mahsulotlar"
+              value={formatNumber(outOfStockProducts)}
+              hint={
+                <Link href="/products" className="inline-flex items-center gap-1 font-medium text-rose-600 hover:underline">
+                  Qoldiqni to&apos;ldirish <ArrowRight className="h-3 w-3" />
+                </Link>
+              }
+              icon={<AlertTriangle className="h-5 w-5" />}
+              tone={outOfStockProducts > 0 ? 'rose' : 'green'}
             />
           </div>
 

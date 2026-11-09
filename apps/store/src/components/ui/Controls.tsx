@@ -195,9 +195,9 @@ export function DescList({ items }: { items: { label: string; value: React.React
   return (
     <dl className="divide-y divide-slate-100">
       {items.map((it) => (
-        <div key={it.label} className="flex items-start justify-between gap-4 py-2 text-sm">
+        <div key={it.label} className="flex items-start justify-between gap-3 py-2 text-sm">
           <dt className="shrink-0 text-slate-500">{it.label}</dt>
-          <dd className="min-w-0 text-right font-medium text-slate-900">{it.value}</dd>
+          <dd className="min-w-0 break-all text-right font-medium text-slate-900 sm:break-normal">{it.value}</dd>
         </div>
       ))}
     </dl>
