@@ -22,6 +22,7 @@ import { api, errorMessage } from '@/lib/api';
 import type { AdminUser } from '@/lib/types';
 import { cn } from '@/lib/format';
 import { Button, Field, Input, Modal, Spinner, useToast } from '@/components/ui';
+import { LanguageSwitcher } from '@/lib/i18n';
 
 const NAV = [
   { section: 'Asosiy', items: [{ label: 'Boshqaruv paneli', href: '/', icon: LayoutDashboard }] },
@@ -135,7 +136,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.replace('/login');
   };
 
-  if (isBare) return <>{children}</>;
+  if (isBare) {
+    return (
+      <>
+        <div className="fixed right-4 top-4 z-50">
+          <LanguageSwitcher />
+        </div>
+        {children}
+      </>
+    );
+  }
 
   if (!ready) {
     return (
@@ -256,6 +266,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <h1 className="truncate text-base font-semibold text-slate-900">{title}</h1>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <LanguageSwitcher />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium leading-tight text-slate-900">{user?.name || 'Administrator'}</p>
               <p className="text-xs leading-tight text-slate-500">@{user?.login || 'admin'}</p>

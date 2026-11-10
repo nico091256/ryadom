@@ -31,6 +31,7 @@ import {
 import { ProductImage } from '@/components/products/ProductImage';
 import { ProductFormModal } from '@/components/products/ProductFormModal';
 import { PosImportModal } from '@/components/products/PosImportModal';
+import { localizedName, useI18n } from '@/lib/i18n';
 
 const PAGE_LIMIT = 50;
 type StockFilter = 'all' | 'available' | 'out_of_stock' | 'hidden';
@@ -44,6 +45,7 @@ function matches(p: Product, q: string): boolean {
 
 export default function ProductsPage() {
   const toast = useToast();
+  const { lang } = useI18n();
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -223,7 +225,7 @@ export default function ProductsPage() {
                 <option value="">Barcha kategoriyalar</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name_uz}
+                    {localizedName(c, lang)}
                   </option>
                 ))}
               </Select>
@@ -290,11 +292,11 @@ export default function ProductsPage() {
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <ProductImage src={p.image_url} alt={p.name_uz} />
+                        <ProductImage src={p.image_url} alt={localizedName(p, lang)} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <p className={cn('line-clamp-2 text-sm font-semibold leading-snug', p.is_available ? 'text-slate-900' : 'text-slate-500')}>
-                              {p.name_uz}
+                              {localizedName(p, lang)}
                             </p>
                             <Switch
                               size="sm"
@@ -304,9 +306,9 @@ export default function ProductsPage() {
                               label={p.is_available ? 'Sotuvdan olish' : "Sotuvga qo'yish"}
                             />
                           </div>
-                          {p.name_ru && <p className="mt-0.5 truncate text-xs text-slate-400">{p.name_ru}</p>}
+                          {lang === 'uz' && p.name_ru && <p className="mt-0.5 truncate text-xs text-slate-400">{p.name_ru}</p>}
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            {p.category?.name_uz && <Badge tone="gray">{p.category.name_uz}</Badge>}
+                            {p.category?.name_uz && <Badge tone="gray">{localizedName(p.category, lang)}</Badge>}
                             {(p.barcode || p.sku) && (
                               <span className="truncate font-mono text-[11px] text-slate-400">
                                 {[p.barcode, p.sku].filter(Boolean).join(' · ')}
@@ -397,12 +399,12 @@ export default function ProductsPage() {
                     <TR key={p.id} className={cn(loading && 'opacity-60', !p.is_available && 'bg-slate-50/40')}>
                       <TD>
                         <div className="flex items-center gap-3">
-                          <ProductImage src={p.image_url} alt={p.name_uz} />
+                          <ProductImage src={p.image_url} alt={localizedName(p, lang)} />
                           <div className="min-w-0">
                             <p className={cn('max-w-[280px] truncate font-medium', p.is_available ? 'text-slate-900' : 'text-slate-500')}>
-                              {p.name_uz}
+                              {localizedName(p, lang)}
                             </p>
-                            {p.name_ru && <p className="max-w-[280px] truncate text-xs text-slate-400">{p.name_ru}</p>}
+                            {lang === 'uz' && p.name_ru && <p className="max-w-[280px] truncate text-xs text-slate-400">{p.name_ru}</p>}
                             {(p.barcode || p.sku) && (
                               <p className="max-w-[280px] truncate font-mono text-[11px] text-slate-400" title="Shtrix-kod · SKU">
                                 {[p.barcode, p.sku].filter(Boolean).join(' · ')}
@@ -413,7 +415,7 @@ export default function ProductsPage() {
                       </TD>
                       <TD>
                         {p.category?.name_uz ? (
-                          <Badge tone="gray">{p.category.name_uz}</Badge>
+                          <Badge tone="gray">{localizedName(p.category, lang)}</Badge>
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
                         )}
