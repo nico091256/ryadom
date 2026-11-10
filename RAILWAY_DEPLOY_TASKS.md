@@ -12,7 +12,7 @@
 - Environment ID: `e9979114-bdc2-4c48-95eb-f0994a48b2e0`
 - **api** servisi (ryadom, GitHub `nico091256/ryadom`) ID: `e9234a25-2792-41fb-b471-4d444c466f48`
 - Bazalar (Online, tegma): **PostGIS**, **Redis**
-- GitHub asosiy branch: `main`, oxirgi commit: `4f8dec6`
+- GitHub asosiy branch: `main` (avto-deploy ulangan: `api`, `admin`, `store`, `client`)
 
 ---
 
@@ -30,8 +30,10 @@
 | 8 | admin servisi yaratildi, build bo'ldi va ishga tushdi | ✅ |
 | 9 | store servisi yaratildi, build bo'ldi va ishga tushdi | ✅ |
 | 10 | api: CORS_ORIGINS to'ldirildi | ✅ |
-| 11 | custom domenlar qo'shildi (`ryadom.uz` CNAME yozuvlari olindi) | 🔄 DNS kutilmoqda |
+| 11 | custom domenlar qo'shildi (`ryadom.uz` CNAME yozuvlari olindi) | ✅ |
 | 12 | Flutter web (client) Nginx orqali Railway'da ishga tushirildi | ✅ |
+| 13 | POS (REGOS + YES POS) 1000+ batching, `/pos/sales` va `14_pos_sku_and_cart_indexes` migratsiyasi | ✅ |
+| 14 | `api` servisi uchun Rasmlar saqlanishi (Volume `/app/apps/backend/uploads` yoki S3) | 🔄 Ixtiyoriy |
 
 ---
 
@@ -172,6 +174,26 @@ Flutter web `apps/mobile_client` Docker + Nginx bilan Railway'da ishga tushirilg
 - Custom domen: `client.ryadom.uz` (CNAME → `3qt64fos.up.railway.app`)
 - Build: `--dart-define=API_BASE_URL=https://api.ryadom.uz/api/v1`
 - `client.ryadom.uz` api `CORS_ORIGINS` ga qo'shilishi shart (QARORLAR blokiga qara).
+
+---
+
+## 📦 QADAM 13 — Railway'da rasmlar o'chib ketmasligi uchun Volume ulash (`api` servisi)
+
+Yuklangan do'kon logotiplari, kategoriya ikonalari hamda REGOS / YES POS dan avtomatik tortilgan mahsulot rasmlari `/app/apps/backend/uploads` papkasiga yoziladi. Keyingi deploy'larda rasmlar saqlanib qolishi uchun ikkita yo'l bor:
+
+1. **Railway Volume (Eng oson va tezkor usul):**
+   - Railway Dashboard → **api** servisi ustiga o'ng tugma (yoki `+ Create` → `Volume`) → **Mount Path**: `/app/apps/backend/uploads` qilib saqlang.
+2. **Yoki S3 / Cloudflare R2 (Tashqi Object Storage):**
+   - `api` → **Variables** ga quyidagilarni qo'shing:
+     ```
+     UPLOAD_DRIVER=s3
+     S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+     S3_BUCKET=ryadom-uploads
+     S3_REGION=auto
+     S3_ACCESS_KEY=<key>
+     S3_SECRET_KEY=<secret>
+     S3_PUBLIC_URL=https://cdn.ryadom.uz
+     ```
 
 ---
 
