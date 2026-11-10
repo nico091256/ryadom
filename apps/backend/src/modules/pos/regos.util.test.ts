@@ -6,6 +6,7 @@ import {
   normalizeRegosItem,
   parseCsvCatalog,
   resolveRegosGatewayUrl,
+  resolveYesPosTarget,
   sanitizeProductCode,
 } from './regos.util';
 
@@ -96,4 +97,37 @@ test('parseCsvCatalog parses semicolon-delimited REGOS CSV export and normalizes
 test('DEMO_REGOS_ITEMS all normalize cleanly', () => {
   const normalized = DEMO_REGOS_ITEMS.map((i) => normalizeRegosItem(i, { priceInSom: true })).filter(Boolean);
   assert.equal(normalized.length, DEMO_REGOS_ITEMS.length);
+});
+
+test('resolveYesPosTarget validates demo, bare token, and yespos.uz URLs', () => {
+  assert.deepEqual(resolveYesPosTarget('demo'), { mode: 'demo' });
+  assert.deepEqual(resolveYesPosTarget('demo_yespos'), { mode: 'demo' });
+  assert.deepEqual(resolveYesPosTarget('yp_live_token_123'), {
+    mode: 'live',
+    url: 'https://api.yespos.uz/api/v1/products',
+    token: 'yp_live_token_123',
+  });
+  assert.deepEqual(resolveYesPosTarget('https://api.yespos.uz/v2/catalog/items'), {
+    mode: 'live',
+    url: 'https://api.yespos.uz/v2/catalog/items',
+  });
+  assert.throws(() => resolveYesPosTarget('http://169.254.169.254/latest'));
+  assert.throws(() => resolveYesPosTarget('https://evil.example.com/api'));
+});
+
+test('normalizeRegosItem supports YES POS Uzbek/API fields', () => {
+  const item = normalizeRegosItem({
+    id: 901,
+    bar_code: '4780055566677',
+    'Mahsulot nomi': 'YES POS Sarxil Olma 1kg',
+    selling_price: 18500,
+    stock_quantity: 42,
+    Kategoriya: 'Meva va sabzavotlar',
+  });
+  assert.ok(item);
+  assert.equal(item.barcode, '4780055566677');
+  assert.equal(item.name_uz, 'YES POS Sarxil Olma 1kg');
+  assert.equal(item.price, 1850000);
+  assert.equal(item.stock, 42);
+  assert.equal(item.group_name, 'Meva va sabzavotlar');
 });
