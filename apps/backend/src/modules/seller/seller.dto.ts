@@ -305,11 +305,16 @@ export class UpdatePosSettingsDto {
   pos_webhook_url?: string | null;
 }
 
-/** POST /seller/pos/regos/sync — pull products, prices, and stock directly from REGOS.Online API. */
+/** POST /seller/pos/regos/sync (or /seller/pos/sync) — pull products, prices, and stock directly from REGOS.Online or YES POS API. */
 export class RegosSyncDto {
+  @ApiPropertyOptional({ enum: POS_TYPES, example: 'yespos', description: 'POS provider (regos | yespos)' })
+  @IsOptional()
+  @IsIn(POS_TYPES as unknown as string[])
+  pos_type?: PosType;
+
   @ApiProperty({
     example: 'demo',
-    description: 'REGOS Connected Integration Key, full gateway URL, or "demo" for test catalog',
+    description: 'REGOS / YES POS Integration Key, full API/gateway URL, or "demo" for test catalog',
     maxLength: 512,
   })
   @IsNotEmpty()

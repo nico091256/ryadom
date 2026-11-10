@@ -3,12 +3,14 @@ import type { OrderStatus, PaymentMethod, PaymentStatus, PosType, ShopStatus, Us
 /** Kassa tizimlari (backend modules/pos/pos.constants.ts bilan bir xil ro'yxat). */
 export const POS_TYPES: { value: PosType; label: string }[] = [
   { value: 'regos', label: 'REGOS (REGOS.Online)' },
-  { value: 'custom', label: "Boshqa / o'z integratsiyam (API)" },
+  { value: 'yespos', label: 'YES POS (yespos.uz)' },
+  { value: 'billz', label: 'BILLZ' },
+  { value: 'moysklad', label: 'MoySklad (МойСклад)' },
   { value: '1c', label: '1C' },
   { value: 'jowi', label: 'Jowi' },
   { value: 'iiko', label: 'iiko' },
-  { value: 'billz', label: 'Billz' },
   { value: 'poster', label: 'Poster' },
+  { value: 'custom', label: "Boshqa / o'z integratsiyam (API)" },
 ];
 
 export const ORDER_STATUSES: OrderStatus[] = ['new', 'accepted', 'on_the_way', 'delivered', 'cancelled'];

@@ -164,6 +164,38 @@ export function resolveRegosGatewayUrl(keyOrUrl: string): string {
 }
 
 /**
+ * Resolves a YES POS (`yespos.uz`) integration token or API URL.
+ * Returns `'demo'` for demo keys, or `{ url, token }` for live requests.
+ */
+export function resolveYesPosTarget(keyOrUrl: string): { mode: 'demo' } | { mode: 'live'; url: string; token?: string } {
+  const raw = (keyOrUrl ?? '').trim();
+  if (!raw) throw new Error('YES POS API kaliti kiritilishi shart');
+  if (/^demo(_yespos.*|_regos.*)?$/i.test(raw)) return { mode: 'demo' };
+
+  if (/^https?:\/\//i.test(raw)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      throw new Error("YES POS API manzili noto'g'ri");
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:' || (host !== 'yespos.uz' && !host.endsWith('.yespos.uz'))) {
+      throw new Error('Faqat https://*.yespos.uz API manzillariga ruxsat berilgan');
+    }
+    return { mode: 'live', url: parsed.toString() };
+  }
+
+  const sanitizedToken = raw.replace(/[^A-Za-z0-9._\-:|]/g, '');
+  if (!sanitizedToken) throw new Error("YES POS API kaliti noto'g'ri");
+  return {
+    mode: 'live',
+    url: 'https://api.yespos.uz/api/v1/products',
+    token: sanitizedToken,
+  };
+}
+
+/**
  * Cleans an arbitrary barcode or SKU / articul from REGOS so it conforms to
  * PRODUCT_CODE_REGEX (`/^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,63}$/`).
  */
@@ -178,10 +210,18 @@ export function sanitizeProductCode(raw: unknown): string | null {
   return str.length > 0 ? str : null;
 }
 
-/** Extracts the primary barcode from a REGOS item (`barcode` string or `barcodes` array). */
+/** Extracts the primary barcode from a REGOS / YES POS item (`barcode` string or `barcodes` array). */
 export function extractRegosBarcode(item: Record<string, any>): string | null {
   const direct = sanitizeProductCode(
-    item.barcode ?? item.shtrix ?? item.ean ?? item['Штрихкод'] ?? item['Shtrix-kod'],
+    item.barcode ??
+      item.bar_code ??
+      item.shtrix ??
+      item.ean ??
+      item['Штрихкод'] ??
+      item['Штрих-код'] ??
+      item['Shtrix-kod'] ??
+      item['Shtrix kod'] ??
+      item['Barkod'],
   );
   if (direct) return direct;
 
@@ -191,32 +231,34 @@ export function extractRegosBarcode(item: Record<string, any>): string | null {
       return sanitizeProductCode(first);
     }
     if (first && typeof first === 'object') {
-      return sanitizeProductCode(first.value ?? first.barcode ?? first.code);
+      return sanitizeProductCode(first.value ?? first.barcode ?? first.code ?? first.ean13 ?? first.ean8 ?? first.code128);
     }
   }
   return null;
 }
 
-/** Extracts SKU / Articul / REGOS code from an item. */
+/** Extracts SKU / Articul / REGOS / Billz / MoySklad code from an item. */
 export function extractRegosSku(item: Record<string, any>): string | null {
   const articul = sanitizeProductCode(
-    item.sku ?? item.articul ?? item.article ?? item['Артикул'] ?? item['Artikul'],
+    item.sku ?? item.articul ?? item.article ?? item.product_code ?? item['Артикул'] ?? item['Artikul'],
   );
   if (articul) return articul;
 
-  const code = item.code ?? item['Код'] ?? item.id;
+  const code = item.code ?? item['Код'] ?? item.product_id ?? item.id;
   if (code !== undefined && code !== null && String(code).trim() !== '') {
     return sanitizeProductCode(`REG-${String(code).trim()}`);
   }
   return null;
 }
 
-/** Extracts a valid http(s) or /uploads/ image URL from common REGOS / CSV / JSON fields. */
+/** Extracts a valid http(s) or /uploads/ image URL from common REGOS / Billz / Poster / CSV / JSON fields. */
 export function extractRegosImageUrl(raw: Record<string, any>): string | null {
   const candidates: unknown[] = [
     raw.image_url,
+    raw.main_image_url,
     raw.image_path,
     raw.image,
+    raw.photo_origin,
     raw.photo_url,
     raw.photo,
     raw.picture,
@@ -231,6 +273,11 @@ export function extractRegosImageUrl(raw: Record<string, any>): string | null {
     } else if (first && typeof first === 'object') {
       candidates.push(first.url, first.image_url, first.image_path, first.path);
     }
+  }
+  if (Array.isArray(raw.product_photos) && raw.product_photos.length > 0) {
+    const first = raw.product_photos[0];
+    if (typeof first === 'string') candidates.push(first);
+    else if (first && typeof first === 'object') candidates.push(first.photo_url, first.url);
   }
 
   for (const val of candidates) {
@@ -262,8 +309,12 @@ export function normalizeRegosItem(
   const rawName = String(
     raw.name_uz ??
       raw.name ??
+      raw.product_name ??
+      raw.title_uz ??
       raw.fullname ??
       raw['Наименование'] ??
+      raw['Mahsulot nomi'] ??
+      raw['Tovar nomi'] ??
       raw['Nomi'] ??
       raw.title ??
       '',
@@ -287,11 +338,32 @@ export function normalizeRegosItem(
       ? String(descriptionRaw).trim().slice(0, 2000)
       : null;
 
-  // Parse price: in REGOS, prices are in UZS (so'm). Convert to integer tiyin (1 so'm = 100 tiyin).
+  // Parse price across REGOS, Billz (`shop_prices`), MoySklad (`salePrices`), Poster (`price` map), and CSV/JSON:
+  const posterSpotPrice =
+    raw.price && typeof raw.price === 'object' && !Array.isArray(raw.price)
+      ? Object.values(raw.price)[0]
+      : undefined;
+  const billzShopPrice =
+    Array.isArray(raw.shop_prices) && raw.shop_prices[0]
+      ? raw.shop_prices[0].retail_price ?? raw.shop_prices[0].price
+      : undefined;
+  const moySkladPrice =
+    Array.isArray(raw.salePrices) && raw.salePrices[0] && raw.salePrices[0].value !== undefined
+      ? Number(raw.salePrices[0].value) / 100
+      : undefined;
+
   const rawPriceVal =
-    raw.price ??
+    (typeof raw.price === 'number' || typeof raw.price === 'string' ? raw.price : undefined) ??
+    raw.selling_price ??
+    raw.sale_price ??
+    posterSpotPrice ??
+    billzShopPrice ??
+    moySkladPrice ??
     raw.retail_price ??
     raw['Цена'] ??
+    raw['Цена продажи'] ??
+    raw['Sotish narxi'] ??
+    raw['Sotuv narxi'] ??
     raw['Narx'] ??
     raw['Narxi'] ??
     (Array.isArray(raw.prices) && raw.prices[0] ? raw.prices[0].value ?? raw.prices[0].price : 0);
@@ -302,14 +374,25 @@ export function normalizeRegosItem(
     Math.round(priceInSom ? safePriceNum * 100 : safePriceNum),
   );
 
-  // Parse stock / quantity: REGOS quantities can be decimals (e.g. 12.5); floor to non-negative int.
+  // Parse stock / quantity across REGOS (`quantities`), YES POS (`stock_quantity`/`amount`), Billz (`measurement_values`), MoySklad (`stock`), and CSV/JSON:
+  const billzStock =
+    Array.isArray(raw.measurement_values) && raw.measurement_values[0]
+      ? raw.measurement_values[0].active_measurement_value ?? raw.measurement_values[0].value
+      : undefined;
   const rawStockVal =
     raw.stock ??
+    raw.stock_quantity ??
     raw.quantity ??
+    raw.amount ??
     raw.qty ??
+    billzStock ??
     raw['Остаток'] ??
     raw['Кол-во'] ??
+    raw['Количество'] ??
     raw['Qoldiq'] ??
+    raw['Miqdori'] ??
+    raw['Miqdor'] ??
+    raw['Soni'] ??
     (Array.isArray(raw.quantities) && raw.quantities[0]
       ? raw.quantities[0].quantity ?? raw.quantities[0].common ?? raw.quantities[0].value
       : 0);
@@ -321,10 +404,17 @@ export function normalizeRegosItem(
   const isAvailable =
     raw.is_available !== undefined ? Boolean(raw.is_available) : stockInt > 0 || raw.quantity === undefined;
 
+  const billzCategoryName =
+    Array.isArray(raw.categories) && raw.categories[0] && typeof raw.categories[0] === 'object'
+      ? raw.categories[0].name
+      : null;
+
   const groupName =
     (raw.group && typeof raw.group === 'object' ? raw.group.name : null) ??
+    billzCategoryName ??
     raw.group_name ??
     raw.category_name ??
+    raw.pathName ??
     raw.category ??
     raw['Группа'] ??
     raw['Kategoriya'] ??

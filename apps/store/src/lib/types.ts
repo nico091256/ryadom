@@ -61,7 +61,7 @@ export interface Shop {
   city?: City | null;
 }
 
-export type PosType = 'regos' | 'custom' | '1c' | 'jowi' | 'iiko' | 'billz' | 'poster';
+export type PosType = 'regos' | 'yespos' | 'billz' | 'moysklad' | '1c' | 'poster' | 'iiko' | 'jowi' | 'custom';
 
 export interface PosSettingsPayload {
   pos_type: PosType;
@@ -69,6 +69,7 @@ export interface PosSettingsPayload {
 }
 
 export interface RegosSyncPayload {
+  pos_type?: PosType;
   integration_key: string;
   stock_id?: number;
   price_type_id?: number;
@@ -82,7 +83,7 @@ export interface PosBulkImportPayload {
 }
 
 export interface PosCatalogSyncResult {
-  source: 'regos_demo' | 'regos_api' | 'file_import';
+  source: 'regos_demo' | 'regos_api' | 'yespos_demo' | 'yespos_api' | 'file_import';
   created: number;
   updated: number;
   skipped: number;

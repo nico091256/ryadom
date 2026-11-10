@@ -21,7 +21,7 @@ import {
   UpdateShopProfileDto,
 } from './seller.dto';
 import { OrderStatus } from '@localshop/shared';
-import { POS_API_KEY_PREFIX } from '../pos/pos.constants';
+import { POS_API_KEY_PREFIX, PosType } from '../pos/pos.constants';
 import { isSafeWebhookUrl } from '../pos/pos-webhook.service';
 import {
   CategoryRef,
@@ -29,6 +29,7 @@ import {
   matchCategoryId,
   normalizeRegosItem,
   resolveRegosGatewayUrl,
+  resolveYesPosTarget,
 } from '../pos/regos.util';
 
 /** '' and whitespace become null so an empty form field clears the code instead of storing ''. */
@@ -153,36 +154,63 @@ export class SellerService {
   }
 
   /**
-   * Connects to REGOS.Online Gateway (`POST .../v1/item/getext`) or uses the built-in
-   * REGOS demo catalog when `integration_key === 'demo'`, normalizes prices (so'm -> tiyin)
+   * Connects to REGOS.Online Gateway (`POST .../v1/item/getext`) or YES POS (`yespos.uz`) API,
+   * or uses the built-in demo catalog when `integration_key === 'demo'`, normalizes prices (so'm -> tiyin)
    * and stock, matches categories, and upserts all products into the seller's shop.
    */
   async syncFromRegos(ownerId: string, dto: RegosSyncDto) {
     const shop = await this.getSellerShop(ownerId);
-    let gatewayUrl: string;
-    try {
-      gatewayUrl = resolveRegosGatewayUrl(dto.integration_key);
-    } catch (e: any) {
-      throw new BadRequestException({
-        code: 'REGOS_INVALID_KEY',
-        message: e?.message || 'REGOS integratsiya kaliti noto\'g\'ri.',
-      });
-    }
+    const targetPosType: PosType = dto.pos_type ?? (shop.pos_type === 'yespos' ? 'yespos' : 'regos');
 
     let rawItems: Record<string, any>[] = [];
-    if (gatewayUrl === 'demo') {
-      rawItems = DEMO_REGOS_ITEMS;
+    let sourceLabel = 'regos_api';
+
+    if (targetPosType === 'yespos') {
+      let target: ReturnType<typeof resolveYesPosTarget>;
+      try {
+        target = resolveYesPosTarget(dto.integration_key);
+      } catch (e: any) {
+        throw new BadRequestException({
+          code: 'YESPOS_INVALID_KEY',
+          message: e?.message || "YES POS integratsiya kaliti noto'g'ri.",
+        });
+      }
+      if (target.mode === 'demo') {
+        rawItems = DEMO_REGOS_ITEMS;
+        sourceLabel = 'yespos_demo';
+      } else {
+        rawItems = await this.fetchYesPosCatalog(target.url, target.token, {
+          stock_id: dto.stock_id,
+        });
+        sourceLabel = 'yespos_api';
+      }
     } else {
-      rawItems = await this.fetchRegosCatalog(gatewayUrl, {
-        stock_id: dto.stock_id,
-        price_type_id: dto.price_type_id,
-      });
+      let gatewayUrl: string;
+      try {
+        gatewayUrl = resolveRegosGatewayUrl(dto.integration_key);
+      } catch (e: any) {
+        throw new BadRequestException({
+          code: 'REGOS_INVALID_KEY',
+          message: e?.message || "REGOS integratsiya kaliti noto'g'ri.",
+        });
+      }
+
+      if (gatewayUrl === 'demo') {
+        rawItems = DEMO_REGOS_ITEMS;
+        sourceLabel = 'regos_demo';
+      } else {
+        rawItems = await this.fetchRegosCatalog(gatewayUrl, {
+          stock_id: dto.stock_id,
+          price_type_id: dto.price_type_id,
+        });
+        sourceLabel = 'regos_api';
+      }
     }
 
-    if (shop.pos_type !== 'regos') {
+    if (shop.pos_type !== targetPosType) {
       await this.prisma.shop.update({
         where: { id: shop.id },
-        data: { pos_type: 'regos' },
+        data: { pos_type: targetPosType },
       });
     }
 
@@ -192,9 +220,52 @@ export class SellerService {
     });
 
     return {
-      source: gatewayUrl === 'demo' ? 'regos_demo' : 'regos_api',
+      source: sourceLabel,
       ...stats,
     };
+  }
+
+  private async fetchYesPosCatalog(
+    url: string,
+    token?: string,
+    opts?: { stock_id?: number },
+  ): Promise<Record<string, any>[]> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}`, 'X-API-Key': token } : {}),
+      };
+      const reqUrl = new URL(url);
+      if (opts?.stock_id && !reqUrl.searchParams.has('branch_id')) {
+        reqUrl.searchParams.set('branch_id', String(opts.stock_id));
+      }
+      const res = await fetch(reqUrl.toString(), {
+        method: 'GET',
+        headers,
+        redirect: 'error',
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} (${res.statusText})`);
+      }
+      const body: any = await res.json();
+      if (Array.isArray(body)) return body;
+      if (Array.isArray(body?.data)) return body.data;
+      if (Array.isArray(body?.result)) return body.result;
+      if (Array.isArray(body?.items)) return body.items;
+      if (Array.isArray(body?.products)) return body.products;
+      if (Array.isArray(body?.data?.items)) return body.data.items;
+      return [];
+    } catch (err: any) {
+      throw new BadRequestException({
+        code: 'YESPOS_CONNECTION_FAILED',
+        message: `YES POS serveriga ulanib bo'lmadi (${err?.message || 'tarmoq xatosi'}). API kalitni tekshiring yoki "demo" rejimida sinab ko'ring.`,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**

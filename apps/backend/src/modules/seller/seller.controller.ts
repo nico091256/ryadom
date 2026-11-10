@@ -68,8 +68,8 @@ export class SellerController {
     return this.sellerService.updatePosSettings(sellerId, dto);
   }
 
-  @Post('pos/regos/sync')
-  @ApiOperation({ summary: 'Pull full catalog (products, prices, quantities) from REGOS.Online Item/GetExt API and upsert into shop' })
+  @Post(['pos/regos/sync', 'pos/yespos/sync', 'pos/sync'])
+  @ApiOperation({ summary: 'Pull full catalog (products, prices, quantities) from REGOS.Online or YES POS API and upsert into shop' })
   async syncFromRegos(@CurrentUser('id') sellerId: string, @Body() dto: RegosSyncDto) {
     return this.sellerService.syncFromRegos(sellerId, dto);
   }

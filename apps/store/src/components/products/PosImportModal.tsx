@@ -96,11 +96,11 @@ export function PosImportModal({
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const [tab, setTab] = useState<'regos_api' | 'file'>('regos_api');
+  const [tab, setTab] = useState<'regos_api' | 'yespos_api' | 'file'>('regos_api');
   const [categories, setCategories] = useState<Category[]>([]);
   const [defaultCategoryId, setDefaultCategoryId] = useState('');
 
-  // REGOS API state
+  // REGOS / YES POS API state
   const [integrationKey, setIntegrationKey] = useState('demo');
   const [stockId, setStockId] = useState('1');
   const [priceTypeId, setPriceTypeId] = useState('1');
@@ -138,8 +138,10 @@ export function PosImportModal({
   };
 
   const runRegosSync = async () => {
+    const provider = tab === 'yespos_api' ? 'yespos' : 'regos';
+    const providerName = provider === 'yespos' ? 'YES POS' : 'REGOS';
     if (!integrationKey.trim()) {
-      toast.error('REGOS kalitini kiriting', 'Masalan: integratsiya kaliti yoki sinov uchun "demo"');
+      toast.error(`${providerName} kalitini kiriting`, 'Masalan: integratsiya kaliti yoki sinov uchun "demo"');
       return;
     }
     setBusy(true);
@@ -148,6 +150,7 @@ export function PosImportModal({
       const sId = Number(stockId);
       const pId = Number(priceTypeId);
       const res = await api.syncFromRegos({
+        pos_type: provider,
         integration_key: integrationKey.trim(),
         ...(Number.isInteger(sId) && sId > 0 ? { stock_id: sId } : {}),
         ...(Number.isInteger(pId) && pId > 0 ? { price_type_id: pId } : {}),
@@ -155,12 +158,12 @@ export function PosImportModal({
       });
       setLastResult(res);
       toast.success(
-        'REGOS sinxronizatsiyasi yakunlandi',
+        `${providerName} sinxronizatsiyasi yakunlandi`,
         `${res.created} ta yangi mahsulot qo'shildi, ${res.updated} ta yangilandi`,
       );
       onImported();
     } catch (e) {
-      toast.error("REGOS dan yuklab bo'lmadi", errorMessage(e));
+      toast.error(`${providerName} dan yuklab bo'lmadi`, errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -196,13 +199,13 @@ export function PosImportModal({
     <Modal
       open={open}
       onClose={() => !busy && onClose()}
-      title="REGOS (POS) dan mahsulotlarni avtomatik yuklash"
-      description="Magazinchi mahsulotlarni bittalab qo'shmasligi uchun REGOS API yoki CSV/JSON eksport orqali barcha nomenklaturani bir marta bosishda yuklang."
+      title="REGOS / YES POS dan mahsulotlarni avtomatik yuklash"
+      description="Magazinchi mahsulotlarni bittalab qo'shmasligi uchun REGOS.Online, YES POS (yespos.uz) yoki CSV/Excel/JSON eksport orqali barcha nomenklaturani bir marta bosishda yuklang."
       size="lg"
     >
       <div className="space-y-5">
         {/* Tabs */}
-        <div className="grid grid-cols-1 gap-1.5 rounded-xl bg-slate-100 p-1 sm:grid-cols-2 sm:gap-2">
+        <div className="grid grid-cols-1 gap-1.5 rounded-xl bg-slate-100 p-1 sm:grid-cols-3 sm:gap-2">
           <button
             type="button"
             onClick={() => setTab('regos_api')}
@@ -211,7 +214,17 @@ export function PosImportModal({
             }`}
           >
             <CloudDownload className="h-4 w-4 text-emerald-600" />
-            REGOS.Online API (Avto)
+            REGOS.Online API
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('yespos_api')}
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              tab === 'yespos_api' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <CloudDownload className="h-4 w-4 text-emerald-600" />
+            YES POS (yespos.uz)
           </button>
           <button
             type="button"
@@ -221,7 +234,7 @@ export function PosImportModal({
             }`}
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            REGOS CSV / JSON fayldan
+            CSV / Excel / JSON fayl
           </button>
         </div>
 
@@ -229,7 +242,7 @@ export function PosImportModal({
         <Field
           label="Standart kategoriya (guruh mos kelmagan mahsulotlar uchun)"
           htmlFor="pos-import-category"
-          hint="REGOS dagi guruh nomi ('Sut', 'Ichimliklar', 'Non' va h.k.) avtomatik moslanadi; qolganlari shu kategoriyaga tushadi."
+          hint="POS tizimdagi guruh nomi ('Sut', 'Ichimliklar', 'Non' va h.k.) avtomatik moslanadi; qolganlari shu kategoriyaga tushadi."
         >
           <Select
             id="pos-import-category"
@@ -245,13 +258,25 @@ export function PosImportModal({
           </Select>
         </Field>
 
-        {tab === 'regos_api' ? (
+        {tab === 'regos_api' || tab === 'yespos_api' ? (
           <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">REGOS.Online Gateway ulanishi</h4>
+                <h4 className="text-sm font-semibold text-slate-900">
+                  {tab === 'yespos_api' ? 'YES POS (yespos.uz) API ulanishi' : 'REGOS.Online Gateway ulanishi'}
+                </h4>
                 <p className="text-xs text-slate-500">
-                  REGOS.Online → Интеграции bo'limidan olingan kalitni (yoki sinov uchun <code className="font-mono font-semibold text-emerald-700">demo</code>) kiriting
+                  {tab === 'yespos_api' ? (
+                    <>
+                      YES POS shaxsiy kabineti yoki integratsiya bo&apos;limidan olingan kalitni (yoki sinov uchun{' '}
+                      <code className="font-mono font-semibold text-emerald-700">demo</code>) kiriting
+                    </>
+                  ) : (
+                    <>
+                      REGOS.Online → Интеграции bo&apos;limidan olingan kalitni (yoki sinov uchun{' '}
+                      <code className="font-mono font-semibold text-emerald-700">demo</code>) kiriting
+                    </>
+                  )}
                 </p>
               </div>
               <Button
@@ -262,26 +287,30 @@ export function PosImportModal({
                 onClick={() => setIntegrationKey('demo')}
                 disabled={busy}
               >
-                Demo kalitni qo'yish
+                Demo kalitni qo&apos;yish
               </Button>
             </div>
 
             <Field
-              label="REGOS Integration Key yoki Gateway URL"
+              label={tab === 'yespos_api' ? 'YES POS API Key yoki Endpoint URL' : 'REGOS Integration Key yoki Gateway URL'}
               htmlFor="regos-integration-key"
-              hint="Format: https://integration.regos.uz/gateway/out/{kalit}/v1/item/getext"
+              hint={
+                tab === 'yespos_api'
+                  ? 'Masalan: yespos.uz API tokeni, https://api.yespos.uz/api/v1/products yoki "demo"'
+                  : 'Format: https://integration.regos.uz/gateway/out/{kalit}/v1/item/getext'
+              }
             >
               <Input
                 id="regos-integration-key"
                 value={integrationKey}
                 onChange={(e) => setIntegrationKey(e.target.value)}
-                placeholder="demo yoki 9a8b7c6d5e4f..."
+                placeholder={tab === 'yespos_api' ? 'demo yoki YES POS API kaliti...' : 'demo yoki 9a8b7c6d5e4f...'}
                 disabled={busy}
               />
             </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="REGOS Ombor ID (stock_id)" htmlFor="regos-stock-id">
+              <Field label={tab === 'yespos_api' ? 'Filial / Ombor ID (branch_id)' : 'REGOS Ombor ID (stock_id)'} htmlFor="regos-stock-id">
                 <Input
                   id="regos-stock-id"
                   type="number"
@@ -292,7 +321,7 @@ export function PosImportModal({
                   disabled={busy}
                 />
               </Field>
-              <Field label="REGOS Narx turi ID (price_type_id)" htmlFor="regos-price-type-id">
+              <Field label="Narx turi ID (price_type_id)" htmlFor="regos-price-type-id">
                 <Input
                   id="regos-price-type-id"
                   type="number"
@@ -309,9 +338,9 @@ export function PosImportModal({
           <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">REGOS CSV yoki JSON eksport fayli</h4>
+                <h4 className="text-sm font-semibold text-slate-900">YES POS / REGOS / Excel CSV yoki JSON eksport fayli</h4>
                 <p className="text-xs text-slate-500">
-                  Ustunlar: <code className="font-mono">Код;Артикул;Штрихкод;Наименование;Цена;Остаток;Группа</code> (narx so'mda)
+                  Ustunlar: <code className="font-mono">Код;Артикул;Штрихкод;Наименование;Цена;Остаток;Группа</code> (yoki YES POS o&apos;zbekcha jadvali)
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -388,14 +417,14 @@ export function PosImportModal({
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Yopish
           </Button>
-          {tab === 'regos_api' ? (
+          {tab === 'regos_api' || tab === 'yespos_api' ? (
             <Button
               type="button"
               icon={<CloudDownload className="h-4 w-4" />}
               loading={busy}
               onClick={runRegosSync}
             >
-              REGOS dan mahsulotlarni tortish
+              {tab === 'yespos_api' ? 'YES POS dan mahsulotlarni tortish' : 'REGOS dan mahsulotlarni tortish'}
             </Button>
           ) : (
             <Button

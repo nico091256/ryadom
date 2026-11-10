@@ -1,5 +1,5 @@
 /** Cash-register vendors we document presets for; 'custom' = any system speaking the /pos API. */
-export const POS_TYPES = ['regos', 'custom', '1c', 'jowi', 'iiko', 'billz', 'poster'] as const;
+export const POS_TYPES = ['regos', 'yespos', 'billz', 'moysklad', '1c', 'poster', 'iiko', 'jowi', 'custom'] as const;
 export type PosType = (typeof POS_TYPES)[number];
 
 /** Header the POS software sends its shop key in. */

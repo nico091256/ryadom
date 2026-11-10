@@ -187,7 +187,7 @@ export default function ProductsPage() {
               icon={<CloudDownload className="h-4 w-4 text-emerald-600" />}
               onClick={() => setPosImportOpen(true)}
             >
-              REGOS / POS dan yuklash
+              REGOS / YES POS dan yuklash
             </Button>
             <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>
               Yangi mahsulot

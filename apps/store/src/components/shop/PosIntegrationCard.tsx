@@ -73,9 +73,11 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
   };
 
   const syncRegosCatalog = async (overrideKey?: string) => {
+    const activeProvider = posType === 'yespos' ? 'yespos' : 'regos';
+    const providerLabel = activeProvider === 'yespos' ? 'YES POS' : 'REGOS';
     const keyToUse = (overrideKey ?? regosKey).trim();
     if (!keyToUse) {
-      toast.error('REGOS kalitini kiriting', 'Masalan: integratsiya kaliti yoki sinov uchun "demo"');
+      toast.error(`${providerLabel} kalitini kiriting`, 'Masalan: integratsiya kaliti yoki sinov uchun "demo"');
       return;
     }
     if (overrideKey) setRegosKey(overrideKey);
@@ -85,21 +87,22 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
       const sId = Number(regosStockId);
       const pId = Number(regosPriceTypeId);
       const res = await api.syncFromRegos({
+        pos_type: activeProvider,
         integration_key: keyToUse,
         ...(Number.isInteger(sId) && sId > 0 ? { stock_id: sId } : {}),
         ...(Number.isInteger(pId) && pId > 0 ? { price_type_id: pId } : {}),
         ...(defaultCatId ? { default_category_id: defaultCatId } : {}),
       });
       setSyncResult(res);
-      if (shop.pos_type !== 'regos') {
-        onUpdated({ ...shop, pos_type: 'regos' });
+      if (shop.pos_type !== activeProvider) {
+        onUpdated({ ...shop, pos_type: activeProvider });
       }
       toast.success(
-        'REGOS mahsulotlari sinxronlandi',
+        `${providerLabel} mahsulotlari sinxronlandi`,
         `${res.created} ta yangi qo'shildi, ${res.updated} ta yangilandi`,
       );
     } catch (e) {
-      toast.error("REGOS dan tortib bo'lmadi", errorMessage(e));
+      toast.error(`${providerLabel} dan tortib bo'lmadi`, errorMessage(e));
     } finally {
       setSyncingRegos(false);
     }
@@ -136,8 +139,8 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
   return (
     <Card>
       <CardHeader
-        title="Kassa (POS) integratsiyasi — REGOS.Online"
-        description="REGOS, 1C, Jowi, iiko, Billz, Poster tizimlarini ulang va mahsulotlarni qo'lda kiritmasdan avtomatik tortib oling"
+        title="Kassa (POS) integratsiyasi — REGOS.Online & YES POS"
+        description="REGOS, YES POS (yespos.uz), BILLZ, 1C, MoySklad, Jowi, iiko, Poster tizimlarini ulang va mahsulotlarni qo'lda kiritmasdan avtomatik tortib oling"
       />
       <div className="space-y-5 p-5">
         {/* Sozlamalar */}
@@ -179,16 +182,20 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
           </Button>
         </div>
 
-        {/* REGOS.Online Avto-Sinxronizatsiya bloki */}
-        {posType === 'regos' && (
+        {/* REGOS.Online & YES POS Avto-Sinxronizatsiya bloki */}
+        {(posType === 'regos' || posType === 'yespos') && (
           <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h4 className="text-sm font-semibold text-slate-900">
-                  REGOS.Online dan barcha mahsulotlarni avtomatik tortish (Item/GetExt)
+                  {posType === 'yespos'
+                    ? 'YES POS (yespos.uz) dan barcha mahsulotlarni avtomatik tortish'
+                    : 'REGOS.Online dan barcha mahsulotlarni avtomatik tortish (Item/GetExt)'}
                 </h4>
                 <p className="mt-0.5 text-xs text-slate-600">
-                  Magazinchi mahsulotlarni bittalab qo'shib chiqmasligi uchun REGOS.Online integratsiya kalitini kiriting — barcha mahsulotlar, narxlar (so'mdan tiyinga) va ombor qoldiqlari avtomatik yaratiladi.
+                  {posType === 'yespos'
+                    ? "Magazinchi mahsulotlarni bittalab qo'shib chiqmasligi uchun YES POS API kalitini (yoki URL manzilini) kiriting — barcha mahsulotlar, narxlar, rasmlar va ombor qoldiqlari avtomatik yaratiladi."
+                    : "Magazinchi mahsulotlarni bittalab qo'shib chiqmasligi uchun REGOS.Online integratsiya kalitini kiriting — barcha mahsulotlar, narxlar (so'mdan tiyinga) va ombor qoldiqlari avtomatik yaratiladi."}
                 </p>
               </div>
               <Button
@@ -199,27 +206,31 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
                 loading={syncingRegos}
                 onClick={() => syncRegosCatalog('demo')}
               >
-                Demo REGOS bazasidan sinash
+                {posType === 'yespos' ? 'Demo YES POS bazasidan sinash' : 'Demo REGOS bazasidan sinash'}
               </Button>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="sm:col-span-2">
                 <Field
-                  label="REGOS Integration Key yoki Gateway URL"
+                  label={posType === 'yespos' ? 'YES POS API Key yoki Endpoint URL' : 'REGOS Integration Key yoki Gateway URL'}
                   htmlFor="shop-regos-key"
-                  hint="Masalan: integration.regos.uz kaliti yoki 'demo'"
+                  hint={
+                    posType === 'yespos'
+                      ? "Masalan: yespos.uz API tokeni, https://api.yespos.uz/... yoki 'demo'"
+                      : "Masalan: integration.regos.uz kaliti yoki 'demo'"
+                  }
                 >
                   <Input
                     id="shop-regos-key"
                     value={regosKey}
                     onChange={(e) => setRegosKey(e.target.value)}
-                    placeholder="demo yoki REGOS kaliti"
+                    placeholder={posType === 'yespos' ? 'demo yoki YES POS API kaliti' : 'demo yoki REGOS kaliti'}
                     disabled={syncingRegos}
                   />
                 </Field>
               </div>
-              <Field label="Ombor ID (stock_id)" htmlFor="shop-regos-stock">
+              <Field label={posType === 'yespos' ? 'Filial / Ombor ID (branch_id)' : 'Ombor ID (stock_id)'} htmlFor="shop-regos-stock">
                 <Input
                   id="shop-regos-stock"
                   type="number"
@@ -267,7 +278,7 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
                 loading={syncingRegos}
                 onClick={() => syncRegosCatalog()}
               >
-                REGOS dan mahsulotlarni tortish
+                {posType === 'yespos' ? 'YES POS dan mahsulotlarni tortish' : 'REGOS dan mahsulotlarni tortish'}
               </Button>
             </div>
 
@@ -275,7 +286,7 @@ export function PosIntegrationCard({ shop, onUpdated }: { shop: Shop; onUpdated:
               <div className="flex items-center gap-2.5 rounded-lg border border-emerald-300 bg-white px-3.5 py-2.5 text-xs text-emerald-900">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
                 <span>
-                  REGOS sinxronizatsiyasi yakunlandi: <b>{syncResult.created} ta</b> yangi mahsulot yaratildi,{' '}
+                  {posType === 'yespos' ? 'YES POS' : 'REGOS'} sinxronizatsiyasi yakunlandi: <b>{syncResult.created} ta</b> yangi mahsulot yaratildi,{' '}
                   <b>{syncResult.updated} ta</b> mahsulot yangilandi (Jami: {syncResult.total} ta).
                 </span>
               </div>
