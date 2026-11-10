@@ -130,4 +130,32 @@ describe('SellerService.bulkImportPosItems — 1000 items with images batching',
       'https://cdn.regos.uz/items/img-1.webp',
     );
   });
+
+  it('syncs demo catalog for YES POS (pos_type=yespos) and updates shop pos_type', async () => {
+    const prisma: any = {
+      shop: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'shop-1', owner_id: 'owner-1', pos_type: 'regos' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      category: { findMany: jest.fn().mockResolvedValue([{ id: 'cat-1', name_uz: 'Non va pishiriqlar' }]) },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn().mockResolvedValue({ count: 8 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new SellerService(prisma);
+
+    const res = await service.syncFromRegos('owner-1', {
+      pos_type: 'yespos',
+      integration_key: 'demo',
+    });
+
+    expect(res.source).toBe('yespos_demo');
+    expect(res.created).toBeGreaterThan(0);
+    expect(prisma.shop.update).toHaveBeenCalledWith({
+      where: { id: 'shop-1' },
+      data: { pos_type: 'yespos' },
+    });
+  });
 });
