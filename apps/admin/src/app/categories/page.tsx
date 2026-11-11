@@ -5,6 +5,7 @@ import { FolderTree, ImagePlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ApiError, errorMessage, resolveMediaUrl } from '@/lib/api';
 import type { Category } from '@/lib/types';
 import { formatNumber } from '@/lib/format';
+import { localizedName, useI18n } from '@/lib/i18n';
 import {
   Button,
   Card,
@@ -161,6 +162,7 @@ function CategoryModal({
 
 export default function CategoriesPage() {
   const toast = useToast();
+  const { lang } = useI18n();
   const [items, setItems] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -256,7 +258,7 @@ export default function CategoriesPage() {
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <CategoryIcon icon={c.icon_url} />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{c.name_uz}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900">{localizedName(c, lang)}</p>
                         <p className="truncate text-xs text-slate-500">
                           {[c.name_ru, c.name_en].filter(Boolean).join(' · ')}
                           {c.productCount != null ? ` · ${formatNumber(c.productCount)} ta` : ''}
@@ -308,7 +310,7 @@ export default function CategoriesPage() {
                     <TD>
                       <div className="flex items-center gap-3">
                         <CategoryIcon icon={c.icon_url} />
-                        <span className="font-medium text-slate-900">{c.name_uz}</span>
+                        <span className="font-medium text-slate-900">{localizedName(c, lang)}</span>
                       </div>
                     </TD>
                     <TD className="text-slate-500">{c.name_ru}</TD>
